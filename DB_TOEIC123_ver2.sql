@@ -1,7 +1,7 @@
-﻿-- STO123: tao moi SQL Server DB_TOEIC123_ver2, khong cap nhat CSDL dang co du lieu.
+-- STO123: tao moi SQL Server DB_TOEIC123_ver2, khong cap nhat CSDL dang co du lieu.
 -- 1 giai doan = 1 khoa hoc; Unit co the mang bat ky ten/noi dung nao.
-CREATE DATABASE DB_TOEIC123_ver2;
-GO
+--CREATE DATABASE DB_TOEIC123_ver2;
+--GO
 USE DB_TOEIC123_ver2;
 GO
 SET ANSI_NULLS ON;
@@ -52,18 +52,33 @@ CREATE TABLE dbo.XacThucDangNhap(
     )
 );
 GO
-
 CREATE TABLE dbo.XacThucOTP(
-
     MaXacThuc int primary key identity(1,1),
     MaNguoiDung int not null foreign key references NguoiDung(MaNguoiDung),
     MaOTP varchar(8) not null,
-    ThoiGianHetHan datetime not null default dateadd(minute, 15, getdate()),
-    TrangThai varchar(16) not null default 'CHUA_XAC_THUC'
-        check (TrangThai in ('DA_XAC_THUC','CHUA_XAC_THUC','HET_HAN')),
+    LoaiOTP varchar(30) not null
+        CONSTRAINT DF_XacThucOTP_LoaiOTP
+        DEFAULT 'XAC_THUC_EMAIL',
+    ThoiGianHetHan datetime not null
+        default dateadd(minute, 15, getdate()),
+    TrangThai varchar(16) not null
+        default 'CHUA_XAC_THUC'
+        check (TrangThai in (
+            'DA_XAC_THUC',
+            'CHUA_XAC_THUC',
+            'HET_HAN'
+        )),
+
     NgayTao datetime not null default getdate(),
-    constraint CK_XacThucOTP_ThoiGian check (ThoiGianHetHan > NgayTao),
-    constraint CK_XacThucOTP_MaOTP check (nullif(ltrim(rtrim(MaOTP)), '') is not null)
+    constraint CK_XacThucOTP_ThoiGian
+        check (ThoiGianHetHan > NgayTao),
+    constraint CK_XacThucOTP_MaOTP
+        check (nullif(ltrim(rtrim(MaOTP)), '') is not null),
+    constraint CK_XacThucOTP_LoaiOTP
+        check (LoaiOTP in (
+            'XAC_THUC_EMAIL',
+            'QUEN_MAT_KHAU'
+        ))
 );
 GO
 
@@ -528,3 +543,5 @@ LEFT JOIN dbo.ChiTietKetQua ct
 WHERE k.TrangThai = 'DA_NOP'
 GROUP BY k.MaKetQua, p.SoPart;
 GO
+
+

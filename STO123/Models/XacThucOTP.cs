@@ -31,6 +31,11 @@ public partial class XacThucOTP
     [Column(TypeName = "datetime")]
     public DateTime NgayTao { get; set; }
 
+    [Required]
+    [StringLength(30)]
+    [Unicode(false)]
+    public string LoaiOTP { get; set; }
+
     [ForeignKey("MaNguoiDung")]
     [InverseProperty("XacThucOTP")]
     public virtual NguoiDung MaNguoiDungNavigation { get; set; }
