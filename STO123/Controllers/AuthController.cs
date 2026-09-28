@@ -1,81 +1,56 @@
-using System.ComponentModel.DataAnnotations;
-using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
 using STO123.DTOs.Auth;
-using STO123.Models;
+using STO123.Services.Auth;
 
 namespace STO123.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public sealed class AuthController : ControllerBase
+public sealed class AuthController(IAuthService authService) : ControllerBase
 {
-    private readonly ToeicDbContext _context;
-    private readonly PasswordHasher<NguoiDung> _passwordHasher = new();
-
-    public AuthController(ToeicDbContext context)
-    {
-        _context = context;
-    }
-
     [HttpPost("register")]
-    public async Task<ActionResult<RegisterResponse>> Register(
-        RegisterRequest request,
-        CancellationToken cancellationToken)
-    {
-        var email = request.Email.Trim().ToLowerInvariant();
-        var hoTen = request.HoTen.Trim();
+    public async Task<IActionResult> Register(RegisterRequest request, CancellationToken cancellationToken) =>
+        Respond(await authService.RegisterAsync(request, cancellationToken));
 
-        if (string.IsNullOrWhiteSpace(hoTen) || string.IsNullOrWhiteSpace(email))
-        {
-            return BadRequest("Name and email are required.");
-        }
+    [HttpPost("verify-email")]
+    public async Task<IActionResult> VerifyEmail(VerifyEmailRequest request, CancellationToken cancellationToken) =>
+        Respond(await authService.VerifyEmailAsync(request, cancellationToken));
 
-        if (email.Length > 254 || !new EmailAddressAttribute().IsValid(email))
-        {
-            return BadRequest("A valid email address is required.");
-        }
+    [HttpPost("resend-otp")]
+    public async Task<IActionResult> ResendOtp(EmailRequest request, CancellationToken cancellationToken) =>
+        Ok(await authService.ResendOtpAsync(request, cancellationToken));
 
-        if (await _context.NguoiDung.AnyAsync(
-                user => user.Email.Trim().ToLower() == email, cancellationToken))
-        {
-            return Conflict("Email is already registered.");
-        }
+    [HttpPost("login")]
+    public async Task<IActionResult> Login(LoginRequest request, CancellationToken cancellationToken) =>
+        Respond(await authService.LoginAsync(request, cancellationToken));
 
-        var user = new NguoiDung
-        {
-            HoTen = hoTen,
-            Email = email,
-            VaiTro = "HOC_VIEN"
-        };
+    [Authorize]
+    [HttpGet("me")]
+    public async Task<IActionResult> Me(CancellationToken cancellationToken) =>
+        TryGetUserId(out var userId)
+            ? Respond(await authService.MeAsync(userId, cancellationToken))
+            : Unauthorized();
 
-        var credential = new XacThucDangNhap
-        {
-            MaNguoiDungNavigation = user,
-            LoaiXacThuc = "EMAIL",
-            MatKhauMaHoa = _passwordHasher.HashPassword(user, request.Password)
-        };
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword(EmailRequest request, CancellationToken cancellationToken) =>
+        Ok(await authService.ForgotPasswordAsync(request, cancellationToken));
 
-        try
-        {
-            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-            _context.XacThucDangNhap.Add(credential);
-            await _context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (
-            exception.GetBaseException() is SqlException { Number: 2601 or 2627 })
-        {
-            return Conflict("Email is already registered.");
-        }
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken cancellationToken) =>
+        Respond(await authService.ResetPasswordAsync(request, cancellationToken));
 
-        return StatusCode(StatusCodes.Status201Created, new RegisterResponse(
-            user.MaNguoiDung,
-            user.HoTen,
-            user.Email,
-            user.VaiTro,
-            user.TrangThai));
-    }
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken) =>
+        TryGetUserId(out var userId)
+            ? Respond(await authService.ChangePasswordAsync(userId, request, cancellationToken))
+            : Unauthorized();
+
+    private bool TryGetUserId(out int userId) =>
+        int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId);
+
+    private IActionResult Respond<T>(AuthResult<T> result) =>
+        StatusCode(result.StatusCode, result.Error is null ? result.Value : new MessageResponse(result.Error));
 }

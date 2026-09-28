@@ -13,4 +13,7 @@ public sealed class RegisterRequest
 
     [Required]
     public string Password { get; init; } = string.Empty;
+
+    [StringLength(16)]
+    public string? SoDienThoai { get; init; }
 }
