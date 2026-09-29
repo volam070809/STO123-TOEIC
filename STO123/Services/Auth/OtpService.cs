@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using STO123.Models;
 
@@ -32,6 +32,9 @@ public sealed class OtpService(ToeicDbContext context) : IOtpService
     public Task<XacThucOTP?> FindNewestValidAsync(
         int userId, string purpose, string code, DateTime nowUtc, CancellationToken cancellationToken)
     {
+        if (code.Length != 6 || !code.All(char.IsAsciiDigit))
+            return Task.FromResult<XacThucOTP?>(null);
+
         return context.XacThucOTP
             .Where(otp => otp.MaNguoiDung == userId
                 && otp.LoaiOTP == purpose

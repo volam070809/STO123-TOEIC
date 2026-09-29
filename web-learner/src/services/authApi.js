@@ -5,6 +5,7 @@ export const authApi = {
     return apiRequest("/api/auth/register", {
       method: "POST",
       body: data,
+      timeoutMs: 120_000,
     });
   },
 
@@ -19,6 +20,7 @@ export const authApi = {
     return apiRequest("/api/auth/resend-otp", {
       method: "POST",
       body: { email },
+      timeoutMs: 90_000,
     });
   },
 
@@ -27,6 +29,10 @@ export const authApi = {
       method: "POST",
       body: data,
     });
+  },
+
+  googleLogin(idToken) {
+    return apiRequest("/api/auth/google", { method: "POST", body: { idToken }, timeoutMs: 60_000 });
   },
 
   getMe(token) {
@@ -39,6 +45,7 @@ export const authApi = {
     return apiRequest("/api/auth/forgot-password", {
       method: "POST",
       body: { email },
+      timeoutMs: 90_000,
     });
   },
 

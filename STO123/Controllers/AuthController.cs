@@ -8,7 +8,7 @@ namespace STO123.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public sealed class AuthController(IAuthService authService) : ControllerBase
+public sealed class AuthController(IAuthService authService, IGoogleAuthService googleAuthService) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request, CancellationToken cancellationToken) =>
@@ -25,6 +25,10 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request, CancellationToken cancellationToken) =>
         Respond(await authService.LoginAsync(request, cancellationToken));
+
+    [HttpPost("google")]
+    public async Task<IActionResult> Google(GoogleLoginRequest request, CancellationToken cancellationToken) =>
+        Respond(await googleAuthService.AuthenticateAsync(request.IdToken, cancellationToken));
 
     [Authorize]
     [HttpGet("me")]

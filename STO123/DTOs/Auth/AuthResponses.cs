@@ -11,4 +11,5 @@ public sealed record MeResponse(
     string? SoDienThoai,
     string? AnhDaiDien,
     string VaiTro,
-    string TrangThai);
+    string TrangThai,
+    bool HasPassword);

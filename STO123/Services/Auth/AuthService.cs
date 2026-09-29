@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
@@ -114,7 +114,8 @@ public sealed class AuthService(
             return ResendMessage;
 
         var otp = await ReplaceOtpAsync(user, VerifyPurpose, cancellationToken);
-        await SendWithoutDisclosureAsync(user.Email, VerifyPurpose, otp.MaOTP, cancellationToken);
+        if (otp is not null)
+            await SendWithoutDisclosureAsync(user.Email, VerifyPurpose, otp.MaOTP, cancellationToken);
         return ResendMessage;
     }
 
@@ -144,7 +145,8 @@ public sealed class AuthService(
     {
         var user = await context.NguoiDung.AsNoTracking()
             .Where(u => u.MaNguoiDung == userId)
-            .Select(u => new MeResponse(u.MaNguoiDung, u.HoTen, u.Email, u.SoDienThoai, u.AnhDaiDien, u.VaiTro, u.TrangThai))
+            .Select(u => new MeResponse(u.MaNguoiDung, u.HoTen, u.Email, u.SoDienThoai, u.AnhDaiDien, u.VaiTro, u.TrangThai,
+                u.XacThucDangNhap != null && u.XacThucDangNhap.LoaiXacThuc == "EMAIL"))
             .FirstOrDefaultAsync(cancellationToken);
         return user is null
             ? AuthResult<MeResponse>.Failure(404, "Account not found.")
@@ -160,7 +162,8 @@ public sealed class AuthService(
             return ForgotMessage;
 
         var otp = await ReplaceOtpAsync(user, ResetPurpose, cancellationToken);
-        await SendWithoutDisclosureAsync(user.Email, ResetPurpose, otp.MaOTP, cancellationToken);
+        if (otp is not null)
+            await SendWithoutDisclosureAsync(user.Email, ResetPurpose, otp.MaOTP, cancellationToken);
         return ForgotMessage;
     }
 
@@ -211,11 +214,19 @@ public sealed class AuthService(
         return AuthResult<MessageResponse>.Success(200, new MessageResponse("Password changed."));
     }
 
-    private async Task<XacThucOTP> ReplaceOtpAsync(NguoiDung user, string purpose, CancellationToken cancellationToken)
+    private async Task<XacThucOTP?> ReplaceOtpAsync(NguoiDung user, string purpose, CancellationToken cancellationToken)
     {
+        var nowUtc = DateTime.UtcNow;
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        // A public endpoint must enforce this cooldown server-side, including after a page refresh.
+        var recentlyIssued = await context.XacThucOTP.AsNoTracking().AnyAsync(
+            otp => otp.MaNguoiDung == user.MaNguoiDung && otp.LoaiOTP == purpose &&
+                otp.NgayTao > nowUtc.AddSeconds(-60), cancellationToken);
+        if (recentlyIssued)
+            return null;
+
         await otpService.InvalidateUnusedAsync(user.MaNguoiDung, purpose, cancellationToken);
-        var otp = otpService.Create(user, purpose, DateTime.UtcNow);
+        var otp = otpService.Create(user, purpose, nowUtc);
         context.XacThucOTP.Add(otp);
         await context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

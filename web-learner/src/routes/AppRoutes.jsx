@@ -1,52 +1,26 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-
-function Placeholder({ title }) {
-  return <h1>{title}</h1>;
-}
+import HomePage from "../pages/HomePage";
+import VocabularyPage from "../pages/vocabulary/VocabularyPage";
+import LoginPage from "../pages/auth/LoginPage";
+import RegisterPage from "../pages/auth/RegisterPage";
+import VerifyEmailPage from "../pages/auth/VerifyEmailPage";
+import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage";
+import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
+import ProfilePage from "../pages/auth/ProfilePage";
+import ChangePasswordPage from "../pages/auth/ChangePasswordPage";
+import ProtectedRoute from "./ProtectedRoute";
 
 export default function AppRoutes() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-
-        <Route
-          path="/login"
-          element={<Placeholder title="Đăng nhập" />}
-        />
-
-        <Route
-          path="/register"
-          element={<Placeholder title="Đăng ký" />}
-        />
-
-        <Route
-          path="/verify-email"
-          element={<Placeholder title="Xác thực email" />}
-        />
-
-        <Route
-          path="/forgot-password"
-          element={<Placeholder title="Quên mật khẩu" />}
-        />
-
-        <Route
-          path="/reset-password"
-          element={<Placeholder title="Đặt lại mật khẩu" />}
-        />
-
-        <Route
-          path="/profile"
-          element={<Placeholder title="Hồ sơ" />}
-        />
-
-        <Route
-          path="/change-password"
-          element={<Placeholder title="Đổi mật khẩu" />}
-        />
-
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </BrowserRouter>
-  );
+  return <BrowserRouter><Routes>
+    <Route path="/" element={<HomePage />} />
+    <Route path="/vocabulary" element={<VocabularyPage />} />
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/register" element={<RegisterPage />} />
+    <Route path="/verify-email" element={<VerifyEmailPage />} />
+    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+    <Route path="/reset-password" element={<ResetPasswordPage />} />
+    <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+    <Route path="/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
+    <Route path="*" element={<Navigate to="/" replace />} />
+  </Routes></BrowserRouter>;
 }
