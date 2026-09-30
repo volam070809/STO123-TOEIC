@@ -428,4 +428,5 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
-
+tools/vocabulary-audio/words/
+tools/vocabulary-audio/examples/
