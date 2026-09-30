@@ -390,10 +390,11 @@ CREATE TABLE dbo.TuVung(
     TuVung nvarchar(128) not null,
     Nghia nvarchar(256) not null,
     PhienAm nvarchar(128) null,
-   LoaiTu VARCHAR(32) NULL,
+    LoaiTu VARCHAR(32) NULL,
     ViDu nvarchar(512) null,
     DichViDu nvarchar(512) null,
-    DuongDanAudio varchar(512) null
+    DuongDanAudio varchar(512) null,
+    DuongDanAudioViDu varchar(512) NULL
 );
 GO
 
