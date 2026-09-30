@@ -199,6 +199,9 @@ export default function VocabularyPage() {
     </>}
 
     {!loading && stage === "list" && <>
+      <div className="vocab-list-back">
+        <button type="button" className="vocab-text-button" onClick={() => setStage("topics")}>← Quay lại chủ đề</button>
+      </div>
       <div className="vocab-banner">
         <strong>{title}</strong>
         <span>{words.length} từ {isLearner
@@ -234,7 +237,6 @@ export default function VocabularyPage() {
           <Link className="primary-button" to="/register">Đăng ký miễn phí</Link>
         </aside>}
       </div>
-      <button type="button" className="vocab-text-button" onClick={() => setStage("topics")}>← Quay lại chủ đề</button>
     </>}
 
     {!loading && stage === "cards" && word && <>

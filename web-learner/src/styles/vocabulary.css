@@ -1,6 +1,7 @@
 ﻿.vocab-page { background: var(--background); }
 .vocab-page .site-container { padding-bottom: 60px; }
 .vocab-banner { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px; min-height: 100px; margin-bottom: 40px; padding: 18px 28px; border-radius: 12px; background: #e8f0ff; color: var(--primary); font-size: 14px; }
+.vocab-list-back { position: sticky; top: 0; z-index: 2; width: fit-content; max-width: 100%; margin: 0 0 12px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--background); box-shadow: 0 2px 8px rgb(0 0 0 / 8%); }
 .vocab-banner.is-topics { background: #fff1df; color: var(--color-heading); }
 .vocab-banner strong { font-size: 15px; }
 .vocab-banner span { color: #61708a; }

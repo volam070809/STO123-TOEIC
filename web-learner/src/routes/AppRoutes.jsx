@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import HomePage from "../pages/HomePage";
 import VocabularyPage from "../pages/vocabulary/VocabularyPage";
 import VocabularyPracticePage from "../pages/practice/VocabularyPracticePage";
@@ -12,10 +13,19 @@ import ProfilePage from "../pages/auth/ProfilePage";
 import ChangePasswordPage from "../pages/auth/ChangePasswordPage";
 import ProtectedRoute from "./ProtectedRoute";
 
+function VocabularyRoute() {
+  const location = useLocation();
+  const rootNavigation = location.state?.vocabularyRoot;
+  useEffect(() => {
+    if (rootNavigation) window.scrollTo(0, 0);
+  }, [location.key, rootNavigation]);
+  return <VocabularyPage key={rootNavigation ? location.key : "vocabulary"} />;
+}
+
 export default function AppRoutes() {
   return <BrowserRouter><Routes>
     <Route path="/" element={<HomePage />} />
-    <Route path="/vocabulary" element={<VocabularyPage />} />
+    <Route path="/vocabulary" element={<VocabularyRoute />} />
     <Route path="/practice/vocabulary" element={<VocabularyPracticePage />} />
     <Route path="/practice/vocabulary/history" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
     <Route path="/practice/vocabulary/history/:id" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
