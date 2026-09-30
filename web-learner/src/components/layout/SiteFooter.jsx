@@ -6,7 +6,7 @@ export default function SiteFooter() {
     <div className="site-footer-columns">
       <Link className="site-footer-logo" to="/"><BrandLogo /></Link>
       <div><strong>Khóa học</strong><span>TOEIC 450+</span><span>TOEIC 650+</span><span>TOEIC 800+</span></div>
-      <div><strong>Luyện tập</strong><span>Từ vựng</span><span>Ngữ pháp</span><span>Đề thi</span></div>
+      <div><strong>Luyện tập</strong><Link to="/vocabulary">Từ vựng</Link><Link to="/practice/vocabulary">Luyện từ vựng</Link><span>Ngữ pháp</span><span>Đề thi</span></div>
       <div><strong>Hỗ trợ</strong><span>Câu hỏi thường gặp</span><span>Liên hệ</span><span>Điều khoản</span></div>
     </div>
     <small>© 2026 STO123 · Nền tảng luyện thi TOEIC của nhóm.</small>

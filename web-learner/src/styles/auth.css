@@ -24,6 +24,8 @@
 .site-footer-inner { width: min(100% - 120px, 1320px); margin: 0 auto; padding: 34px 0 24px; }
 .site-footer-columns { display: grid; grid-template-columns: 175px repeat(3, 230px); gap: 70px; min-height: 135px; align-items: start; }
 .site-footer-columns > div { display: grid; align-content: start; gap: 3px; font-size: 13px; color: var(--border); }
+.site-footer-columns > div a { color: inherit; text-decoration: none; }
+.site-footer-columns > div a:hover { text-decoration: underline; }
 .site-footer-columns strong { font-size: 15px; font-weight: 600; color: white; margin-bottom: 7px; }
 .site-footer-logo { display: inline-flex; align-items: center; width: fit-content; height: 42px; padding: 0 2px; background: white; }
 .site-footer-inner small { display: block; margin-top: 28px; font-size: 13px; color: var(--border); }

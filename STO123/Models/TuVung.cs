@@ -39,6 +39,10 @@ public partial class TuVung
     [Unicode(false)]
     public string LoaiTu { get; set; }
 
+    [StringLength(512)]
+    [Unicode(false)]
+    public string DuongDanAudioViDu { get; set; }
+
     [InverseProperty("MaTuVungNavigation")]
     public virtual ICollection<TienDoTuVung> TienDoTuVung { get; set; } = new List<TienDoTuVung>();
 
