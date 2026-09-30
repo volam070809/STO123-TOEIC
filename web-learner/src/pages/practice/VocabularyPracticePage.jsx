@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import SiteLayout from "../../layouts/SiteLayout";
 import SessionBoundary from "../../components/auth/SessionBoundary";
@@ -18,7 +18,7 @@ export default function VocabularyPracticePage() {
       <div className="page-heading">
         <span>Luyện tập / Luyện từ vựng</span>
         <h1>Luyện từ vựng</h1>
-        <p>Kiểm tra khả năng nhớ từ với câu hỏi trắc nghiệm. Điểm chỉ lưu trong lượt luyện này.</p>
+        <p>Kiểm tra khả năng nhớ từ với câu hỏi trắc nghiệm. Kết quả hoàn thành được lưu trong lịch sử luyện tập.</p>
       </div>
       {user && token ? <LearnerPractice key={token} token={token} /> :
         <section className="vocab-panel">
@@ -45,6 +45,9 @@ function LearnerPractice({ token }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [session, dispatch] = useReducer(practiceReducer, null);
+  const [saveState, setSaveState] = useState("");
+  const submittedSessions = useRef(new WeakSet());
+  const activeAttempt = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -64,6 +67,8 @@ function LearnerPractice({ token }) {
   }, [hasUnsavedAnswers]);
 
   function begin(targets, optionPool) {
+    activeAttempt.current += 1;
+    setSaveState("");
     const questions = buildPracticeQuestions(targets, optionPool);
     if (!questions.length) {
       setNotice("Chủ đề này chưa có đủ từ vựng để tạo bài luyện.");
@@ -95,6 +100,8 @@ function LearnerPractice({ token }) {
   }
 
   function leavePractice() {
+    activeAttempt.current += 1;
+    setSaveState("");
     if (hasUnsavedAnswers && !window.confirm("Thoát lượt luyện? Các câu trả lời trong lượt này sẽ không được lưu.")) return;
     dispatch({ type: "reset" });
     setTopic(null);
@@ -107,7 +114,40 @@ function LearnerPractice({ token }) {
   const answer = session?.answers[session.position];
   const result = session?.finished ? practiceResult(session) : null;
 
+  function advance() {
+    if (!session || !answer) return;
+    if (session.position + 1 < session.questions.length) {
+      dispatch({ type: "next" });
+      return;
+    }
+    if (submittedSessions.current.has(session)) return;
+    submittedSessions.current.add(session);
+    const attemptNumber = activeAttempt.current;
+    dispatch({ type: "next" });
+    setSaveState("saving");
+    const answers = session.questions.map((item, index) => ({
+      maTuVung: item.word.maTuVung,
+      type: item.type,
+      prompt: item.prompt,
+      options: item.options,
+      correctIndex: item.correctIndex,
+      selectedIndex: session.answers[index].optionIndex,
+    }));
+    apiRequest(ROOT + "/practice-history", {
+      token, method: "POST", body: { maChuDe: topic.maChuDe, answers }
+    }).then(() => {
+      if (activeAttempt.current === attemptNumber) setSaveState("saved");
+    }).catch(() => {
+      if (activeAttempt.current === attemptNumber) setSaveState("failed");
+    });
+  }
+
   return <>
+    <div className="practice-history-link"><Link className="vocab-text-button" to="/practice/vocabulary/history"
+      onClick={event => {
+        if (hasUnsavedAnswers && !window.confirm("Thoát lượt luyện? Các câu trả lời trong lượt này sẽ không được lưu."))
+          event.preventDefault();
+      }}>Lịch sử luyện từ</Link></div>
     {loading && <p role="status">Đang tải dữ liệu luyện tập...</p>}
     {error && <div className="vocab-error" role="alert"><p>{error}</p>
       {!topic && <button className="outline-button" type="button" onClick={() => {
@@ -167,7 +207,7 @@ function LearnerPractice({ token }) {
         {answer && <div className="practice-feedback" role="status">
           <strong>{answer.correct ? "Đúng" : "Sai"}</strong>
           <p>Đáp án đúng: {question.options[question.correctIndex]}</p>
-          <button type="button" className="primary-button" onClick={() => dispatch({ type: "next" })}>
+          <button type="button" className="primary-button" onClick={advance}>
             {session.position + 1 === session.questions.length ? "Xem kết quả" : "Câu tiếp theo"}
           </button>
         </div>}
@@ -181,7 +221,10 @@ function LearnerPractice({ token }) {
         {result.wrongWords.length ? <ul>{result.wrongWords.map(word =>
           <li key={word.maTuVung}><strong>{word.word}</strong> — {word.meaning}</li>)}</ul> :
           <p>Bạn đã trả lời đúng tất cả câu hỏi.</p>}
-        <p>Điểm của lượt luyện này chưa được lưu. Trạng thái học từ vựng của bạn không thay đổi.</p>
+        <p role="status">{saveState === "saving" ? "Đang lưu kết quả..." :
+          saveState === "saved" ? "Đã lưu kết quả luyện tập." :
+          saveState === "failed" ? "Không thể lưu lịch sử luyện tập." : ""}</p>
+        <p>Trạng thái học từ vựng của bạn không thay đổi.</p>
         <div className="practice-actions">
           {result.wrongWords.length > 0 && <button type="button" className="primary-button"
             onClick={() => begin(result.wrongWords, pool)}>Luyện lại từ sai</button>}

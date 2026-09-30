@@ -1,4 +1,6 @@
 .practice-panel { max-width: 900px; margin-top: 20px; }
+.practice-history-link { margin-bottom: 20px; }
+.practice-history-list .practice-panel { padding-bottom: 28px; }
 .practice-actions, .practice-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
 .practice-toolbar { justify-content: space-between; color: var(--text-muted); }
 .practice-modes { display: flex; flex-wrap: wrap; gap: 20px; margin: 24px 0; padding: 20px; border: 1px solid var(--border); border-radius: 8px; }

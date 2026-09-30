@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import HomePage from "../pages/HomePage";
 import VocabularyPage from "../pages/vocabulary/VocabularyPage";
 import VocabularyPracticePage from "../pages/practice/VocabularyPracticePage";
+import VocabularyPracticeHistoryPage from "../pages/practice/VocabularyPracticeHistoryPage";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import VerifyEmailPage from "../pages/auth/VerifyEmailPage";
@@ -16,6 +17,8 @@ export default function AppRoutes() {
     <Route path="/" element={<HomePage />} />
     <Route path="/vocabulary" element={<VocabularyPage />} />
     <Route path="/practice/vocabulary" element={<VocabularyPracticePage />} />
+    <Route path="/practice/vocabulary/history" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
+    <Route path="/practice/vocabulary/history/:id" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/register" element={<RegisterPage />} />
     <Route path="/verify-email" element={<VerifyEmailPage />} />
