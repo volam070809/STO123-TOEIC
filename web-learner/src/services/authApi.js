@@ -41,6 +41,10 @@ export const authApi = {
     });
   },
 
+  renew(token) {
+    return apiRequest("/api/auth/renew", { method: "POST", token });
+  },
+
   forgotPassword(email) {
     return apiRequest("/api/auth/forgot-password", {
       method: "POST",

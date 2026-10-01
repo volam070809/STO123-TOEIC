@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using STO123.Models;
 using STO123.Services.Auth;
+using STO123.Services.Exam;
+using STO123.Services.Scoring;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -63,6 +65,10 @@ builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
 builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<ExamGenerationService>();
+builder.Services.AddScoped<ExamAttemptService>();
+builder.Services.AddScoped<ExamGradingService>();
+builder.Services.AddSingleton<IToeicScoreCalculator, EstimatedLinearToeicScoreCalculator>();
 
 builder.Services.AddDbContext<ToeicDbContext>(options =>
     options.UseSqlServer(

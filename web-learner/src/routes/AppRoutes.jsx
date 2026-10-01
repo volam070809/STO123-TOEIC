@@ -12,6 +12,10 @@ import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
 import ProfilePage from "../pages/auth/ProfilePage";
 import ChangePasswordPage from "../pages/auth/ChangePasswordPage";
 import ProtectedRoute from "./ProtectedRoute";
+import MockHomePage from "../pages/exam/MockHomePage";
+import ExamPage from "../pages/exam/ExamPage";
+import ExamResultPage from "../pages/exam/ExamResultPage";
+import ExamReviewPage from "../pages/exam/ExamReviewPage";
 
 function VocabularyRoute() {
   const location = useLocation();
@@ -29,6 +33,10 @@ export default function AppRoutes() {
     <Route path="/practice/vocabulary" element={<VocabularyPracticePage />} />
     <Route path="/practice/vocabulary/history" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
     <Route path="/practice/vocabulary/history/:id" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
+    <Route path="/mock-test" element={<ProtectedRoute><MockHomePage /></ProtectedRoute>} />
+    <Route path="/exam/:attemptId" element={<ProtectedRoute><ExamPage /></ProtectedRoute>} />
+    <Route path="/exam/:attemptId/result" element={<ProtectedRoute><ExamResultPage /></ProtectedRoute>} />
+    <Route path="/exam/:attemptId/review" element={<ProtectedRoute><ExamReviewPage /></ProtectedRoute>} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/register" element={<RegisterPage />} />
     <Route path="/verify-email" element={<VerifyEmailPage />} />

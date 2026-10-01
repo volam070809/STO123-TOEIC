@@ -17,8 +17,8 @@ public sealed class JwtTokenService(IConfiguration configuration) : IJwtTokenSer
 
         if (string.IsNullOrWhiteSpace(key) || Encoding.UTF8.GetByteCount(key) < 32)
             throw new InvalidOperationException("Jwt:Key must contain at least 32 UTF-8 bytes in User Secrets or an environment variable.");
-        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience) || lifetime != 60)
-            throw new InvalidOperationException("Jwt:Issuer, Jwt:Audience, and Jwt:ExpiresMinutes (60) must be configured.");
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience) || lifetime < 150)
+            throw new InvalidOperationException("Jwt:Issuer, Jwt:Audience, and Jwt:ExpiresMinutes (at least 150) must be configured.");
 
         var nowUtc = DateTime.UtcNow;
         var expiresAtUtc = nowUtc.AddMinutes(lifetime);

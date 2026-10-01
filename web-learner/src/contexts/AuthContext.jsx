@@ -87,6 +87,18 @@ export function AuthProvider({ children }) {
     sessionStorage.removeItem("passwordResetEmail");
   }
 
+  async function renewToken() {
+    const current = tokenRef.current;
+    if (!current) throw new Error("Phiên đăng nhập đã kết thúc.");
+    const result = await authApi.renew(current);
+    if (tokenRef.current !== current) return;
+    tokenRef.current = result.token;
+    sessionStorage.setItem("accessToken", result.token);
+    sessionStorage.setItem("expiresAtUtc", result.expiresAtUtc);
+    setToken(result.token);
+    return result.token;
+  }
+
   useEffect(() => {
     if (!startupRequestedRef.current && tokenRef.current) {
       startupRequestedRef.current = true;
@@ -101,6 +113,6 @@ export function AuthProvider({ children }) {
 
   return <AuthContext.Provider value={{
     token, user, loading, sessionError, isAuthenticated: !!token && !!user,
-    login, loginWithGoogle, logout, loadCurrentUser,
+    login, loginWithGoogle, logout, loadCurrentUser, renewToken,
   }}>{children}</AuthContext.Provider>;
 }

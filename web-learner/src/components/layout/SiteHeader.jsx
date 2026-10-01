@@ -29,7 +29,8 @@ export default function SiteHeader() {
         <Link className="site-nav-active" to="/" onClick={() => setMenuOpen(false)}>Trang chủ</Link>
         <span>Lộ trình</span><span>Bài giảng</span>
         <Link to="/vocabulary" state={{ vocabularyRoot: true }} onClick={() => setMenuOpen(false)}>Từ vựng</Link>
-        <Link to="/practice/vocabulary" onClick={() => setMenuOpen(false)}>Luyện tập</Link><span>Thi thử</span>
+        <Link to="/practice/vocabulary" onClick={() => setMenuOpen(false)}>Luyện tập</Link>
+        <Link to="/mock-test" onClick={() => setMenuOpen(false)}>Thi thử</Link>
       </nav>
       <div className={"site-account" + (menuOpen ? " is-open" : "")}>
         {loading ? <span className="site-account-loading">Đang tải...</span> : token && sessionError ? <span className="site-account-loading">Không thể tải tài khoản</span> : user ? <>

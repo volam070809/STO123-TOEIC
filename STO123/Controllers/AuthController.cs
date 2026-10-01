@@ -3,12 +3,15 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STO123.DTOs.Auth;
 using STO123.Services.Auth;
+using STO123.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace STO123.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public sealed class AuthController(IAuthService authService, IGoogleAuthService googleAuthService) : ControllerBase
+public sealed class AuthController(IAuthService authService, IGoogleAuthService googleAuthService,
+    IJwtTokenService jwtTokens, ToeicDbContext db) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request, CancellationToken cancellationToken) =>
@@ -36,6 +39,17 @@ public sealed class AuthController(IAuthService authService, IGoogleAuthService 
         TryGetUserId(out var userId)
             ? Respond(await authService.MeAsync(userId, cancellationToken))
             : Unauthorized();
+
+    [Authorize]
+    [HttpPost("renew")]
+    public async Task<IActionResult> Renew(CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        var user = await db.NguoiDung.AsNoTracking().FirstOrDefaultAsync(x => x.MaNguoiDung == userId, cancellationToken);
+        if (user is null || user.TrangThai != "HOAT_DONG") return Unauthorized();
+        var (token, expiresAtUtc) = jwtTokens.Create(user);
+        return Ok(new LoginResponse(token, expiresAtUtc));
+    }
 
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword(EmailRequest request, CancellationToken cancellationToken) =>
