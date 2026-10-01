@@ -30,6 +30,7 @@ export default function SiteHeader() {
         <span>Lộ trình</span><span>Bài giảng</span>
         <Link to="/vocabulary" state={{ vocabularyRoot: true }} onClick={() => setMenuOpen(false)}>Từ vựng</Link>
         <Link to="/practice/vocabulary" onClick={() => setMenuOpen(false)}>Luyện tập</Link>
+        {user && <Link to="/placement" onClick={() => setMenuOpen(false)}>Phân lớp</Link>}
         <Link to="/mock-test" onClick={() => setMenuOpen(false)}>Thi thử</Link>
       </nav>
       <div className={"site-account" + (menuOpen ? " is-open" : "")}>

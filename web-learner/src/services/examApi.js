@@ -15,6 +15,15 @@ export const examApi = {
   review: (id, token) => apiRequest(root + id + "/review", { token }),
 };
 
+export const placementApi = {
+  state: token => apiRequest("/api/placement", { token }),
+  start: token => apiRequest("/api/placement/start", { method: "POST", token }),
+  result: token => apiRequest("/api/placement/result", { token }),
+  target: (targetScore, token) => apiRequest("/api/placement/target",
+    { method: "PUT", body: { targetScore }, token }),
+  courses: token => apiRequest("/api/placement/courses", { token }),
+};
+
 export async function examMediaBlob(endpoint, token, signal) {
   const response = await fetch(API_BASE_URL + endpoint, { headers: { Authorization: "Bearer " + token }, signal });
   if (!response.ok) throw new Error("Không thể tải media.");

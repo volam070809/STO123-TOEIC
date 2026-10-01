@@ -80,7 +80,7 @@ public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbConte
             _ = await attempts.OwnedAsync(id, LearnerId, ct);
             var group = await db.NhomLuotLam.AsNoTracking().Include(g => g.MaPartNavigation)
                 .FirstOrDefaultAsync(g => g.MaKetQua == id && g.MaNhomLuotLam == groupId, ct);
-            if (group is null || group.MaPartNavigation?.SoPart != 7)
+            if (group is null)
                 throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Không tìm thấy hình ảnh.", 404);
             var document = ExamDocumentCodec.Decode(group.TaiLieuJson).FirstOrDefault(d => d.Order == order);
             if (string.IsNullOrWhiteSpace(document?.ImagePath))

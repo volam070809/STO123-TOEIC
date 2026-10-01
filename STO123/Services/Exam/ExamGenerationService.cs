@@ -10,9 +10,9 @@ public sealed record PlannedUnit(int Part, NguLieu? Resource, IReadOnlyList<CauH
 public sealed class ExamGenerationService(ToeicDbContext db, IConfiguration configuration, BlobServiceClient blobs)
 {
     private static ExamProblem Invalid() => new("INVALID_EXAM_STRUCTURE", "Cấu trúc đề thi không hợp lệ.", 409);
-    private static ExamProblem Empty() => new(ExamCore.Insufficient, "Không đủ dữ liệu để tạo đề thi.", 409);
 
-    public async Task<IReadOnlyList<PlannedUnit>> BuildAsync(int? fixedExamId, CancellationToken ct)
+    public async Task<IReadOnlyList<PlannedUnit>> BuildAsync(int? fixedExamId, CancellationToken ct,
+        string fixedExamType = "DE_THI")
     {
         var parts = await db.PartTOEIC.AsNoTracking().ToDictionaryAsync(p => p.MaPart, p => p.SoPart, ct);
         if (parts.Values.Distinct().Count() != 7 || !Enumerable.Range(1, 7).All(parts.Values.Contains)) throw Invalid();
@@ -30,7 +30,7 @@ public sealed class ExamGenerationService(ToeicDbContext db, IConfiguration conf
             if (!byPart.TryGetValue(part, out var candidates)) continue;
             if (part == 5)
             {
-                foreach (var q in candidates.Where(q => !memberByQuestion.ContainsKey(q.MaCauHoi) && ValidOptions(q, part)))
+                foreach (var q in candidates.Where(q => !memberByQuestion.ContainsKey(q.MaCauHoi) && ExamSourceValidator.ValidQuestion(q, part)))
                     units[part].Add(new(part, null, [q], []));
                 continue;
             }
@@ -38,27 +38,29 @@ public sealed class ExamGenerationService(ToeicDbContext db, IConfiguration conf
             {
                 foreach (var q in candidates)
                 {
-                    if (!ValidOptions(q, part) || !memberByQuestion.TryGetValue(q.MaCauHoi, out var member) ||
+                    if (!ExamSourceValidator.ValidQuestion(q, part) || !memberByQuestion.TryGetValue(q.MaCauHoi, out var member) ||
                         !resources.TryGetValue(member.MaNguLieu, out var resource) ||
-                        !ValidMedia(resource, part) ||
-                        !allByResource.TryGetValue(member.MaNguLieu, out var group) || group.Count != 1) continue;
-                    units[part].Add(new(part, resource, [q], []));
+                        !ExamSourceValidator.ValidMedia(resource, part) ||
+                        !allByResource.TryGetValue(member.MaNguLieu, out var group) ||
+                        !ExamSourceValidator.ValidGroup(part, group)) continue;
+                    var docs = documents.Where(d => d.MaNguLieu == resource.MaNguLieu).ToList();
+                    if (!ExamSourceValidator.ValidDocuments(part, docs)) continue;
+                    units[part].Add(new(part, resource, [q], docs));
                 }
                 continue;
             }
             foreach (var group in allByResource.Values)
             {
-                if (!resources.TryGetValue(group[0].MaNguLieu, out var resource) || !ValidMedia(resource, part)) continue;
+                if (!resources.TryGetValue(group[0].MaNguLieu, out var resource) ||
+                    !ExamSourceValidator.ValidMedia(resource, part) || !ExamSourceValidator.ValidGroup(part, group)) continue;
                 // A group containing unpublished, missing, or mixed-Part questions is not a valid unit.
                 var ids = group.Select(m => m.MaCauHoi).ToHashSet();
                 var groupQuestions = candidates.Where(q => ids.Contains(q.MaCauHoi)).ToDictionary(q => q.MaCauHoi);
                 if (groupQuestions.Count != group.Count || group.Any(m => !groupQuestions.ContainsKey(m.MaCauHoi))) continue;
                 var ordered = group.OrderBy(m => m.ThuTu).Select(m => groupQuestions[m.MaCauHoi]).ToList();
-                if ((part is 3 or 4 && ordered.Count != 3) || (part == 6 && ordered.Count != 4)) continue;
-                if (ordered.Any(q => !ValidOptions(q, part))) continue;
+                if (ordered.Any(q => !ExamSourceValidator.ValidQuestion(q, part))) continue;
                 var docs = documents.Where(d => d.MaNguLieu == resource.MaNguLieu).ToList();
-                if (part == 7 && (docs.Count is < 1 or > 3 || docs.Any(d =>
-                    string.IsNullOrWhiteSpace(d.NoiDung) && string.IsNullOrWhiteSpace(d.DuongDanAnh)))) continue;
+                if (!ExamSourceValidator.ValidDocuments(part, docs)) continue;
                 units[part].Add(new(part, resource, ordered, docs));
             }
         }
@@ -69,39 +71,13 @@ public sealed class ExamGenerationService(ToeicDbContext db, IConfiguration conf
         if (fixedExamId.HasValue)
         {
             var exam = await db.DeThi.AsNoTracking().FirstOrDefaultAsync(x => x.MaDeThi == fixedExamId, ct);
-            if (exam is null || exam.LoaiDe != "DE_THI" || exam.TrangThai != "OPEN" || exam.ThoiGianLamBai != ExamCore.DurationMinutes) throw Invalid();
+            if (exam is null || exam.LoaiDe != fixedExamType || exam.TrangThai != "OPEN" || exam.ThoiGianLamBai != ExamCore.DurationMinutes) throw Invalid();
             var links = await db.CauHoiDeThi.AsNoTracking().Where(x => x.MaDeThi == fixedExamId)
                 .OrderBy(x => x.ThuTu).ToListAsync(ct);
-            if (links.Count != 200 || links.Select(x => x.ThuTu).Where((value, i) => value != i + 1).Any()) throw Invalid();
-            var lookup = units.Values.SelectMany(x => x).SelectMany(u => u.Questions.Select(q => (q.MaCauHoi, u)))
-                .ToDictionary(x => x.MaCauHoi, x => x.u);
-            var result = new List<PlannedUnit>();
-            var index = 0;
-            while (index < links.Count)
-            {
-                if (!lookup.TryGetValue(links[index].MaCauHoi, out var unit)) throw Invalid();
-                if (index + unit.Questions.Count > links.Count ||
-                    !unit.Questions.Select(q => q.MaCauHoi).SequenceEqual(
-                        links.Skip(index).Take(unit.Questions.Count).Select(x => x.MaCauHoi))) throw Invalid();
-                result.Add(unit);
-                index += unit.Questions.Count;
-            }
-            if (!ValidPlan(result)) throw Invalid();
-            return result;
+            return FixedExamPlan.Select(links, units.Values.SelectMany(x => x));
         }
 
-        var repeat = configuration.GetValue<bool>("ExamGeneration:AllowRepeatedQuestions");
-        var plan = new List<PlannedUnit>();
-        foreach (var (part, target) in ExamCore.PartCounts)
-        {
-            var pool = units[part].OrderBy(_ => Random.Shared.Next()).ToList();
-            if (pool.Count == 0) throw Empty();
-            var selected = ExactUnits(pool, target, repeat);
-            if (selected is null) throw Empty();
-            plan.AddRange(selected);
-        }
-        if (!ValidPlan(plan)) throw Empty();
-        return plan;
+        return RandomExamPlanner.Select(units, Random.Shared);
     }
 
     private static IEnumerable<string> MediaPaths(PlannedUnit unit) =>
@@ -137,43 +113,24 @@ public sealed class ExamGenerationService(ToeicDbContext db, IConfiguration conf
         return available.Keys.ToHashSet(StringComparer.Ordinal);
     }
 
-    private static List<PlannedUnit>? ExactUnits(List<PlannedUnit> pool, int target, bool repeat)
-    {
-        // Finite unbounded-knapsack DP. Prefer unused units by processing each source once first.
-        var best = new List<PlannedUnit>?[target + 1];
-        best[0] = [];
-        foreach (var unit in pool)
-            for (var n = target; n >= unit.Questions.Count; n--)
-                if (best[n] is null && best[n - unit.Questions.Count] is { } prior)
-                    best[n] = [.. prior, unit];
-        if (best[target] is not null || !repeat) return best[target];
-        for (var n = 1; n <= target; n++)
-            foreach (var unit in pool)
-                if (n >= unit.Questions.Count && best[n] is null && best[n - unit.Questions.Count] is { } prior)
-                    best[n] = [.. prior, unit];
-        return best[target];
-    }
-
-    private static bool ValidPlan(IEnumerable<PlannedUnit> units) =>
+    internal static bool ValidPlan(IEnumerable<PlannedUnit> units) =>
         units.SelectMany(x => x.Questions.Select(_ => x.Part)).GroupBy(x => x).All(g =>
             ExamCore.PartCounts.TryGetValue(g.Key, out var count) && g.Count() == count) &&
         units.Sum(x => x.Questions.Count) == 200 &&
         units.Select(x => x.Part).SequenceEqual(units.Select(x => x.Part).OrderBy(x => x));
 
-    private static bool ValidMedia(NguLieu resource, int part) => part switch
+    internal static bool ValidRandomPlan(IEnumerable<PlannedUnit> source)
     {
-        1 => !string.IsNullOrWhiteSpace(resource.DuongDanAudio) && !string.IsNullOrWhiteSpace(resource.DuongDanAnh),
-        2 or 3 or 4 => !string.IsNullOrWhiteSpace(resource.DuongDanAudio),
-        6 => !string.IsNullOrWhiteSpace(resource.NoiDungNguLieu),
-        _ => true
-    };
-
-    private static bool ValidOptions(CauHoi q, int part)
-    {
-        if (string.IsNullOrWhiteSpace(q.PhuongAnA) || string.IsNullOrWhiteSpace(q.PhuongAnB) ||
-            string.IsNullOrWhiteSpace(q.PhuongAnC)) return false;
-        if (part != 2 && string.IsNullOrWhiteSpace(q.PhuongAnD)) return false;
-        var answer = q.PhuongAnDung?.Trim();
-        return answer is "A" or "B" or "C" || (part != 2 && answer == "D" && !string.IsNullOrWhiteSpace(q.PhuongAnD));
+        var units = source.ToList();
+        var questions = units.SelectMany(unit => unit.Questions).ToList();
+        return ExamCore.PartCounts.All(pair =>
+            units.Where(unit => unit.Part == pair.Key).Sum(unit => unit.Questions.Count) > 0 &&
+            units.Where(unit => unit.Part == pair.Key).Sum(unit => unit.Questions.Count) <= pair.Value) &&
+            units.All(unit => RandomExamPlanner.ValidUnitSize(unit.Part, unit.Questions.Count)) &&
+            questions.Select(q => q.MaCauHoi).Distinct().Count() == questions.Count &&
+            units.Where(unit => unit.Resource is not null).Select(unit => unit.Resource!.MaNguLieu).Distinct().Count() ==
+            units.Count(unit => unit.Resource is not null) &&
+            units.Select(unit => unit.Part).SequenceEqual(units.Select(unit => unit.Part).OrderBy(part => part));
     }
+
 }

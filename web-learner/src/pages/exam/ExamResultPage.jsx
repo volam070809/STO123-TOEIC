@@ -18,7 +18,7 @@ export default function ExamResultPage() {
     return () => { live = false; };
   }, [attemptId, token]);
   return <SiteLayout><div className="site-container exam-result">
-    <div className="page-heading"><span>Thi thử / Kết quả</span><h1>Kết quả thi thử</h1></div>
+    <div className="page-heading"><span>{result?.source === "PLACEMENT" ? "Phân lớp" : "Thi thử"} / Kết quả</span><h1>{result?.examName || "Kết quả bài thi"}</h1></div>
     {error && <p className="exam-error" role="alert">{error} <Link to={`/exam/${attemptId}`}>Mở bài thi</Link></p>}
     {!result && !error && <p>Đang tải kết quả…</p>}
     {result && <>
@@ -38,7 +38,8 @@ export default function ExamResultPage() {
         {result.parts.map(row => <div key={row.part}><strong>Part {row.part}</strong><span>{row.stats.correct}/{row.stats.total} đúng</span>
           <span>{row.stats.percentage}%</span></div>)}</div></section>
       <div className="action-row"><Link className="primary-button" to={`/exam/${attemptId}/review`}>Xem lại bài</Link>
-        <Link className="outline-button" to="/mock-test">Thi thử</Link></div>
+        <Link className="outline-button" to={result.source === "PLACEMENT" ? "/placement" : "/mock-test"}>
+          {result.source === "PLACEMENT" ? "Phân lớp" : "Thi thử"}</Link></div>
     </>}
   </div></SiteLayout>;
 }

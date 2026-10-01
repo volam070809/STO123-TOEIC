@@ -16,6 +16,7 @@ import MockHomePage from "../pages/exam/MockHomePage";
 import ExamPage from "../pages/exam/ExamPage";
 import ExamResultPage from "../pages/exam/ExamResultPage";
 import ExamReviewPage from "../pages/exam/ExamReviewPage";
+import PlacementPage from "../pages/exam/PlacementPage";
 
 function VocabularyRoute() {
   const location = useLocation();
@@ -34,6 +35,7 @@ export default function AppRoutes() {
     <Route path="/practice/vocabulary/history" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
     <Route path="/practice/vocabulary/history/:id" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
     <Route path="/mock-test" element={<ProtectedRoute><MockHomePage /></ProtectedRoute>} />
+    <Route path="/placement" element={<ProtectedRoute><PlacementPage /></ProtectedRoute>} />
     <Route path="/exam/:attemptId" element={<ProtectedRoute><ExamPage /></ProtectedRoute>} />
     <Route path="/exam/:attemptId/result" element={<ProtectedRoute><ExamResultPage /></ProtectedRoute>} />
     <Route path="/exam/:attemptId/review" element={<ProtectedRoute><ExamReviewPage /></ProtectedRoute>} />

@@ -4,11 +4,10 @@ import { useAuth } from "../../contexts/AuthState";
 import SiteLayout from "../../layouts/SiteLayout";
 import { examApi } from "../../services/examApi";
 import ExamContent from "./ExamContent";
+import { examPartInstructions } from "./examPartInstructions";
 import "../../styles/exam.css";
 
-const counts = [6, 25, 39, 30, 30, 16, 54];
-const boundaries = counts.reduce((a, n) => [...a, (a.at(-1) || 0) + n], []);
-function partForOrder(order) { return boundaries.findIndex(end => order <= end) + 1; }
+const parts = [1, 2, 3, 4, 5, 6, 7];
 function clock(seconds) { return `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`; }
 
 export default function ExamPage() {
@@ -20,8 +19,7 @@ export default function ExamPage() {
   const [current, setCurrent] = useState(1);
   const [remaining, setRemaining] = useState(null);
   const [pending, setPending] = useState(false);
-  const [savingIds, setSavingIds] = useState({});
-  const [saveErrors, setSaveErrors] = useState({});
+  const [saveStates, setSaveStates] = useState({});
   const [navOpen, setNavOpen] = useState(() => window.matchMedia("(min-width: 801px)").matches);
   const queues = useRef(new Map());
   const failedSaves = useRef(new Set());
@@ -42,7 +40,8 @@ export default function ExamPage() {
     let live = true;
     examApi.attempt(attemptId, tokenRef.current).then(data => {
       if (!live) return;
-      if (data.status !== "DANG_LAM") navigate(`/exam/${attemptId}/result`, { replace: true });
+      if (data.status !== "DANG_LAM") navigate(data.source === "PLACEMENT" ? "/placement" :
+        `/exam/${attemptId}/result`, { replace: true });
       else setAttempt(data);
     }).catch(() => { if (live) setError("Không thể tải bài thi hoặc bạn không có quyền truy cập."); });
     return () => { live = false; };
@@ -57,7 +56,8 @@ export default function ExamPage() {
   useEffect(() => {
     if (!attempt || remaining !== 0) return;
     examApi.attempt(attemptId, token).then(data => {
-      if (data.status !== "DANG_LAM") navigate(`/exam/${attemptId}/result`, { replace: true });
+      if (data.status !== "DANG_LAM") navigate(data.source === "PLACEMENT" ? "/placement" :
+        `/exam/${attemptId}/result`, { replace: true });
     }).catch(() => {});
   }, [remaining, attempt, attemptId, token, navigate]);
   useEffect(() => {
@@ -69,6 +69,7 @@ export default function ExamPage() {
   const questions = useMemo(() => attempt ? [...attempt.groups.flatMap(g => g.questions), ...attempt.independentQuestions]
     .sort((a, b) => a.order - b.order) : [], [attempt]);
   const selected = questions.find(q => q.order === current);
+  const currentPart = selected?.part;
   const group = attempt?.groups.find(g => g.groupId === selected?.groupId || g.questions.some(q => q.attemptQuestionId === selected?.attemptQuestionId));
   const answered = questions.filter(q => q.selectedOption).length;
 
@@ -82,17 +83,15 @@ export default function ExamPage() {
     const id = question.attemptQuestionId;
     const count = (savingCount.current.get(id) || 0) + 1;
     savingCount.current.set(id, count);
-    setSavingIds(old => ({ ...old, [id]: true }));
-    setSaveErrors(old => ({ ...old, [id]: false }));
+    setSaveStates(old => ({ ...old, [id]: "saving" }));
     const next = (queues.current.get(id) || Promise.resolve()).catch(() => {}).then(work);
     queues.current.set(id, next);
     next.then(() => { failedSaves.current.delete(id); }).catch(() => {
       failedSaves.current.add(id);
-      setSaveErrors(old => ({ ...old, [id]: true }));
     }).finally(() => {
       const left = (savingCount.current.get(id) || 1) - 1;
       savingCount.current.set(id, left);
-      if (!left) setSavingIds(old => ({ ...old, [id]: false }));
+      if (!left) setSaveStates(old => ({ ...old, [id]: failedSaves.current.has(id) ? "error" : "saved" }));
     });
   }
   function answer(question, option) {
@@ -104,34 +103,44 @@ export default function ExamPage() {
     updateQuestion(question.attemptQuestionId, { flagged: next });
     enqueue(question, () => examApi.flag(attemptId, question.attemptQuestionId, next, token));
   }
+  function retry(question) {
+    enqueue(question, async () => {
+      await examApi.answer(attemptId, question.attemptQuestionId, question.selectedOption, token);
+      await examApi.flag(attemptId, question.attemptQuestionId, question.flagged, token);
+    });
+  }
   async function submit() {
     if (pending) return;
     setPending(true); setError("");
     try {
       await Promise.allSettled([...queues.current.values()]);
       if (failedSaves.current.size) { setError("Một số câu trả lời chưa được lưu. Vui lòng thử lại trước khi nộp."); return; }
-      await examApi.submit(attemptId, token);
-      navigate(`/exam/${attemptId}/result`);
+      const finished = await examApi.submit(attemptId, token);
+      navigate(finished.source === "PLACEMENT" ? "/placement" : `/exam/${attemptId}/result`);
     } catch { setError("Không thể nộp bài. Vui lòng thử lại."); }
     finally { setPending(false); }
   }
   return <SiteLayout><div className="site-container exam-page">
     {error && <p className="exam-error" role="alert">{error}</p>}
     {!attempt ? <p>{error ? <Link to="/mock-test">Về trang thi thử</Link> : "Đang tải bài thi…"}</p> : <>
-      <div className="exam-top"><div><h1>Thi thử TOEIC</h1><p>Part {partForOrder(current)} · Đã trả lời {answered}/200</p></div>
+      <div className="exam-top"><div><h1>{attempt.examName || "Thi thử TOEIC"}</h1><p>Part {currentPart} · Đã trả lời {answered}/{attempt.totalQuestions}</p></div>
         <div className="exam-top-actions"><strong aria-live="polite">{remaining === null ? "--:--" : clock(remaining)}</strong>
           <button className="primary-button" disabled={pending} onClick={submit}>Nộp bài</button></div></div>
       <div className="exam-layout"><main>
+        <p className="exam-part-instruction">{examPartInstructions[currentPart]}</p>
         <ExamContent group={group} independentQuestion={!group ? selected : null} attemptId={attemptId} token={token}
-          onAnswer={answer} onFlag={flag} savingIds={savingIds} saveErrors={saveErrors} />
+          mode={attempt.source === "PRACTICE" ? "PRACTICE" : attempt.source === "PLACEMENT" ? "PLACEMENT" : "MOCK"}
+          onAnswer={answer} onFlag={flag} onRetry={retry} saveStates={saveStates} submissionPending={pending} />
         <div className="exam-step"><button className="outline-button" disabled={current <= 1} onClick={() => setCurrent(current - 1)}>Câu trước</button>
-          <button className="outline-button" disabled={current >= 200} onClick={() => setCurrent(current + 1)}>Câu tiếp</button></div>
+          <button className="outline-button" disabled={current >= attempt.totalQuestions} onClick={() => setCurrent(current + 1)}>Câu tiếp</button></div>
       </main><aside className="exam-navigator"><details open={navOpen} onToggle={event => setNavOpen(event.currentTarget.open)}><summary>Điều hướng câu hỏi</summary>
-        {counts.map((_, index) => <div key={index}><h3>Part {index + 1}</h3><div className="exam-number-grid">
-          {questions.filter(q => q.part === index + 1).map(q => <button type="button" key={q.attemptQuestionId}
-            className={[q.order === current && "current", q.selectedOption && "answered", q.flagged && "flagged"].filter(Boolean).join(" ")}
+        {parts.map(part => <div key={part}><h3>Part {part}</h3><div className="exam-number-grid">
+          {questions.filter(q => q.part === part).map(q => <button type="button" key={q.attemptQuestionId}
+            className={[q.order === current && "current", q.selectedOption ? "answered" : "unanswered",
+              q.flagged && "flagged"].filter(Boolean).join(" ")}
             aria-label={`Câu ${q.order}${q.selectedOption ? ", đã trả lời" : ", chưa trả lời"}${q.flagged ? ", đã đánh dấu" : ""}`}
-            onClick={() => { setCurrent(q.order); requestAnimationFrame(() => document.getElementById("question-" + q.attemptQuestionId)?.focus()); }}>{q.order}</button>)}</div></div>)}
+            onClick={() => { setCurrent(q.order); if (window.innerWidth <= 800) setNavOpen(false);
+              requestAnimationFrame(() => document.getElementById("question-" + q.attemptQuestionId)?.focus()); }}>{q.order}</button>)}</div></div>)}
       </details></aside></div>
     </>}
   </div></SiteLayout>;

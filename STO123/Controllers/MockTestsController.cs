@@ -25,6 +25,8 @@ public sealed class MockTestsController(ToeicDbContext db, ExamAttemptService at
     [HttpPost("start")]
     public async Task<IActionResult> Start([FromBody] StartExamRequest request, CancellationToken ct)
     {
+        if (request.Source is not ("FIXED" or "RANDOM"))
+            return BadRequest(new { code = "INVALID_SOURCE", message = "Nguồn đề thi không hợp lệ." });
         try { return Ok(new { attemptId = await attempts.StartAsync(LearnerId, request, ct) }); }
         catch (ExamProblem e) { return StatusCode(e.Status, new { code = e.Code, message = e.Message }); }
     }
@@ -32,13 +34,11 @@ public sealed class MockTestsController(ToeicDbContext db, ExamAttemptService at
     [HttpGet("history")]
     public async Task<IActionResult> History(CancellationToken ct)
     {
+        await attempts.FinalizeExpiredOwnedAsync(LearnerId, ct);
         var rows = await db.KetQuaLamBai.AsNoTracking()
             .Where(x => x.MaHocVien == LearnerId && x.LoaiBaiLam == ExamCore.Mock)
-            .OrderByDescending(x => x.NgayLamBai)
-            .Select(x => new { x.MaKetQua, x.TrangThai, x.NgayLamBai, x.HetHanLuc, x.DiemTong })
             .ToListAsync(ct);
-        return Ok(rows.Select(x => new ExamHistoryDto(x.MaKetQua, x.TrangThai,
-            ExamCore.Utc(x.NgayLamBai), x.HetHanLuc.HasValue ? ExamCore.Utc(x.HetHanLuc.Value) : null,
-            x.DiemTong)));
+        var exams = await db.DeThi.AsNoTracking().Where(x => x.LoaiDe == "DE_THI").ToListAsync(ct);
+        return Ok(MockHistorySummary.Build(rows, exams));
     }
 }
