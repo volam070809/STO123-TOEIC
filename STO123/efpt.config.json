@@ -35,6 +35,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[CauHoiLuotLam]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[ChiTietCauHinhDeThi]",
          "ObjectType": 0
       },
@@ -107,11 +111,19 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[NguLieuTaiLieu]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[NguoiDung]",
          "ObjectType": 0
       },
       {
          "Name": "[dbo].[NhomCauHoi]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[NhomLuotLam]",
          "ObjectType": 0
       },
       {
@@ -157,10 +169,6 @@
       {
          "Name": "[dbo].[XacThucOTP]",
          "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[v_KetQuaTheoPart]",
-         "ObjectType": 3
       }
    ],
    "UiHint": null,

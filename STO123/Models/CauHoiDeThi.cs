@@ -20,9 +20,6 @@ public partial class CauHoiDeThi
 
     public int ThuTu { get; set; }
 
-    [InverseProperty("CauHoiDeThi")]
-    public virtual ICollection<ChiTietKetQua> ChiTietKetQua { get; set; } = new List<ChiTietKetQua>();
-
     [ForeignKey("MaCauHoi")]
     [InverseProperty("CauHoiDeThi")]
     public virtual CauHoi MaCauHoiNavigation { get; set; }

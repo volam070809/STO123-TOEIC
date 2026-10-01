@@ -8,30 +8,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STO123.Models;
 
-[PrimaryKey("MaKetQua", "MaCauHoi")]
 public partial class ChiTietKetQua
 {
     [Key]
-    public int MaKetQua { get; set; }
-
-    public int MaDeThi { get; set; }
-
-    [Key]
-    public int MaCauHoi { get; set; }
+    public int MaCauHoiLuotLam { get; set; }
 
     [StringLength(1)]
     [Unicode(false)]
     public string DapAnChon { get; set; }
 
-    public bool? LaDung { get; set; }
-
     public bool DanhDau { get; set; }
 
-    [ForeignKey("MaDeThi, MaCauHoi")]
+    [ForeignKey("MaCauHoiLuotLam")]
     [InverseProperty("ChiTietKetQua")]
-    public virtual CauHoiDeThi CauHoiDeThi { get; set; }
-
-    [ForeignKey("MaKetQua, MaDeThi")]
-    [InverseProperty("ChiTietKetQua")]
-    public virtual KetQuaLamBai KetQuaLamBai { get; set; }
+    public virtual CauHoiLuotLam MaCauHoiLuotLamNavigation { get; set; }
 }

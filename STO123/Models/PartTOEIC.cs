@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STO123.Models;
 
-[Index("SoPart", Name = "UQ__PartTOEI__7C5265F4AC7987BE", IsUnique = true)]
+[Index("SoPart", Name = "UQ__PartTOEI__7C5265F45CEFF669", IsUnique = true)]
 public partial class PartTOEIC
 {
     [Key]
@@ -25,5 +25,11 @@ public partial class PartTOEIC
     public virtual ICollection<CauHoi> CauHoi { get; set; } = new List<CauHoi>();
 
     [InverseProperty("MaPartNavigation")]
+    public virtual ICollection<CauHoiLuotLam> CauHoiLuotLam { get; set; } = new List<CauHoiLuotLam>();
+
+    [InverseProperty("MaPartNavigation")]
     public virtual ICollection<ChiTietCauHinhDeThi> ChiTietCauHinhDeThi { get; set; } = new List<ChiTietCauHinhDeThi>();
+
+    [InverseProperty("MaPartNavigation")]
+    public virtual ICollection<NhomLuotLam> NhomLuotLam { get; set; } = new List<NhomLuotLam>();
 }

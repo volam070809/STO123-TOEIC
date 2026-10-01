@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STO123.Models;
 
+[Index("MaPart", "TrangThai", Name = "IX_CauHoi_PartTrangThai")]
 public partial class CauHoi
 {
     [Key]
@@ -41,8 +42,16 @@ public partial class CauHoi
 
     public byte DoKho { get; set; }
 
+    [Required]
+    [StringLength(16)]
+    [Unicode(false)]
+    public string TrangThai { get; set; }
+
     [InverseProperty("MaCauHoiNavigation")]
     public virtual ICollection<CauHoiDeThi> CauHoiDeThi { get; set; } = new List<CauHoiDeThi>();
+
+    [InverseProperty("MaCauHoiGocNavigation")]
+    public virtual ICollection<CauHoiLuotLam> CauHoiLuotLam { get; set; } = new List<CauHoiLuotLam>();
 
     [ForeignKey("MaPart")]
     [InverseProperty("CauHoi")]

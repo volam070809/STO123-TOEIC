@@ -1,4 +1,6 @@
--- STO123: tao moi SQL Server DB_TOEIC123_ver2, khong cap nhat CSDL dang co du lieu.
+ -- STO123 - FULL SCHEMA DB_TOEIC123_ver2
+-- Ban hoan chinh sau khi cap nhat Exam Core.
+-- Dung de tao CSDL moi / luu tren Git. KHONG dung de migrate DB dang co.
 -- 1 giai doan = 1 khoa hoc; Unit co the mang bat ky ten/noi dung nao.
 --CREATE DATABASE DB_TOEIC123_ver2;
 --GO
@@ -90,7 +92,9 @@ CREATE TABLE dbo.KhoaHoc(
     GiaiDoan tinyint not null unique check (GiaiDoan between 1 and 3),
     DiemMucTieuToiDa int not null check (DiemMucTieuToiDa between 10 and 990),
     MoTa nvarchar(512) null,
-    TrangThai varchar(32) not null default 'DANG_MO' check (TrangThai in ('DANG_MO','DA_DONG')),
+    DuongDanAnhDaiDien varchar(512) null,
+    TrangThai varchar(32) not null default 'DANG_MO'
+        check (TrangThai in ('DANG_MO','DA_DONG')),
     MaAdminNoiDung int null foreign key references NguoiDung(MaNguoiDung),
     NgayTao datetime not null default getdate()
 );
@@ -183,12 +187,24 @@ CREATE TABLE dbo.NguLieu(
     NoiDungNguLieu nvarchar(max) null,
     NoiDungDich nvarchar(max) null,
     DuongDanAudio varchar(512) null,
+    DuongDanAnh varchar(512) null
+
+    -- Business validation media/noi dung theo tung Part xu ly o backend.
+    -- Part 7 co the dung NguLieu nhu group/container.
+);
+GO
+
+-- Tai lieu nguon co thu tu cho Part 7.
+-- Backend validate 1-3 document va LoaiTaiLieu hop le.
+CREATE TABLE dbo.NguLieuTaiLieu(
+
+    MaTaiLieu int primary key identity(1,1),
+    MaNguLieu int not null foreign key references NguLieu(MaNguLieu),
+    LoaiTaiLieu varchar(32) not null,
+    NoiDung nvarchar(max) null,
     DuongDanAnh varchar(512) null,
-    constraint CK_NguLieu_NoiDung check (
-        nullif(ltrim(rtrim(NoiDungNguLieu)), N'') is not null
-        or nullif(ltrim(rtrim(DuongDanAudio)), '') is not null
-        or nullif(ltrim(rtrim(DuongDanAnh)), '') is not null
-    )
+    ThuTu int not null check (ThuTu > 0),
+    constraint UQ_NguLieuTaiLieu_ThuTu unique (MaNguLieu, ThuTu)
 );
 GO
 
@@ -204,6 +220,8 @@ CREATE TABLE dbo.CauHoi(
     GiaiThich nvarchar(max) null,
     MaPart int not null foreign key references PartTOEIC(MaPart),
     DoKho tinyint not null check (DoKho between 1 and 3),
+    TrangThai varchar(16) not null default 'NHAP'
+        check (TrangThai in ('NHAP','XUAT_BAN','AN')),
     constraint CK_CauHoi_PhuongAn check (
         PhuongAnD is not null or PhuongAnDung in ('A','B','C')
     )
@@ -287,40 +305,106 @@ GO
 CREATE TABLE dbo.KetQuaLamBai(
 
     MaKetQua int primary key identity(1,1),
-    MaDeThi int not null foreign key references DeThi(MaDeThi),
+
+    -- FIXED: MaDeThi co gia tri. RANDOM: MaDeThi = NULL.
+    MaDeThi int null foreign key references DeThi(MaDeThi),
+
     MaHocVien int not null foreign key references NguoiDung(MaNguoiDung),
     MaLuotLam uniqueidentifier not null default newid() unique,
+
+    LoaiBaiLam varchar(16) not null
+        check (LoaiBaiLam in ('PLACEMENT','MOCK','PRACTICE')),
+
     TrangThai varchar(16) not null default 'DANG_LAM'
-        check (TrangThai in ('DANG_LAM','DA_NOP','BO_DO')),
+        check (TrangThai in ('DANG_LAM','DA_NOP','BO_DO','HET_GIO')),
+
     DiemNghe int null check (DiemNghe between 5 and 495),
     DiemDoc int null check (DiemDoc between 5 and 495),
     DiemTong as (DiemNghe + DiemDoc),
-    NgayLamBai datetime not null default getdate(),
-    NgayNopBai datetime null,
+
+    -- Quy uoc backend ghi UTC.
+    NgayLamBai datetime2(3) not null default sysutcdatetime(),
+    HetHanLuc datetime2(3) null,
+    NgayNopBai datetime2(3) null,
     ThoiGianLamBai int null check (ThoiGianLamBai >= 0), -- Phut
-    constraint UQ_KetQuaLamBai_DeThi unique (MaKetQua, MaDeThi),
+
+    constraint CK_KetQuaLamBai_ThoiHan check (
+        HetHanLuc is null or HetHanLuc > NgayLamBai
+    ),
+
     constraint CK_KetQuaLamBai_NopBai check (
-        (TrangThai = 'DA_NOP' and NgayNopBai is not null
-            and NgayNopBai >= NgayLamBai and ThoiGianLamBai is not null)
-        or (TrangThai in ('DANG_LAM','BO_DO') and NgayNopBai is null)
+        (TrangThai in ('DA_NOP','HET_GIO') and NgayNopBai is not null)
+        or
+        (TrangThai in ('DANG_LAM','BO_DO') and NgayNopBai is null)
+    )
+);
+GO
+
+-- Snapshot mot lan xuat hien cua resource/group trong mot luot thi.
+-- Part 1/2 van tao NhomLuotLam de snapshot media; Part 5 co the khong co group.
+CREATE TABLE dbo.NhomLuotLam(
+
+    MaNhomLuotLam int primary key identity(1,1),
+    MaKetQua int not null foreign key references KetQuaLamBai(MaKetQua),
+    MaNguLieuGoc int null foreign key references NguLieu(MaNguLieu),
+    MaPart int not null foreign key references PartTOEIC(MaPart),
+    ThuTu int not null check (ThuTu > 0),
+
+    NoiDungNguLieu nvarchar(max) null,
+    NoiDungDich nvarchar(max) null,
+    DuongDanAudio varchar(512) null,
+    DuongDanAnh varchar(512) null,
+
+    -- Snapshot document Part 7, backend serialize tu NguLieuTaiLieu.
+    TaiLieuJson nvarchar(max) null,
+
+    constraint UQ_NhomLuotLam_ThuTu unique (MaKetQua, ThuTu)
+);
+GO
+
+-- Snapshot mot lan xuat hien cua cau hoi.
+CREATE TABLE dbo.CauHoiLuotLam(
+
+    MaCauHoiLuotLam int primary key identity(1,1),
+    MaKetQua int not null foreign key references KetQuaLamBai(MaKetQua),
+    MaNhomLuotLam int null foreign key references NhomLuotLam(MaNhomLuotLam),
+    MaCauHoiGoc int null foreign key references CauHoi(MaCauHoi),
+    MaPart int not null foreign key references PartTOEIC(MaPart),
+
+    ThuTu int not null check (ThuTu > 0),
+    ThuTuTrongPart int not null check (ThuTuTrongPart > 0),
+
+    NoiDung nvarchar(max) null,
+    PhuongAnA nvarchar(512) not null,
+    PhuongAnB nvarchar(512) not null,
+    PhuongAnC nvarchar(512) not null,
+    PhuongAnD nvarchar(512) null,
+    PhuongAnDung char(1) not null
+        check (PhuongAnDung in ('A','B','C','D')),
+    GiaiThich nvarchar(max) null,
+
+    constraint UQ_CauHoiLuotLam_ThuTu
+        unique (MaKetQua, ThuTu),
+
+    constraint UQ_CauHoiLuotLam_ThuTuTrongPart
+        unique (MaKetQua, MaPart, ThuTuTrongPart),
+
+    constraint CK_CauHoiLuotLam_PhuongAn check (
+        PhuongAnD is not null or PhuongAnDung in ('A','B','C')
     )
 );
 GO
 
 CREATE TABLE dbo.ChiTietKetQua(
 
-    MaKetQua int not null,
-    MaDeThi int not null,
-    MaCauHoi int not null,
-    DapAnChon char(1) null check (DapAnChon in ('A','B','C','D')),
-    LaDung bit null,
-    DanhDau bit not null default 0,
-    constraint PK_ChiTietKetQua primary key (MaKetQua, MaCauHoi),
-    constraint FK_ChiTietKetQua_KetQua foreign key (MaKetQua, MaDeThi)
-        references KetQuaLamBai(MaKetQua, MaDeThi),
-    constraint FK_ChiTietKetQua_CauHoiDeThi foreign key (MaDeThi, MaCauHoi)
-        references CauHoiDeThi(MaDeThi, MaCauHoi),
-    constraint CK_ChiTietKetQua_BoTrong check (LaDung is null or LaDung = 0 or DapAnChon is not null)
+    -- Answer gan vao question occurrence, khong gan truc tiep MaCauHoi goc.
+    MaCauHoiLuotLam int primary key
+        foreign key references CauHoiLuotLam(MaCauHoiLuotLam),
+
+    DapAnChon char(1) null
+        check (DapAnChon in ('A','B','C','D')),
+
+    DanhDau bit not null default 0
 );
 GO
 
@@ -524,26 +608,36 @@ ON dbo.GiaoDichThanhToan(MaCongThanhToan, MaGiaoDichCongThanhToan)
 WHERE MaGiaoDichCongThanhToan IS NOT NULL;
 GO
 
+-- Index can thiet cho Exam Core.
+CREATE INDEX IX_KetQuaLamBai_HocVienTrangThai
+ON dbo.KetQuaLamBai(MaHocVien, TrangThai, NgayLamBai DESC);
+GO
+
+CREATE INDEX IX_CauHoi_PartTrangThai
+ON dbo.CauHoi(MaPart, TrangThai);
+GO
+
+CREATE INDEX IX_KetQuaPhanLopKNN_MaKetQua
+ON dbo.KetQuaPhanLopKNN(MaKetQua);
+GO
+
 -- Du lieu 7 Part TOEIC
 INSERT INTO dbo.PartTOEIC(SoPart, SoCauChuan)
 VALUES (1,6),(2,25),(3,39),(4,30),(5,30),(6,16),(7,54);
 GO
 
--- Ty le dung moi Part cho KNN, tinh tu cau hoi da cham.
-CREATE VIEW dbo.v_KetQuaTheoPart AS
-SELECT k.MaKetQua, p.SoPart,
-       COUNT(*) AS TongSoCau,
-       SUM(CASE WHEN ct.LaDung = 1 THEN 1 ELSE 0 END) AS SoCauDung,
-       CAST(100.0 * SUM(CASE WHEN ct.LaDung = 1 THEN 1 ELSE 0 END)
-            / COUNT(*) AS decimal(5,2)) AS DiemPhanTram
-FROM dbo.KetQuaLamBai k
-JOIN dbo.CauHoiDeThi cd ON cd.MaDeThi = k.MaDeThi
-JOIN dbo.CauHoi c ON c.MaCauHoi = cd.MaCauHoi
-JOIN dbo.PartTOEIC p ON p.MaPart = c.MaPart
-LEFT JOIN dbo.ChiTietKetQua ct
-    ON ct.MaKetQua = k.MaKetQua AND ct.MaCauHoi = cd.MaCauHoi
-WHERE k.TrangThai = 'DA_NOP'
-GROUP BY k.MaKetQua, p.SoPart;
-GO
+-- Ket qua theo Part duoc tinh trong backend tu CauHoiLuotLam + ChiTietKetQua.
+-- Khong tao v_KetQuaTheoPart de tranh lap business logic trong CSDL.
 
 
+-- =========================================================================
+-- EXAM CORE CONTRACT (BACKEND)
+-- =========================================================================
+-- 1) Part 1/2: tao NhomLuotLam de snapshot media.
+-- 2) Part 3/4/6/7: generator chon nguyen group, khong tach cau.
+-- 3) Part 7: source document doc tu NguLieuTaiLieu; snapshot vao TaiLieuJson.
+-- 4) AllowRepeatedQuestions/group: lap o CauHoiLuotLam/NhomLuotLam, khong lap PK source.
+-- 5) Dung/sai/bo trong, Listening/Reading/7 Part va KNN percentage tinh o backend.
+-- 6) MOCK khong chay KNN; PLACEMENT moi chay KNN.
+-- 7) Timer, expiry, ownership, autosave, submit idempotency xu ly o backend.
+-- 8) Blob exam media nen dung ten/path immutable hoac versioned.

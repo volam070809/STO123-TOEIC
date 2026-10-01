@@ -26,5 +26,11 @@ public partial class NguLieu
     public string DuongDanAnh { get; set; }
 
     [InverseProperty("MaNguLieuNavigation")]
+    public virtual ICollection<NguLieuTaiLieu> NguLieuTaiLieu { get; set; } = new List<NguLieuTaiLieu>();
+
+    [InverseProperty("MaNguLieuNavigation")]
     public virtual ICollection<NhomCauHoi> NhomCauHoi { get; set; } = new List<NhomCauHoi>();
+
+    [InverseProperty("MaNguLieuGocNavigation")]
+    public virtual ICollection<NhomLuotLam> NhomLuotLam { get; set; } = new List<NhomLuotLam>();
 }

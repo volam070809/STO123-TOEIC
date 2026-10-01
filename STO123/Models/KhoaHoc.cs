@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STO123.Models;
 
-[Index("GiaiDoan", Name = "UQ__KhoaHoc__A88A4039AFA0359F", IsUnique = true)]
+[Index("GiaiDoan", Name = "UQ__KhoaHoc__A88A40395930F860", IsUnique = true)]
 public partial class KhoaHoc
 {
     [Key]
@@ -34,6 +34,10 @@ public partial class KhoaHoc
 
     [Column(TypeName = "datetime")]
     public DateTime NgayTao { get; set; }
+
+    [StringLength(512)]
+    [Unicode(false)]
+    public string DuongDanAnhDaiDien { get; set; }
 
     [ForeignKey("MaAdminNoiDung")]
     [InverseProperty("KhoaHoc")]

@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STO123.Models;
 
+[Index("MaKetQua", Name = "IX_KetQuaPhanLopKNN_MaKetQua")]
 public partial class KetQuaPhanLopKNN
 {
     [Key]

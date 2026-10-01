@@ -8,14 +8,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STO123.Models;
 
-[Index("MaKetQua", "MaDeThi", Name = "UQ_KetQuaLamBai_DeThi", IsUnique = true)]
-[Index("MaLuotLam", Name = "UQ__KetQuaLa__C8728A372842CA3F", IsUnique = true)]
+[Index("MaHocVien", "TrangThai", "NgayLamBai", Name = "IX_KetQuaLamBai_HocVienTrangThai", IsDescending = new[] { false, false, true })]
+[Index("MaLuotLam", Name = "UQ__KetQuaLa__C8728A37FBEBE052", IsUnique = true)]
 public partial class KetQuaLamBai
 {
     [Key]
     public int MaKetQua { get; set; }
 
-    public int MaDeThi { get; set; }
+    public int? MaDeThi { get; set; }
 
     public int MaHocVien { get; set; }
 
@@ -32,16 +32,24 @@ public partial class KetQuaLamBai
 
     public int? DiemTong { get; set; }
 
-    [Column(TypeName = "datetime")]
+    [Precision(3)]
     public DateTime NgayLamBai { get; set; }
 
-    [Column(TypeName = "datetime")]
+    [Precision(3)]
     public DateTime? NgayNopBai { get; set; }
 
     public int? ThoiGianLamBai { get; set; }
 
-    [InverseProperty("KetQuaLamBai")]
-    public virtual ICollection<ChiTietKetQua> ChiTietKetQua { get; set; } = new List<ChiTietKetQua>();
+    [Required]
+    [StringLength(16)]
+    [Unicode(false)]
+    public string LoaiBaiLam { get; set; }
+
+    [Precision(3)]
+    public DateTime? HetHanLuc { get; set; }
+
+    [InverseProperty("MaKetQuaNavigation")]
+    public virtual ICollection<CauHoiLuotLam> CauHoiLuotLam { get; set; } = new List<CauHoiLuotLam>();
 
     [InverseProperty("MaKetQuaNavigation")]
     public virtual ICollection<KetQuaPhanLopKNN> KetQuaPhanLopKNN { get; set; } = new List<KetQuaPhanLopKNN>();
@@ -53,6 +61,9 @@ public partial class KetQuaLamBai
     [ForeignKey("MaHocVien")]
     [InverseProperty("KetQuaLamBai")]
     public virtual NguoiDung MaHocVienNavigation { get; set; }
+
+    [InverseProperty("MaKetQuaNavigation")]
+    public virtual ICollection<NhomLuotLam> NhomLuotLam { get; set; } = new List<NhomLuotLam>();
 
     [InverseProperty("MaKetQuaNavigation")]
     public virtual ICollection<TienDoBuocLoTrinh> TienDoBuocLoTrinh { get; set; } = new List<TienDoBuocLoTrinh>();

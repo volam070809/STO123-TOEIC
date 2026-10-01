@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STO123.Models;
 
-[Index("Email", Name = "UQ__NguoiDun__A9D105343E3DE794", IsUnique = true)]
+[Index("Email", Name = "UQ__NguoiDun__A9D10534BC89D6A1", IsUnique = true)]
 public partial class NguoiDung
 {
     [Key]
