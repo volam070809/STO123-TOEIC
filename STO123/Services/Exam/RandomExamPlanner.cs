@@ -2,8 +2,8 @@ namespace STO123.Services.Exam;
 
 public static class RandomExamPlanner
 {
-    private static ExamProblem Insufficient() => new(ExamCore.Insufficient,
-        "Không đủ dữ liệu để tạo đề thi ngẫu nhiên hợp lệ.", 409);
+    private static ExamProblem Insufficient(int part) => new(ExamCore.Insufficient,
+        $"Hiện chưa đủ dữ liệu hợp lệ để tạo bài thi Part {part}.", 409);
 
     public static IReadOnlyDictionary<byte, int> DifficultyCounts(IEnumerable<PlannedUnit> units) =>
         units.SelectMany(unit => unit.Questions).GroupBy(question => question.DoKho)
@@ -11,14 +11,17 @@ public static class RandomExamPlanner
 
     public static IReadOnlyList<PlannedUnit> Select(
         IReadOnlyDictionary<int, List<PlannedUnit>> units,
-        Random random)
+        Random random, int? selectedPart = null)
     {
+        if (selectedPart is not null && !ExamCore.PartCounts.ContainsKey(selectedPart.Value))
+            throw new ExamProblem("INVALID_PART", "Part phải từ 1 đến 7.");
         var plan = new List<PlannedUnit>();
         var usedQuestions = new HashSet<int>();
         var usedGroups = new HashSet<int>();
         foreach (var (part, target) in ExamCore.PartCounts)
         {
-            if (!units.TryGetValue(part, out var candidates) || candidates.Count == 0) throw Insufficient();
+            if (selectedPart is not null && part != selectedPart) continue;
+            if (!units.TryGetValue(part, out var candidates) || candidates.Count == 0) throw Insufficient(part);
             var pool = candidates.ToArray();
             random.Shuffle(pool);
             var unique = new List<PlannedUnit>();
@@ -36,7 +39,7 @@ public static class RandomExamPlanner
                 if (unit.Resource is not null) seenGroups.Add(unit.Resource.MaNguLieu);
             }
             var selected = BestUnits(unique, target);
-            if (selected is null || selected.Count == 0) throw Insufficient();
+            if (selected is null || selected.Count == 0) throw Insufficient(part);
             plan.AddRange(selected);
             foreach (var unit in selected)
             {
@@ -44,7 +47,8 @@ public static class RandomExamPlanner
                 if (unit.Resource is not null) usedGroups.Add(unit.Resource.MaNguLieu);
             }
         }
-        if (!ExamGenerationService.ValidRandomPlan(plan)) throw Insufficient();
+        if (!ExamGenerationService.ValidGeneratedPlan(plan, selectedPart))
+            throw new ExamProblem("INVALID_EXAM_STRUCTURE", "Không thể tạo đề thi từ dữ liệu hợp lệ.", 409);
         return plan;
     }
 

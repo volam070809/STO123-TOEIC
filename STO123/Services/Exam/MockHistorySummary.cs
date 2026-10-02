@@ -24,7 +24,7 @@ public static class MockHistorySummary
                 scores.Count == 0 ? null : scores.Max(a => a.DiemTong),
                 latest?.NgayNopBai is { } date ? ExamCore.Utc(date) : null, active?.MaKetQua);
         }).OrderBy(e => e.ExamId).ToList();
-        var randomAttempts = attempts.Where(a => a.LoaiBaiLam == ExamCore.Mock && !a.MaDeThi.HasValue)
+        var randomAttempts = finalized.Where(a => !a.MaDeThi.HasValue)
             .OrderByDescending(a => a.NgayLamBai)
             .Select(a => new ExamHistoryDto(a.MaKetQua, a.TrangThai, ExamCore.Utc(a.NgayLamBai),
                 a.HetHanLuc.HasValue ? ExamCore.Utc(a.HetHanLuc.Value) : null, a.DiemTong)).ToList();

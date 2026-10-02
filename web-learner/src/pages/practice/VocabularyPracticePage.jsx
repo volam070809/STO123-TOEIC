@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import SiteLayout from "../../layouts/SiteLayout";
 import SessionBoundary from "../../components/auth/SessionBoundary";
 import { useAuth } from "../../contexts/AuthState";
@@ -35,6 +35,8 @@ export default function VocabularyPracticePage() {
 }
 
 function LearnerPractice({ token }) {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
@@ -46,6 +48,7 @@ function LearnerPractice({ token }) {
   const [notice, setNotice] = useState("");
   const [session, dispatch] = useReducer(practiceReducer, null);
   const [saveState, setSaveState] = useState("");
+  const [exitTarget, setExitTarget] = useState(null);
   const submittedSessions = useRef(new WeakSet());
   const activeAttempt = useRef(0);
 
@@ -99,16 +102,44 @@ function LearnerPractice({ token }) {
     }
   }
 
-  function leavePractice() {
+  function finishLeaving(destination, signOut = false) {
     activeAttempt.current += 1;
     setSaveState("");
-    if (hasUnsavedAnswers && !window.confirm("Thoát lượt luyện? Các câu trả lời trong lượt này sẽ không được lưu.")) return;
     dispatch({ type: "reset" });
     setTopic(null);
     setPool([]);
     setNotice("");
     setError("");
+    setExitTarget(null);
+    if (signOut) logout();
+    if (destination) navigate(destination);
   }
+
+  function leavePractice(destination = null) {
+    if (session && !session.finished) setExitTarget({ destination, signOut: false });
+    else finishLeaving(destination);
+  }
+
+  useEffect(() => {
+    if (!session || session.finished) return;
+    const onNavigate = event => {
+      const logoutButton = event.target.closest?.("[data-exam-logout]");
+      if (logoutButton) {
+        event.preventDefault(); event.stopPropagation();
+        setExitTarget({ destination: "/", signOut: true });
+        return;
+      }
+      const link = event.target.closest?.("a[href]");
+      if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey ||
+          event.shiftKey || event.altKey || link.target === "_blank") return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
+      event.preventDefault(); event.stopPropagation();
+      setExitTarget({ destination: url.pathname + url.search + url.hash, signOut: false });
+    };
+    document.addEventListener("click", onNavigate, true);
+    return () => document.removeEventListener("click", onNavigate, true);
+  }, [session]);
 
   const question = session?.questions[session.position];
   const answer = session?.answers[session.position];
@@ -145,8 +176,7 @@ function LearnerPractice({ token }) {
   return <>
     <div className="practice-history-link"><Link className="vocab-text-button" to="/practice/vocabulary/history"
       onClick={event => {
-        if (hasUnsavedAnswers && !window.confirm("Thoát lượt luyện? Các câu trả lời trong lượt này sẽ không được lưu."))
-          event.preventDefault();
+        if (session && !session.finished) { event.preventDefault(); leavePractice("/practice/vocabulary/history"); }
       }}>Lịch sử luyện từ</Link></div>
     {loading && <p role="status">Đang tải dữ liệu luyện tập...</p>}
     {error && <div className="vocab-error" role="alert"><p>{error}</p>
@@ -170,7 +200,7 @@ function LearnerPractice({ token }) {
     </>}
 
     {topic && <>
-      <button type="button" className="vocab-text-button" disabled={starting} onClick={leavePractice}>← Quay lại chọn chủ đề</button>
+      <button type="button" className="vocab-text-button" disabled={starting} onClick={() => leavePractice()}>← Quay lại chọn chủ đề</button>
       {notice && <p role="status" className="vocab-note">{notice}</p>}
 
       {!session && <section className="vocab-panel practice-panel">
@@ -191,7 +221,7 @@ function LearnerPractice({ token }) {
       {session && !session.finished && <section className="vocab-panel practice-panel">
         <div className="practice-toolbar">
           <span>{topic.tenChuDe} · Câu {session.position + 1} / {session.questions.length}</span>
-          <button type="button" className="vocab-text-button" onClick={leavePractice}>Thoát lượt luyện</button>
+          <button type="button" className="vocab-text-button" onClick={() => leavePractice()}>Thoát lượt luyện</button>
         </div>
         <p>{question.type === "word-to-meaning" ? "Chọn nghĩa tiếng Việt đúng:" : "Chọn từ tiếng Anh đúng:"}</p>
         <h2 className="practice-prompt">{question.prompt}</h2>
@@ -229,9 +259,17 @@ function LearnerPractice({ token }) {
           {result.wrongWords.length > 0 && <button type="button" className="primary-button"
             onClick={() => begin(result.wrongWords, pool)}>Luyện lại từ sai</button>}
           <button type="button" className="outline-button" onClick={() => { setMode("all"); begin(pool, pool); }}>Luyện lại chủ đề</button>
-          <button type="button" className="vocab-text-button" onClick={leavePractice}>Quay lại chọn chủ đề</button>
+          <button type="button" className="vocab-text-button" onClick={() => leavePractice()}>Quay lại chọn chủ đề</button>
         </div>
       </section>}
     </>}
+    {exitTarget && <div className="exam-confirm-backdrop" role="presentation"><div className="exam-confirm" role="dialog" aria-modal="true" aria-labelledby="practice-exit-title">
+      <h2 id="practice-exit-title">Bạn có chắc muốn rời khỏi bài?</h2>
+      <p>Tiến độ chưa nộp có thể bị mất.</p>
+      <div className="practice-actions">
+        <button type="button" className="outline-button" onClick={() => setExitTarget(null)}>Ở lại làm bài</button>
+        <button type="button" className="primary-button" onClick={() => finishLeaving(exitTarget.destination, exitTarget.signOut)}>Thoát bài</button>
+      </div>
+    </div></div>}
   </>;
 }

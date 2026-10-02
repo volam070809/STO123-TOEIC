@@ -20,6 +20,26 @@ public static class ExamCore
         Math.Max(0, (int)Math.Floor((end - start).TotalMinutes));
 }
 
+public static class ExamTimer
+{
+    public const int LeaseSeconds = 20;
+    public static int Remaining(KetQuaLamBai attempt, DateTime nowUtc)
+    {
+        var stored = attempt.ThoiGianConLaiGiay ?? throw new ExamProblem("TIMER_NOT_INITIALIZED", "Đồng hồ bài thi chưa được khởi tạo.", 409);
+        if (attempt.BatDauPhienLuc is null) return stored;
+        var elapsed = Math.Max(0, (int)Math.Floor((ExamCore.Utc(nowUtc) - ExamCore.Utc(attempt.BatDauPhienLuc.Value)).TotalSeconds));
+        return Math.Max(0, stored - Math.Min(LeaseSeconds, elapsed));
+    }
+    public static bool IsStale(KetQuaLamBai attempt, DateTime nowUtc) =>
+        attempt.BatDauPhienLuc is { } started && (ExamCore.Utc(nowUtc) - ExamCore.Utc(started)).TotalSeconds > LeaseSeconds;
+    public static void Charge(KetQuaLamBai attempt, DateTime nowUtc, bool keepRunning)
+    {
+        var stale = IsStale(attempt, nowUtc);
+        attempt.ThoiGianConLaiGiay = Remaining(attempt, nowUtc);
+        attempt.BatDauPhienLuc = keepRunning && !stale && attempt.ThoiGianConLaiGiay > 0 ? nowUtc : null;
+    }
+}
+
 public sealed record ExamDocumentSnapshot(int Order, string Type, string? Content, string? ImagePath,
     string? Text = null);
 public sealed record ExamDocuments(int Version, List<ExamDocumentSnapshot> Documents);

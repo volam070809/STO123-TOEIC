@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using STO123.Models;
 using STO123.Services.Auth;
 using STO123.Services.Exam;
+using STO123.Services.Knn;
 using STO123.Services.Scoring;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -68,6 +69,8 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ExamGenerationService>();
 builder.Services.AddScoped<ExamAttemptService>();
 builder.Services.AddScoped<ExamGradingService>();
+builder.Services.AddSingleton<IKnnClassifier, KnnClassifier>();
+builder.Services.AddSingleton<KnnDiagnosticsStore>();
 builder.Services.AddSingleton<IToeicScoreCalculator, EstimatedLinearToeicScoreCalculator>();
 
 builder.Services.AddDbContext<ToeicDbContext>(options =>

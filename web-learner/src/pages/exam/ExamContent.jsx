@@ -10,10 +10,16 @@ function Question({ question, review, onAnswer, onFlag, onRetry, saveState, subm
     {question.text && <p className="exam-preserve-lines">{question.text}</p>}
     <div className="exam-options">{labels.filter(([letter, value]) => value != null ||
       (!review && (question.part === 1 || question.part === 2) && (question.part !== 2 || letter !== "D"))).map(([letter, value]) =>
-      <label key={letter} className="exam-option"><input type="radio" name={"answer-" + question.attemptQuestionId}
+      <label key={letter} className={`exam-option ${review && question.correctOption === letter ? "review-correct-option" : ""} ${review && question.selectedOption === letter && question.correctOption !== letter ? "review-selected-wrong" : ""}`}><input type="radio" name={"answer-" + question.attemptQuestionId}
         value={letter} checked={question.selectedOption === letter} disabled={review || submissionPending}
         onChange={() => onAnswer(question, letter)} />
-        <span><strong>{letter}.</strong> {!review && question.part <= 2 ? "" : value}</span></label>)}</div>
+        <span><strong>{letter}.</strong> {!review && question.part <= 2 ? "" : value}
+          {review && question.correctOption === letter && question.selectedOption === letter &&
+            <em className="review-option-tag">Bạn chọn · Đáp án đúng</em>}
+          {review && question.selectedOption === letter && question.correctOption !== letter &&
+            <em className="review-option-tag">Bạn chọn</em>}
+          {review && question.correctOption === letter && question.selectedOption !== letter &&
+            <em className="review-option-tag">Đáp án đúng</em>}</span></label>)}</div>
     {!review && saveState === "saving" && <small role="status">Đang lưu...</small>}
     {!review && saveState === "saved" && <small className="exam-save-success" role="status">Đã lưu</small>}
     {!review && saveState === "error" && <div className="exam-save-error" role="alert">
@@ -23,7 +29,7 @@ function Question({ question, review, onAnswer, onFlag, onRetry, saveState, subm
     </div>}
     {review && <div className={"exam-review-status " + question.status?.toLowerCase()}>
       <strong>{question.status === "CORRECT" ? "Đúng" : question.status === "INCORRECT" ? "Sai" : "Chưa trả lời"}</strong>
-      <p>Bạn chọn: {question.selectedOption || "—"} · Đáp án đúng: {question.correctOption}</p>
+      {!question.selectedOption && <p>Bạn chưa trả lời câu này.</p>}
       <p className="exam-preserve-lines">{question.explanation}</p></div>}
   </section>;
 }

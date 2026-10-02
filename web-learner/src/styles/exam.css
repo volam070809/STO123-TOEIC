@@ -7,6 +7,11 @@
 .exam-card p { margin: 0; color: #566574; }
 .exam-card button, .exam-card a { flex-shrink: 0; }
 .exam-card-actions { display: grid; gap: .5rem; justify-items: end; }
+.exam-navigation { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; margin-block: 1rem; }
+.exam-navigation > a, .exam-navigation > button { max-width: 100%; white-space: normal; text-align: center; }
+.exam-confirm-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1rem; background: #102a38a8; }
+.exam-confirm { width: min(100%, 27rem); padding: 1.4rem; border-radius: 12px; background: #fff; box-shadow: 0 12px 36px #102a3840; }
+.exam-confirm h2 { margin-top: 0; }
 .exam-card-note { color: #566574; font-size: .85rem; }
 .exam-recommended { display: inline-block; margin-left: .4rem; padding: .2rem .45rem; border-radius: 6px; background: #e5f4ef; color: #196447; font-size: .8rem; }
 .exam-target-form { display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; }
@@ -109,3 +114,45 @@
   .exam-score-sections { grid-template-columns: 1fr; }
   .exam-content { padding: .9rem; }
 }
+.placement-stage > strong { font-size: clamp(2rem, 7vw, 3.5rem); }
+.placement-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+.placement-summary > div { display: grid; gap: .4rem; padding: 1rem; border: 1px solid #d9e3ea; border-radius: 10px; }
+.placement-summary strong { font-size: 1.5rem; color: #145876; }
+.placement-parts { display: grid; gap: 1rem; }
+.placement-part-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .4rem; margin-bottom: .35rem; }
+.placement-bar, .placement-average { height: .75rem; overflow: hidden; border-radius: 99px; background: #e7edf0; }
+.placement-bar span, .placement-average span { display: block; height: 100%; border-radius: inherit; background: #2784a0; }
+.placement-bar .good { background: #247a58; }
+.placement-bar .needs_improvement { background: #ae5344; }
+.placement-knn { padding: 1rem; border: 1px solid #d9e3ea; border-radius: 10px; }
+.placement-knn summary { cursor: pointer; font-weight: 700; }
+.placement-recommended-course { border: 2px solid #247a58; }
+@media (max-width: 560px) { .placement-summary { grid-template-columns: 1fr; } }
+.mock-mode-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.mock-mode-card, .mock-history-card { display: flex; flex-direction: column; min-width: 0; padding: 1.35rem; border: 1px solid #d9e3ea; border-radius: 14px; background: #fff; box-shadow: 0 5px 20px #173c4c0b; }
+.mock-mode-card > span { color: #17617c; font-size: .82rem; font-weight: 700; text-transform: uppercase; }
+.mock-mode-card h3, .mock-history-card h3 { margin: .6rem 0; }
+.mock-mode-card p { flex: 1; color: #566574; }
+.mock-choice-panel { margin-top: 1rem; padding: 1.2rem; border: 1px solid #d9e3ea; border-radius: 12px; background: #f8fbfc; }
+.mock-choice-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .7rem 0; border-top: 1px solid #e3eaef; }
+.mock-part-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .5rem; }
+.mock-history-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.mock-history-card p { color: #566574; }
+.mock-history-card a { align-self: start; margin-top: auto; }
+.review-overview { padding: 1.3rem; border: 1px solid #d9e3ea; border-radius: 12px; background: #f5fafb; }
+.review-part-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; }
+.review-part-card { display: grid; gap: .3rem; padding: .85rem; text-align: left; border: 1px solid #d9e3ea; border-radius: 10px; background: #fff; cursor: pointer; }
+.review-part-card.selected { border: 2px solid #17617c; }
+.review-part-card b { font-size: 1.15rem; }
+.review-part-card small { color: #566574; }
+.exam-review-navigator > details > details { padding: .5rem 0; border-top: 1px solid #e3eaef; }
+.exam-review-navigator > details > details summary { cursor: pointer; font-weight: 650; }
+.exam-review-navigator .exam-number-grid { margin-top: .55rem; }
+.exam-review-navigator .exam-number-grid button { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 2.7rem; font-size: .8rem; }
+.exam-review-navigator .exam-number-grid button small { font-weight: 700; line-height: 1; }
+.review-legend { font-size: .82rem; color: #566574; }
+.exam-option.review-correct-option { border: 2px solid #247a58; background: #e5f4ef; }
+.exam-option.review-selected-wrong { border: 2px solid #b34840; background: #fff0ec; }
+.review-option-tag { display: inline-block; margin-left: .5rem; padding: .15rem .35rem; border-radius: 4px; background: #fff; font-size: .8rem; font-style: normal; font-weight: 700; }
+@media (max-width: 850px) { .mock-mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mock-part-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .mock-mode-grid, .mock-history-grid { grid-template-columns: 1fr; } .mock-part-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mock-choice-row { align-items: stretch; flex-direction: column; } }

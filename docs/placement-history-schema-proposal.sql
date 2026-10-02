@@ -1,0 +1,16 @@
+﻿-- PROPOSAL ONLY. DO NOT EXECUTE AUTOMATICALLY.
+-- BLOCKED BY CURRENT SCHEMA: KetQuaPhanLopKNN is updated in place for the
+-- learner's current recommendation. Older Placement attempts retain their
+-- exam snapshot but not the stage assigned at that time.
+--
+-- Minimum change for future learner-facing Placement history:
+-- ALTER TABLE dbo.KetQuaLamBai
+--   ADD GiaiDoanLucNop tinyint NULL;
+-- ALTER TABLE dbo.KetQuaLamBai
+--   ADD CONSTRAINT CK_KetQuaLamBai_GiaiDoanLucNop
+--       CHECK (GiaiDoanLucNop BETWEEN 1 AND 3);
+--
+-- Populate only after a successful KNN classification of that attempt.
+-- Existing historical stages cannot be recovered as original decisions
+-- without saved old model/dataset output; leave them NULL rather than
+-- presenting a newly calculated stage as the historical stage.

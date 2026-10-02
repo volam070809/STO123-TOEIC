@@ -26,4 +26,12 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Data/Knn/knn_reference_runtime_v1.csv" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="efpt.config.json.user" />
+  </ItemGroup>
+
 </Project>

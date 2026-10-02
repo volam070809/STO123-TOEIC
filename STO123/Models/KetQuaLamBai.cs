@@ -48,6 +48,13 @@ public partial class KetQuaLamBai
     [Precision(3)]
     public DateTime? HetHanLuc { get; set; }
 
+    public int? ThoiGianConLaiGiay { get; set; }
+
+    [Precision(3)]
+    public DateTime? BatDauPhienLuc { get; set; }
+
+    public byte? GiaiDoanLucNop { get; set; }
+
     [InverseProperty("MaKetQuaNavigation")]
     public virtual ICollection<CauHoiLuotLam> CauHoiLuotLam { get; set; } = new List<CauHoiLuotLam>();
 

@@ -1,0 +1,35 @@
+﻿-- PROPOSAL ONLY. DO NOT EXECUTE AUTOMATICALLY.
+-- BLOCKED BY CURRENT SCHEMA: server-authoritative pause/resume requires
+-- an exact remaining duration and the start of the current running interval.
+-- Existing HetHanLuc is an absolute deadline and ThoiGianLamBai stores
+-- completed whole minutes, so neither preserves paused seconds.
+--
+-- Minimum persisted state for intentional in-app pause/resume:
+--   ThoiGianConLaiGiay: remaining seconds at the last pause/resume boundary
+--   BatDauPhienLuc: UTC instant when the current running interval began;
+--                   NULL means paused for an unfinished attempt.
+--
+-- Existing active attempts require a reviewed backfill based on HetHanLuc.
+-- Do not apply a 7200-second default to existing active rows, because that
+-- would reset already consumed time. Application code must be deployed
+-- together with a reviewed migration of existing active attempts.
+--
+-- ALTER TABLE dbo.KetQuaLamBai
+--   ADD ThoiGianConLaiGiay int NULL,
+--       BatDauPhienLuc datetime2(3) NULL;
+--
+-- ALTER TABLE dbo.KetQuaLamBai
+--   ADD CONSTRAINT CK_KetQuaLamBai_ThoiGianConLaiGiay
+--       CHECK (ThoiGianConLaiGiay BETWEEN 0 AND 7200);
+--
+-- Server transaction rules after migration:
+-- Start: remaining=7200, interval-start=UTC now.
+-- Pause: remaining=max(0, remaining-(UTC now-interval-start)), interval-start=NULL.
+-- Resume: interval-start=UTC now; preserve remaining and snapshot.
+-- Submit: consume current running interval, grade and finalize once.
+-- Timeout: finalize when consumed active time reaches remaining.
+-- All transitions must lock the attempt row and verify learner ownership.
+--
+-- Browser close, tab crash, and lost connectivity require a heartbeat or
+-- lease policy to bound undetected running time. The two columns above alone
+-- make intentional pause reliable, but do not detect an unexpected exit.

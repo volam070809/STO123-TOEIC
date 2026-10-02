@@ -18,14 +18,14 @@ public static class PlacementFeatures
 
         var byPart = result.Parts.ToDictionary(p => p.Part, p => p.Stats);
         var percentages = new decimal[7];
-        foreach (var (part, expected) in ExamCore.PartCounts)
+        foreach (var part in ExamCore.PartCounts.Keys)
         {
-            if (!byPart.TryGetValue(part, out var stats) || stats.Total != expected ||
-                stats.Correct < 0 || stats.Correct > expected ||
+            if (!byPart.TryGetValue(part, out var stats) || stats.Total <= 0 ||
+                stats.Correct < 0 || stats.Correct > stats.Total ||
                 stats.Incorrect < 0 || stats.Unanswered < 0 ||
-                stats.Correct + stats.Incorrect + stats.Unanswered != expected)
+                stats.Correct + stats.Incorrect + stats.Unanswered != stats.Total)
                 throw new ExamProblem("INVALID_PLACEMENT_RESULT", "Kết quả từng Part không hợp lệ.", 409);
-            percentages[part - 1] = Math.Round(100m * stats.Correct / expected, 2);
+            percentages[part - 1] = Math.Round(100m * stats.Correct / stats.Total, 2);
         }
         return percentages;
     }

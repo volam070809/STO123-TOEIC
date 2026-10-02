@@ -14,7 +14,7 @@ public static class PlacementTarget
 {
     public static void Apply(KetQuaPhanLopKNN row, int? targetScore)
     {
-        if (targetScore is < 10 or > 990)
+        if (targetScore is null or < 10 or > 990)
             throw new ExamProblem("INVALID_TARGET", "Điểm mục tiêu phải từ 10 đến 990.");
         row.DiemMucTieu = targetScore;
     }

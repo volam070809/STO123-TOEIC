@@ -81,6 +81,9 @@ public class ExamPhase1Tests
         Assert.Equal(500, summary.Statistics.HighestMockScore);
         Assert.Equal(400, summary.Statistics.LatestMockScore);
         Assert.Equal("CLOSE", summary.FixedExams[1].ExamStatus);
+        Assert.Equal(2, summary.RandomAttempts.Count);
+        Assert.All(summary.RandomAttempts, row => Assert.Contains(row.Status,
+            new[] { ExamCore.Submitted, ExamCore.Expired }));
     }
 
     [Theory]

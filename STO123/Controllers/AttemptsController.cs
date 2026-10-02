@@ -45,6 +45,15 @@ public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbConte
     [HttpPost("{id:int}/submit")]
     public Task<IActionResult> Submit(int id, CancellationToken ct) => Run(async () => await attempts.FinalizeAsync(id, LearnerId, false, ct));
 
+    [HttpPost("{id:int}/pause")]
+    public Task<IActionResult> Pause(int id, CancellationToken ct) => Run(async () => await attempts.PauseAsync(id, LearnerId, ct));
+
+    [HttpPost("{id:int}/resume")]
+    public Task<IActionResult> Resume(int id, CancellationToken ct) => Run(async () => await attempts.ResumeAsync(id, LearnerId, ct));
+
+    [HttpPost("{id:int}/heartbeat")]
+    public Task<IActionResult> Heartbeat(int id, CancellationToken ct) => Run(async () => await attempts.HeartbeatAsync(id, LearnerId, ct));
+
     [HttpGet("{id:int}/result")]
     public Task<IActionResult> Result(int id, CancellationToken ct) => Run(async () => await attempts.ResultAsync(id, LearnerId, ct));
 

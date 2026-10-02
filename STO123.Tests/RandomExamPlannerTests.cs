@@ -69,4 +69,34 @@ public class RandomExamPlannerTests
         Assert.Equal(new Dictionary<byte, int> { [1] = 1, [2] = 1, [3] = 1 },
             RandomExamPlanner.DifficultyCounts([mixed]));
     }
+
+    [Theory]
+    [InlineData(1)] [InlineData(2)] [InlineData(3)] [InlineData(4)]
+    [InlineData(5)] [InlineData(6)] [InlineData(7)]
+    public void PartMockUsesOnlyRequestedPartAndCompleteUnits(int part)
+    {
+        var units = FullUnits();
+        var plan = RandomExamPlanner.Select(units, new Random(12), part);
+        Assert.All(plan, unit => Assert.Equal(part, unit.Part));
+        Assert.True(ExamGenerationService.ValidGeneratedPlan(plan, part));
+        Assert.Equal(plan.Sum(unit => unit.Questions.Count),
+            plan.SelectMany(unit => unit.Questions).Select(q => q.MaCauHoi).Distinct().Count());
+        units[part].Clear();
+        var error = Assert.Throws<ExamProblem>(() => RandomExamPlanner.Select(units, new Random(12), part));
+        Assert.Contains($"Part {part}", error.Message);
+    }
+
+    [Fact]
+    public void GroupedPartNeverRepeatsSourceGroup()
+    {
+        var first = new PlannedUnit(3, new NguLieu { MaNguLieu = 9 },
+            Enumerable.Range(1, 3).Select(id => new CauHoi { MaCauHoi = id }).ToList(), []);
+        var repeated = new PlannedUnit(3, new NguLieu { MaNguLieu = 9 },
+            Enumerable.Range(4, 3).Select(id => new CauHoi { MaCauHoi = id }).ToList(), []);
+        var plan = RandomExamPlanner.Select(new Dictionary<int, List<PlannedUnit>> {
+            [3] = [first, repeated]
+        }, new Random(4), 3);
+        Assert.Single(plan);
+        Assert.Equal(3, plan[0].Questions.Count);
+    }
 }

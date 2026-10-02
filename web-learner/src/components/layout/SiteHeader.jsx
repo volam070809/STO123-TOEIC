@@ -27,7 +27,7 @@ export default function SiteHeader() {
       </button>
       <nav id="site-navigation" className={"site-navigation" + (menuOpen ? " is-open" : "")} aria-label="Điều hướng chính">
         <Link className="site-nav-active" to="/" onClick={() => setMenuOpen(false)}>Trang chủ</Link>
-        <span>Lộ trình</span><span>Bài giảng</span>
+        <Link to="/courses" onClick={() => setMenuOpen(false)}>Khóa học</Link>
         <Link to="/vocabulary" state={{ vocabularyRoot: true }} onClick={() => setMenuOpen(false)}>Từ vựng</Link>
         <Link to="/practice/vocabulary" onClick={() => setMenuOpen(false)}>Luyện tập</Link>
         {user && <Link to="/placement" onClick={() => setMenuOpen(false)}>Phân lớp</Link>}
@@ -37,7 +37,7 @@ export default function SiteHeader() {
         {loading ? <span className="site-account-loading">Đang tải...</span> : token && sessionError ? <span className="site-account-loading">Không thể tải tài khoản</span> : user ? <>
           <span className="site-account-identity"><span className="site-account-avatar">{initials}</span><span>{user.hoTen}</span></span>
           <Link to="/profile" onClick={() => setMenuOpen(false)}>Hồ sơ</Link>
-          <button type="button" onClick={signOut}>Đăng xuất</button>
+          <button type="button" data-exam-logout onClick={signOut}>Đăng xuất</button>
         </> : <>
           <Link to="/login" onClick={() => setMenuOpen(false)}>Đăng nhập</Link>
           <Link className="site-account-register" to="/register" onClick={() => setMenuOpen(false)}>Đăng ký</Link>

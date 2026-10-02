@@ -12,7 +12,7 @@ public sealed class ExamGenerationService(ToeicDbContext db, IConfiguration conf
     private static ExamProblem Invalid() => new("INVALID_EXAM_STRUCTURE", "Cấu trúc đề thi không hợp lệ.", 409);
 
     public async Task<IReadOnlyList<PlannedUnit>> BuildAsync(int? fixedExamId, CancellationToken ct,
-        string fixedExamType = "DE_THI")
+        int? selectedPart = null)
     {
         var parts = await db.PartTOEIC.AsNoTracking().ToDictionaryAsync(p => p.MaPart, p => p.SoPart, ct);
         if (parts.Values.Distinct().Count() != 7 || !Enumerable.Range(1, 7).All(parts.Values.Contains)) throw Invalid();
@@ -64,20 +64,22 @@ public sealed class ExamGenerationService(ToeicDbContext db, IConfiguration conf
                 units[part].Add(new(part, resource, ordered, docs));
             }
         }
-        var availableMedia = await AvailableMediaAsync(units.Values.SelectMany(x => x), ct);
+        var availableMedia = await AvailableMediaAsync(units
+            .Where(pair => selectedPart is null || pair.Key == selectedPart)
+            .SelectMany(pair => pair.Value), ct);
         foreach (var part in ExamCore.PartCounts.Keys)
             units[part] = units[part].Where(u => MediaPaths(u).All(availableMedia.Contains)).ToList();
 
         if (fixedExamId.HasValue)
         {
             var exam = await db.DeThi.AsNoTracking().FirstOrDefaultAsync(x => x.MaDeThi == fixedExamId, ct);
-            if (exam is null || exam.LoaiDe != fixedExamType || exam.TrangThai != "OPEN" || exam.ThoiGianLamBai != ExamCore.DurationMinutes) throw Invalid();
+            if (exam is null || exam.LoaiDe != "DE_THI" || exam.TrangThai != "OPEN" || exam.ThoiGianLamBai != ExamCore.DurationMinutes) throw Invalid();
             var links = await db.CauHoiDeThi.AsNoTracking().Where(x => x.MaDeThi == fixedExamId)
                 .OrderBy(x => x.ThuTu).ToListAsync(ct);
             return FixedExamPlan.Select(links, units.Values.SelectMany(x => x));
         }
 
-        return RandomExamPlanner.Select(units, Random.Shared);
+        return RandomExamPlanner.Select(units, Random.Shared, selectedPart);
     }
 
     private static IEnumerable<string> MediaPaths(PlannedUnit unit) =>
@@ -119,13 +121,14 @@ public sealed class ExamGenerationService(ToeicDbContext db, IConfiguration conf
         units.Sum(x => x.Questions.Count) == 200 &&
         units.Select(x => x.Part).SequenceEqual(units.Select(x => x.Part).OrderBy(x => x));
 
-    internal static bool ValidRandomPlan(IEnumerable<PlannedUnit> source)
+    public static bool ValidGeneratedPlan(IEnumerable<PlannedUnit> source, int? selectedPart = null)
     {
         var units = source.ToList();
         var questions = units.SelectMany(unit => unit.Questions).ToList();
         return ExamCore.PartCounts.All(pair =>
-            units.Where(unit => unit.Part == pair.Key).Sum(unit => unit.Questions.Count) > 0 &&
-            units.Where(unit => unit.Part == pair.Key).Sum(unit => unit.Questions.Count) <= pair.Value) &&
+            (selectedPart is null || selectedPart == pair.Key)
+                ? units.Where(unit => unit.Part == pair.Key).Sum(unit => unit.Questions.Count) is var count && count > 0 && count <= pair.Value
+                : units.All(unit => unit.Part != pair.Key)) &&
             units.All(unit => RandomExamPlanner.ValidUnitSize(unit.Part, unit.Questions.Count)) &&
             questions.Select(q => q.MaCauHoi).Distinct().Count() == questions.Count &&
             units.Where(unit => unit.Resource is not null).Select(unit => unit.Resource!.MaNguLieu).Distinct().Count() ==
