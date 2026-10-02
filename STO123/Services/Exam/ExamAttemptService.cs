@@ -501,7 +501,11 @@ public sealed class ExamAttemptService(ToeicDbContext db, ExamGenerationService 
         return grading.Grade(attempt, questions, await Answers(questions, ct))
             with { ExamName = examName ?? GeneratedName(attempt, questions),
                 Source = attempt.LoaiBaiLam == ExamCore.Placement ? ExamCore.Placement :
-                    IsPartMock(attempt, questions) ? "PART" : ExamCore.Mock };
+                    IsPartMock(attempt, questions) ? "PART" : ExamCore.Mock,
+                Mode = attempt.LoaiBaiLam == ExamCore.Placement ? ExamCore.Placement :
+                    attempt.MaDeThi.HasValue ? "FIXED" : IsPartMock(attempt, questions) ? "PART" : "RANDOM",
+                ExamId = attempt.MaDeThi,
+                Part = IsPartMock(attempt, questions) ? questions[0].MaPartNavigation.SoPart : null };
     }
 
     public async Task<ExamReviewDto> ReviewAsync(int id, int learnerId, CancellationToken ct)

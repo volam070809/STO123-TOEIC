@@ -178,21 +178,23 @@ export default function VocabularyPage() {
         <span>Đăng ký tài khoản để học thêm nhiều chủ đề, nghe phát âm và lưu tiến độ học.</span>
       </div>}
       <div className="vocab-topic-grid">
-        {(isLearner ? topics : [topic]).filter(Boolean).map(item =>
-          <article className="vocab-topic-card" key={item.maChuDe || "demo"}>
+        {(isLearner ? topics : [topic]).filter(Boolean).map(item => {
+          const remembered = Math.min(Math.max(item.completedWords || 0, 0), item.totalWords || 0);
+          const percent = item.totalWords > 0 ? Math.round(remembered / item.totalWords * 100) : 0;
+          return <article className="vocab-topic-card" key={item.maChuDe || "demo"}>
             <span className="vocab-pill available">{isLearner ? item.status : "HỌC THỬ"}</span>
             <h2>{item.tenChuDe}</h2>
             <p>{item.totalWords} từ</p>
             {isLearner && <>
-              <p>{item.completedWords}/{item.totalWords} đã hoàn thành · {item.progressPercent}%</p>
-              <progress value={item.completedWords} max={item.totalWords || 1} />
+              <p>{remembered}/{item.totalWords} từ đã nhớ · {percent}%</p>
+              <progress value={remembered} max={item.totalWords || 1} aria-label={`Tiến độ ${item.tenChuDe}: ${percent}%`} />
             </>}
             <button type="button" className="primary-button" onClick={() => openTopic(item)}>
-              {isLearner ? item.completedWords === item.totalWords && item.totalWords > 0
-                ? "Học lại" : item.completedWords
-                  ? "Tiếp tục học" : "Bắt đầu học" : "Xem danh sách"}
+              {isLearner ? remembered > 0 && remembered < item.totalWords
+                ? "Tiếp tục học" : remembered === item.totalWords && item.totalWords > 0
+                  ? "Học lại" : "Bắt đầu học" : "Xem danh sách"}
             </button>
-          </article>)}
+          </article>})}
       </div>
       {isLearner && !topics.length && !error && <p>Chưa có chủ đề từ vựng đang mở.</p>}
       {!isLearner && <p className="vocab-note">Mở khóa thêm chủ đề bằng cách <Link to="/login">đăng nhập</Link> hoặc <Link to="/register">đăng ký</Link>.</p>}

@@ -1,18 +1,54 @@
-﻿import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthState";
 import SessionBoundary from "../components/auth/SessionBoundary";
 import SiteLayout from "../layouts/SiteLayout";
+import { examApi, placementApi } from "../services/examApi";
 
 function LearnerHome({ user }) {
+  const { token } = useAuth();
+  const [mock, setMock] = useState(null);
+  const [placement, setPlacement] = useState(null);
+  useEffect(() => {
+    let live = true;
+    examApi.summary(token).then(value => { if (live) setMock(value); }).catch(() => {});
+    placementApi.summary(token).then(value => { if (live) setPlacement(value); }).catch(() => {});
+    return () => { live = false; };
+  }, [token]);
   return <div className="site-container">
-    <div className="page-heading"><span>Web / Học viên</span><h1>Chào mừng, {user.hoTen}</h1>
-      <p>Tiếp tục khám phá STO123.</p></div>
-    <section className="home-hero"><span className="small-badge">HỌC VIÊN</span>
-      <h2>Học thử từ vựng</h2>
-      <p>Office Essentials là danh sách từ vựng mẫu gồm 10 từ. Kết quả học thử chưa được lưu.</p>
-      <div className="action-row"><Link className="primary-button" to="/vocabulary">Mở danh sách mẫu</Link>
-        <Link className="outline-button" to="/profile">Xem hồ sơ</Link></div>
-    </section>
+    <div className="page-heading"><span>Học viên / Tổng quan</span><h1>Chào mừng, {user.hoTen}</h1>
+      <p>Chọn hoạt động học tiếp theo.</p></div>
+    <section className="home-hero"><span className="small-badge">HỌC TOEIC CÙNG STO123</span>
+      <h2>Tiếp tục hành trình học của bạn</h2>
+      <p>Luyện theo chủ đề, kiểm tra năng lực và theo dõi từng lượt thi đã hoàn thành.</p>
+      <div className="action-row"><Link className="primary-button" to="/courses">Tiếp tục học</Link>
+        <Link className="outline-button" to="/mock-test">Thi thử TOEIC</Link></div></section>
+    {mock?.active && <section className="home-hero"><span className="small-badge">BÀI ĐANG LÀM</span>
+      <h2>{mock.active.name}</h2>
+      <p>Đã trả lời {mock.active.answered}/{mock.active.totalQuestions} câu. Thời gian còn lại được giữ khi rời bài.</p>
+      <Link className="primary-button" to={`/exam/${mock.active.attemptId}`}>Tiếp tục bài thi</Link></section>}
+    {placement?.currentStage && <section className="home-progress-card">
+      <div><span className="small-badge">LỘ TRÌNH HIỆN TẠI</span><h2>Giai đoạn {placement.currentStage}</h2>
+        <p>Từ kết quả kiểm tra đầu vào gần nhất. Xem khóa học phù hợp với mục tiêu của bạn.</p></div>
+      <Link className="outline-button" to="/placement">Xem lộ trình</Link></section>}
+    <h2 className="section-title">Học và luyện tập</h2>
+    <div className="home-access-grid">
+      <article className="access-card"><span className="access-number green">01</span><h3>Kiểm tra đầu vào</h3>
+        <p>{placement?.completedCount ? `${placement.completedCount} lần đã hoàn thành` : "Xác định trình độ hiện tại và lộ trình học."}</p>
+        <Link className="primary-button" to="/placement">Xem lộ trình học</Link></article>
+      <article className="access-card"><span className="access-number orange">02</span><h3>Thi thử TOEIC</h3>
+        <p>{mock?.completedCount ? `${mock.completedCount} lần thi đã hoàn thành` : "Chọn đề có sẵn, đề ngẫu nhiên hoặc thi theo Part."}</p>
+        <Link className="primary-button" to="/mock-test">Mở thi thử</Link></article>
+      <article className="access-card"><span className="access-number purple">03</span><h3>Luyện từ vựng</h3>
+        <p>Học theo chủ đề và xem lại mọi lần luyện đã lưu.</p>
+        <Link className="outline-button" to="/practice/vocabulary">Bắt đầu luyện</Link></article>
+      <article className="access-card"><span className="access-number green">04</span><h3>Từ vựng</h3>
+        <p>Khám phá danh sách và chủ đề từ vựng.</p>
+        <Link className="outline-button" to="/vocabulary">Mở từ vựng</Link></article>
+      <article className="access-card"><span className="access-number orange">05</span><h3>Khóa học</h3>
+        <p>Xem nội dung và lộ trình học hiện có.</p>
+        <Link className="outline-button" to="/courses">Xem khóa học</Link></article>
+    </div>
   </div>;
 }
 

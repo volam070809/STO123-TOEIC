@@ -98,22 +98,28 @@ public class VocabularyPracticeHistoryController(ToeicDbContext db) : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 10,
+        CancellationToken ct = default)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        var attempts = await db.LanLuyenTuVung.AsNoTracking()
-            .Where(x => x.MaNguoiDung == userId && x.NgayNopBai != null)
+        if (page < 1 || pageSize is < 1 or > 20) return BadRequest(new { message = "Invalid page." });
+        var query = db.LanLuyenTuVung.AsNoTracking()
+            .Where(x => x.MaNguoiDung == userId && x.NgayNopBai != null);
+        var total = await query.CountAsync(ct);
+        var attempts = await query
             .OrderByDescending(x => x.NgayNopBai).ThenByDescending(x => x.MaLanLuyen)
+            .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(x => new { x.MaLanLuyen, x.MaChuDe, x.MaChuDeNavigation.TenChuDe,
                 x.NgayBatDau, x.NgayNopBai, x.TrangThai,
                 Total = x.ChiTietLuyenTuVung.Count(),
                 Correct = x.ChiTietLuyenTuVung.Count(d => d.LaDung == true),
                 Incorrect = x.ChiTietLuyenTuVung.Count(d => d.LaDung == false) })
             .ToListAsync(ct);
-        return Ok(attempts.Select(x => new { x.MaLanLuyen, x.MaChuDe, x.TenChuDe,
+        return Ok(new { items = attempts.Select(x => new { x.MaLanLuyen, x.MaChuDe, x.TenChuDe,
             x.NgayBatDau, x.NgayNopBai, x.TrangThai, x.Total, x.Correct,
             x.Incorrect, Percent = x.Correct + x.Incorrect == x.Total
-                ? Percent(x.Correct, x.Total) : (int?)null }));
+                ? Percent(x.Correct, x.Total) : (int?)null }), total, page, pageSize,
+            hasMore = page * pageSize < total });
     }
 
     [HttpGet("{id:int}")]

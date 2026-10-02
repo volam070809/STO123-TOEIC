@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { examMediaBlob } from "../../services/examApi";
 import { advanceAudioSession, audioSession, finishAudioSession, resetUnplayedAudioSession, startAudioSession } from "./audioSession";
 
-export function PrivateImage({ endpoint, token, alt }) {
+export function PrivateImage({ endpoint, token, alt, onDimensions }) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState(false);
   useEffect(() => {
@@ -14,7 +14,9 @@ export function PrivateImage({ endpoint, token, alt }) {
     return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [endpoint, token]);
   if (error) return <p className="exam-media-error">Không thể tải hình ảnh.</p>;
-  return url ? <img className="exam-image" src={url} alt={alt} /> : <p>Đang tải hình ảnh…</p>;
+  return url ? <img className="exam-image" src={url} alt={alt}
+    onLoad={event => onDimensions?.(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)} /> :
+    <p>Đang tải hình ảnh…</p>;
 }
 
 function timeLabel(seconds) {

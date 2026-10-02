@@ -21,7 +21,7 @@ export default function ExamPage() {
   const [pending, setPending] = useState(false);
   const [exitTarget, setExitTarget] = useState(null);
   const [saveStates, setSaveStates] = useState({});
-  const [navOpen, setNavOpen] = useState(() => window.matchMedia("(min-width: 801px)").matches);
+  const [navOpen, setNavOpen] = useState(() => window.matchMedia("(min-width: 1051px)").matches);
   const queues = useRef(new Map());
   const failedSaves = useRef(new Set());
   const savingCount = useRef(new Map());
@@ -195,7 +195,7 @@ export default function ExamPage() {
       </div>
       <div className="exam-layout"><main>
         <p className="exam-part-instruction">{examPartInstructions[currentPart]}</p>
-        <ExamContent group={group} independentQuestion={!group ? selected : null} attemptId={attemptId} token={token}
+        <ExamContent key={group?.groupId ?? selected?.attemptQuestionId} group={group} independentQuestion={!group ? selected : null} attemptId={attemptId} token={token}
           mode={attempt.source === "PRACTICE" ? "PRACTICE" : attempt.source === "PLACEMENT" ? "PLACEMENT" : "MOCK"}
           onAnswer={answer} onFlag={flag} onRetry={retry} saveStates={saveStates} submissionPending={pending} />
         <div className="exam-step"><button className="outline-button" disabled={current <= 1} onClick={() => setCurrent(current - 1)}>Câu trước</button>
@@ -206,7 +206,7 @@ export default function ExamPage() {
             className={[q.order === current && "current", q.selectedOption ? "answered" : "unanswered",
               q.flagged && "flagged"].filter(Boolean).join(" ")}
             aria-label={`Câu ${q.order}${q.selectedOption ? ", đã trả lời" : ", chưa trả lời"}${q.flagged ? ", đã đánh dấu" : ""}`}
-            onClick={() => { setCurrent(q.order); if (window.innerWidth <= 800) setNavOpen(false);
+            onClick={() => { setCurrent(q.order); if (window.innerWidth <= 1050) setNavOpen(false);
               requestAnimationFrame(() => document.getElementById("question-" + q.attemptQuestionId)?.focus()); }}>{q.order}</button>)}</div></div>)}
       </details></aside></div>
     </>}

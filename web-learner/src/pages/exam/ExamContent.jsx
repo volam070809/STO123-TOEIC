@@ -1,5 +1,33 @@
+import { useState } from "react";
 import { PrivateImage, PrivateAudio } from "./ExamMedia";
 import DocumentRenderer from "./DocumentRenderer";
+
+function materialLayout(group, imageSize) {
+  if (!group) return "";
+  const documents = group.documents || [];
+  const tables = documents.filter(document => document.type === "TABLE");
+  const textLength = (group.context?.length || 0) + documents.reduce((length, document) => {
+    if (document.type === "TEXT") return length + (typeof document.content === "string" ? document.content.length : 0);
+    if (document.type === "EMAIL") return length + (document.content?.body?.length || 0);
+    if (document.type === "CHAT") return length + (Array.isArray(document.content?.messages) ?
+      document.content.messages.reduce((sum, message) => sum + (message.text?.length || 0), 0) : 0);
+    return length;
+  }, 0);
+  const longText = textLength > 500 || documents.some(document =>
+    (document.type === "EMAIL" && (document.content?.body?.length || 0) > 450) ||
+    (document.type === "TEXT" && typeof document.content === "string" && document.content.length > 500));
+  const veryWideTable = tables.some(document => {
+    const content = document.content;
+    return (Array.isArray(content?.headers) && content.headers.length >= 5) ||
+      (Array.isArray(content?.rows) && content.rows.some(row => Array.isArray(row) &&
+        row.some(cell => String(cell ?? "").length > 120)));
+  });
+  if (longText || veryWideTable || tables.length > 1) return " is-stacked";
+  const smallImage = imageSize && imageSize.width <= 420 && imageSize.height <= 420;
+  if (tables.length || (group.hasImage && !smallImage) || documents.some(document =>
+    document.type === "IMAGE" || document.imageUrl || document.type === "FORM")) return " is-wide";
+  return "";
+}
 
 function Question({ question, review, onAnswer, onFlag, onRetry, saveState, submissionPending }) {
   const labels = [["A", question.a], ["B", question.b], ["C", question.c], ["D", question.d]];
@@ -36,18 +64,25 @@ function Question({ question, review, onAnswer, onFlag, onRetry, saveState, subm
 
 export default function ExamContent({ group, independentQuestion, attemptId, token, review = false,
   mode = "MOCK", onAnswer, onFlag, onRetry, saveStates = {}, submissionPending = false }) {
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [imageSize, setImageSize] = useState(null);
   const questions = group?.questions ?? [independentQuestion];
   const base = `/api/attempts/${attemptId}/groups/${group?.groupId}`;
-  return <div className="exam-content" key={group?.groupId ?? independentQuestion?.attemptQuestionId}>
-    {group && <div className="exam-context">
+  return <div className={`exam-content${group ? " exam-content-grouped" + materialLayout(group, imageSize) : ""}`}>
+    {group && <div className="exam-source">
+      <button className="outline-button exam-source-toggle" type="button" aria-expanded={sourceOpen}
+        onClick={() => setSourceOpen(value => !value)}>{sourceOpen ? "Thu gọn đề" : "Xem đề"}</button>
+      <div className={`exam-context${sourceOpen ? " is-open" : ""}`}>
       {group.context && <p className="exam-preserve-lines">{group.context}</p>}
       {group.documents?.map(document =>
         <DocumentRenderer key={document.order} document={document} token={token} />)}
-      {group.hasImage && <PrivateImage endpoint={base + "/image"} token={token} alt="Hình minh họa câu hỏi" />}
+      {group.hasImage && <PrivateImage endpoint={base + "/image"} token={token} alt="Hình minh họa câu hỏi"
+        onDimensions={(width, height) => setImageSize({ width, height })} />}
       {group.hasAudio && !review && <PrivateAudio key={base} endpoint={base + "/audio"} token={token} mode={mode} />}
+      </div>
     </div>}
-    {questions.map(question => <Question key={question.attemptQuestionId} question={question} review={review}
+    <div className="exam-group-questions">{questions.map(question => <Question key={question.attemptQuestionId} question={question} review={review}
       onAnswer={onAnswer} onFlag={onFlag} onRetry={onRetry} saveState={saveStates[question.attemptQuestionId]}
-      submissionPending={submissionPending} />)}
+      submissionPending={submissionPending} />)}</div>
   </div>;
 }

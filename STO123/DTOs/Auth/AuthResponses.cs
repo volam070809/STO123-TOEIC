@@ -12,4 +12,8 @@ public sealed record MeResponse(
     string? AnhDaiDien,
     string VaiTro,
     string TrangThai,
-    bool HasPassword);
+    bool HasPassword)
+{
+    public bool HasCustomAvatar { get; init; }
+    public string? AvatarVersion { get; init; }
+}

@@ -99,6 +99,10 @@ export function AuthProvider({ children }) {
     return result.token;
   }
 
+  function updateAvatar(details) {
+    setUser(current => current ? { ...current, ...details } : current);
+  }
+
   useEffect(() => {
     if (!startupRequestedRef.current && tokenRef.current) {
       startupRequestedRef.current = true;
@@ -113,6 +117,6 @@ export function AuthProvider({ children }) {
 
   return <AuthContext.Provider value={{
     token, user, loading, sessionError, isAuthenticated: !!token && !!user,
-    login, loginWithGoogle, logout, loadCurrentUser, renewToken,
+    login, loginWithGoogle, logout, loadCurrentUser, renewToken, updateAvatar,
   }}>{children}</AuthContext.Provider>;
 }

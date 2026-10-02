@@ -11,27 +11,18 @@ export default function ExamResultPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
   const [result, setResult] = useState(null);
-  const [attemptSummary, setAttemptSummary] = useState(null);
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     let live = true;
-    examApi.result(attemptId, token).then(async data => {
-      if (data.source !== "PLACEMENT") {
-        try {
-          const history = await examApi.history(token);
-          if (live) setAttemptSummary(history.attempts.find(row => row.attemptId === Number(attemptId)) || null);
-        } catch { /* Result stays available; exact retry is hidden without metadata. */ }
-      }
-      if (live) setResult(data);
-    })
+    examApi.result(attemptId, token).then(data => { if (live) setResult(data); })
       .catch(e => { if (live) setError(e.data?.code === "ATTEMPT_NOT_FINALIZED" ?
         "Bài thi chưa kết thúc." : "Không thể tải kết quả."); });
     return () => { live = false; };
   }, [attemptId, token]);
   const tested = result?.parts.filter(p => p.stats.total > 0) || [];
   const partMock = result?.source === "PART";
-  const navigation = examNavigation(result, attemptSummary);
+  const navigation = examNavigation(result);
   async function retry() {
     if (retrying || !navigation.mode) return;
     setRetrying(true); setError("");
@@ -44,7 +35,7 @@ export default function ExamResultPage() {
     finally { setRetrying(false); }
   }
   return <SiteLayout><div className="site-container exam-result">
-    <div className="page-heading"><span>{result?.source === "PLACEMENT" ? "Phân lớp" : "Thi thử"} / Kết quả</span>
+    <div className="page-heading"><span>{result?.source === "PLACEMENT" ? "Lộ trình học" : "Thi thử"} / Kết quả</span>
       <h1>{result?.examName || "Kết quả bài thi"}</h1></div>
     {error && <p className="exam-error" role="alert">{error}</p>}
     {!result && !error && <p>Đang tải kết quả…</p>}
@@ -59,10 +50,9 @@ export default function ExamResultPage() {
             <div>Reading <b>{result.readingScore ?? "—"} / 495</b>
               <small>{result.reading.correct} / {result.reading.total} câu đúng</small></div></div></section>}
       <section><h2>Kết quả câu hỏi</h2><div className="exam-stat-grid">
-        <div><b>{result.overall.correct}</b><span>Đúng</span></div>
-        <div><b>{result.overall.incorrect}</b><span>Sai</span></div>
-        <div><b>{result.overall.unanswered}</b><span>Chưa trả lời</span></div>
-        <div><b>{result.overall.total}</b><span>Tổng số câu</span></div>
+        <div><b>{result.overall.correct} / {result.overall.total}</b><span>Đúng</span></div>
+        <div><b>{result.overall.incorrect} / {result.overall.total}</b><span>Sai</span></div>
+        <div><b>{result.overall.unanswered} / {result.overall.total}</b><span>Chưa trả lời</span></div>
       </div></section>
       <section><h2>Theo từng Part</h2><div className="exam-part-list">
         {tested.map(row => <div key={row.part}><strong>Part {row.part}</strong>

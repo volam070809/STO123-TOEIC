@@ -38,12 +38,14 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
             if (row is null) return Ok(new { attemptId = (int?)null, status = "NOT_STARTED" });
             if (row.TrangThai is ExamCore.Active or "BO_DO")
             {
-                var current = await attempts.GetAsync(row.MaKetQua, LearnerId, ct);
-                var answered = current.Groups.SelectMany(g => g.Questions)
-                    .Concat(current.IndependentQuestions).Count(q => q.SelectedOption is not null);
-                return Ok(new { attemptId = (int?)row.MaKetQua, status = current.Status,
-                    totalQuestions = current.TotalQuestions, answered,
-                    remainingSeconds = current.RemainingSeconds, isPaused = current.IsPaused });
+                var counts = await db.CauHoiLuotLam.AsNoTracking().Where(q => q.MaKetQua == row.MaKetQua)
+                    .GroupBy(q => q.MaKetQua).Select(g => new { Total = g.Count(),
+                        Answered = g.Count(q => q.ChiTietKetQua != null && q.ChiTietKetQua.DapAnChon != null) })
+                    .FirstOrDefaultAsync(ct);
+                return Ok(new { attemptId = (int?)row.MaKetQua, status = row.TrangThai,
+                    totalQuestions = counts?.Total ?? 0, answered = counts?.Answered ?? 0,
+                    remainingSeconds = ExamTimer.Remaining(row, DateTime.UtcNow),
+                    isPaused = row.BatDauPhienLuc is null || ExamTimer.IsStale(row, DateTime.UtcNow) });
             }
             return Ok(new { attemptId = (int?)row.MaKetQua, status = row.TrangThai });
         }
@@ -121,22 +123,35 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
         catch (ExamProblem e) { return Problem(e); }
     }
 
-    [HttpGet("history")]
-    public async Task<IActionResult> History(CancellationToken ct)
+    [HttpGet("summary")]
+    public async Task<IActionResult> Summary(CancellationToken ct)
     {
-        var rows = await db.KetQuaLamBai.AsNoTracking().Where(x => x.MaHocVien == LearnerId &&
+        var query = db.KetQuaLamBai.AsNoTracking().Where(x => x.MaHocVien == LearnerId &&
             x.LoaiBaiLam == ExamCore.Placement &&
-            (x.TrangThai == ExamCore.Submitted || x.TrangThai == ExamCore.Expired))
-            .OrderByDescending(x => x.NgayNopBai).ThenByDescending(x => x.MaKetQua).ToListAsync(ct);
+            (x.TrangThai == ExamCore.Submitted || x.TrangThai == ExamCore.Expired));
+        var completedCount = await query.CountAsync(ct);
+        var latestCompletedAt = await query.OrderByDescending(x => x.NgayLamBai)
+            .ThenByDescending(x => x.MaKetQua).Select(x => x.NgayNopBai).FirstOrDefaultAsync(ct);
         var current = await CurrentKnn(ct);
-        return Ok(new { completedCount = rows.Count,
-            latestCompletedAt = rows.FirstOrDefault()?.NgayNopBai,
-            currentStage = current?.GiaiDoanDeXuat,
-            attempts = rows.Select((row, index) => new { attemptId = row.MaKetQua,
-                number = rows.Count - index, completedAt = row.NgayNopBai,
-                status = row.TrangThai,
-                stage = row.GiaiDoanLucNop
-            }).ToList() });
+        return Ok(new { completedCount, latestCompletedAt, currentStage = current?.GiaiDoanDeXuat });
+    }
+
+    [HttpGet("history")]
+    public async Task<IActionResult> History([FromQuery] int page = 1, [FromQuery] int pageSize = 10,
+        CancellationToken ct = default)
+    {
+        if (page < 1 || pageSize is < 1 or > 20) return BadRequest(new { code = "INVALID_PAGE" });
+        var query = db.KetQuaLamBai.AsNoTracking().Where(x => x.MaHocVien == LearnerId &&
+            x.LoaiBaiLam == ExamCore.Placement &&
+            (x.TrangThai == ExamCore.Submitted || x.TrangThai == ExamCore.Expired));
+        var total = await query.CountAsync(ct);
+        var rows = await query.OrderByDescending(x => x.NgayLamBai).ThenByDescending(x => x.MaKetQua)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(x => new { attemptId = x.MaKetQua, completedAt = x.NgayNopBai,
+                status = x.TrangThai, stage = x.GiaiDoanLucNop }).ToListAsync(ct);
+        return Ok(new { items = rows.Select((row, index) => new { row.attemptId,
+            number = total - (page - 1) * pageSize - index, row.completedAt, row.status, row.stage }),
+            total, page, pageSize, hasMore = page * pageSize < total });
     }
 
     [HttpGet("courses/{courseId:int}")]

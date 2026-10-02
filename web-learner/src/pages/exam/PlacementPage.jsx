@@ -7,7 +7,7 @@ import { courseStage } from "./coursePresentation";
 import "../../styles/exam.css";
 
 const levels = { NEEDS_IMPROVEMENT: "Cần cải thiện", DEVELOPING: "Đang phát triển", GOOD: "Tốt" };
-const date = value => value ? new Date(value).toLocaleDateString("vi-VN") : "—";
+const date = value => value ? new Date(value).toLocaleString("vi-VN") : "—";
 const remaining = value => value == null ? "—" : [Math.floor(value / 3600), Math.floor(value % 3600 / 60), value % 60]
   .map(n => String(n).padStart(2, "0")).join(":");
 
@@ -16,6 +16,11 @@ export default function PlacementPage() {
   const navigate = useNavigate();
   const [state, setState] = useState(null);
   const [history, setHistory] = useState(null);
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyMore, setHistoryMore] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
   const [target, setTarget] = useState("");
@@ -24,18 +29,42 @@ export default function PlacementPage() {
   const [, setTick] = useState(0);
   useEffect(() => {
     let live = true;
-    placementApi.state(token).then(async current => {
-      const [past, outcome] = await Promise.all([placementApi.history(token), placementApi.result(token)
-        .catch(e => e.status === 404 ? null : Promise.reject(e))]);
-      const courses = outcome?.targetScore ? await placementApi.courses(token) : [];
+    Promise.all([placementApi.state(token), placementApi.summary(token)]).then(([current, past]) => {
       if (!live) return;
-      setState(current); setHistory(past); setResult(outcome);
-      setTarget(outcome?.targetScore?.toString() ?? "");
-      setRecommendations(courses.filter(c => c.recommended));
-    }).catch(() => { if (live) setError("Không thể tải thông tin phân lớp."); });
+      setState(current); setHistory(past);
+    }).catch(() => { if (live) setError("Không thể tải lộ trình học."); });
     const timer = setInterval(() => setTick(n => n + 1), 1000);
     return () => { live = false; clearInterval(timer); };
   }, [token]);
+
+  async function showAnalysis() {
+    if (analysisLoading || result) return;
+    setAnalysisLoading(true); setError("");
+    try {
+      const outcome = await placementApi.result(token);
+      setResult(outcome);
+      requestAnimationFrame(() => document.getElementById("placement-analysis")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      setTarget(outcome.targetScore?.toString() ?? "");
+      if (outcome.targetScore) {
+        const courses = await placementApi.courses(token);
+        setRecommendations(courses.filter(c => c.recommended));
+      }
+    } catch (e) { setError(e.data?.message || "Không thể tải phân tích kết quả."); }
+    finally { setAnalysisLoading(false); }
+  }
+
+  async function loadHistory() {
+    if (historyLoading || (historyPage > 0 && !historyMore)) return;
+    setHistoryLoading(true); setError("");
+    try {
+      const next = historyPage + 1;
+      const data = await placementApi.history(token, next);
+      setHistoryRows(old => [...old, ...data.items]);
+      setHistoryPage(next); setHistoryMore(data.hasMore);
+      if (next === 1) requestAnimationFrame(() => document.getElementById("placement-history")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    } catch { setError("Không thể tải lịch sử kiểm tra đầu vào."); }
+    finally { setHistoryLoading(false); }
+  }
 
   async function start() {
     if (pending) return;
@@ -67,19 +96,23 @@ export default function PlacementPage() {
   const strong = result?.parts?.filter(p => p.percentage >= 65).map(p => `Part ${p.part}`) || [];
   const improve = result?.parts?.filter(p => p.percentage < 40).map(p => `Part ${p.part}`) || [];
   return <SiteLayout><div className="site-container exam-home">
-    <div className="page-heading"><span>Phân lớp</span><h1>Bài kiểm tra đầu vào</h1>
+    <div className="page-heading"><span>Lộ trình học</span><h1>Kiểm tra đầu vào và lộ trình học</h1>
       <p>7 Part · tối đa 200 câu · 120 phút · Có thể làm lại để cập nhật kết quả</p></div>
     <div className="exam-navigation"><Link className="outline-button" to="/">← Quay lại</Link></div>
     {error && <p className="exam-error" role="alert">{error}</p>}
-    {!state && !error && <p>Đang tải thông tin phân lớp…</p>}
+    {!state && !error && <p>Đang tải lộ trình học…</p>}
     {hasActive && <section className="exam-card"><div><h2>Bài kiểm tra đầu vào đang làm</h2>
       <p>7 Part · {state.totalQuestions} câu · Đã trả lời {state.answered} / {state.totalQuestions}</p>
       <p>{state.isPaused ? "Đang tạm dừng · " : ""}Thời gian còn lại: {remaining(state.remainingSeconds)}</p></div>
       <Link className="primary-button" to={`/exam/${state.attemptId}`}>Tiếp tục kiểm tra</Link></section>}
-    {!hasActive && state && <section className="exam-card"><div><h2>{result ? "Kiểm tra lại năng lực" : "Bắt đầu kiểm tra đầu vào"}</h2>
+    {!hasActive && state && <section className="exam-card"><div><h2>{history?.completedCount ? "Kiểm tra lại năng lực" : "Bắt đầu kiểm tra đầu vào"}</h2>
       <p>Kết quả 7 Part giúp đánh giá năng lực và chọn khóa học phù hợp.</p></div>
       <button className="primary-button" type="button" disabled={pending} onClick={start}>
-        {result ? "Làm lại kiểm tra đầu vào" : "Bắt đầu kiểm tra đầu vào"}</button></section>}
+        {history?.completedCount ? "Làm lại kiểm tra đầu vào" : "Bắt đầu kiểm tra đầu vào"}</button></section>}
+    {history?.completedCount > 0 && !result && <section className="exam-card"><div><h2>Kết quả gần nhất</h2>
+      <p>{date(history.latestCompletedAt)} · {history.currentStage ? `Giai đoạn ${history.currentStage}` : "Chưa có đánh giá trình độ"}</p></div>
+      <button className="outline-button" type="button" disabled={analysisLoading} onClick={showAnalysis}>
+        {analysisLoading ? "Đang tải…" : "Xem phân tích"}</button></section>}
     {result && <>
       <section id="placement-analysis" className="exam-score"><h2>Kết quả kiểm tra đầu vào</h2>
         <p>{date(result.result.finishedAt)} · {result.result.overall.correct} / {result.result.overall.total} câu đúng</p>
@@ -108,7 +141,7 @@ export default function PlacementPage() {
             summary.readingPercentage > summary.listeningPercentage ? "Reading hiện tốt hơn Listening." :
               "Listening và Reading hiện cân bằng."}</p></section>
       <section className="exam-score"><h2>Trình độ hiện tại</h2>
-        <strong>{result.stage ? `Giai đoạn ${result.stage}` : "Chưa thể phân lớp"}</strong>
+        <strong>{result.stage ? `Giai đoạn ${result.stage}` : "Chưa thể xác định giai đoạn"}</strong>
         <p>{result.stage ? `Năng lực hiện tại phù hợp với ${courseStage[result.stage]?.name}.` :
           "Kết quả bài làm đã được lưu; đề xuất hợp lệ trước đó không bị thay đổi."}</p></section>
       {result.stage && <section><h2>Mục tiêu TOEIC của bạn</h2>
@@ -121,21 +154,33 @@ export default function PlacementPage() {
         </form></section>}
       {result.stage && result.targetScore != null && recommendations.length > 0 && <section>
         <h2>{recommendations.length === 1 ? "Khóa học đề xuất" : "Lộ trình khóa học đề xuất"}</h2>
-        <div className="exam-card-list">{recommendations.map((course, index) => <article className="exam-card" key={course.courseId}>
-          <div><h3>{index + 1}. {course.name}</h3>
-            <p>{courseStage[course.stage]?.range} · {index === 0 ? "Bắt đầu từ năng lực hiện tại" :
-              index === recommendations.length - 1 ? `Hướng tới mục tiêu ${result.targetScore}` : "Bước tiếp theo"}</p>
-            <p>🔒 Khóa học đang khóa</p></div>
-          <Link className="outline-button" to={`/courses/${course.courseId}`}>Xem khóa học</Link>
+        <div className="learning-path">{recommendations.map((course, index) => <article className="learning-path-step" key={course.courseId}>
+          <span className="learning-path-number" aria-hidden="true">{index + 1}</span>
+          <div className="learning-path-content">
+            <div className="learning-path-labels"><span className="small-badge">Giai đoạn {course.stage}</span>
+              {course.stage === result.stage && <span className="learning-path-indicator">Trình độ hiện tại</span>}
+              {index === recommendations.length - 1 && <span className="learning-path-indicator">Hướng tới mục tiêu</span>}</div>
+            <h3>{course.name}</h3>
+            <p>Khoảng điểm TOEIC: {courseStage[course.stage]?.range || "Theo trình độ của bạn"}</p>
+            <p>{course.stage === result.stage ? "Phù hợp để bắt đầu từ trình độ hiện tại." :
+              index === recommendations.length - 1 ? `Giúp hướng tới mục tiêu ${result.targetScore} điểm.` :
+                "Bước tiếp theo trong lộ trình đề xuất."}</p>
+            <Link className="outline-button" to={`/courses/${course.courseId}`}>Xem khóa học</Link>
+          </div>
         </article>)}</div></section>}
     </>}
-    {history?.completedCount > 0 && <section className="exam-card"><div><h2>Lịch sử kiểm tra đầu vào</h2>
+    {history?.completedCount > 0 && <section id="placement-history" className="exam-card"><div><h2>Lịch sử kiểm tra đầu vào</h2>
       <p>Đã thực hiện {history.completedCount} lần · Lần gần nhất: {date(history.latestCompletedAt)}</p>
-      <p>Trình độ hiện tại: {history.currentStage ? `Giai đoạn ${history.currentStage}` : "Chưa có phân lớp"}</p>
-      <details><summary>Xem lịch sử</summary><div className="placement-history-list">{history.attempts.map(row =>
+      <p>Trình độ hiện tại: {history.currentStage ? `Giai đoạn ${history.currentStage}` : "Chưa có đánh giá trình độ"}</p>
+      <button className="outline-button" type="button" disabled={historyLoading || historyPage > 0} onClick={loadHistory}>
+        {historyLoading ? "Đang tải…" : historyPage ? "Lịch sử đã mở" : "Xem lịch sử"}</button>
+      {historyPage > 0 && <div className="placement-history-list">{historyRows.map(row =>
         <div key={row.attemptId}><span>Lần {row.number} · {date(row.completedAt)}
           {row.stage ? ` · Giai đoạn ${row.stage}` : " · Chưa lưu kết quả phân loại"}</span>
-          <Link to={`/exam/${row.attemptId}/result`}>Xem kết quả</Link></div>)}</div></details></div></section>}
+          <span className="action-row"><Link to={`/exam/${row.attemptId}/result`}>Xem kết quả</Link>
+            <Link to={`/exam/${row.attemptId}/review`}>Xem lại bài</Link></span></div>)}
+        {historyMore && <button className="outline-button" type="button" disabled={historyLoading} onClick={loadHistory}>
+          {historyLoading ? "Đang tải…" : "Xem thêm lần kiểm tra"}</button>}</div>}</div></section>}
     <section><Link className="outline-button" to="/courses">Khám phá tất cả khóa học</Link></section>
   </div></SiteLayout>;
 }

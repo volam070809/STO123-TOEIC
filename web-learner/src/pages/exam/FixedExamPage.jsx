@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import SiteLayout from "../../layouts/SiteLayout";
@@ -6,57 +6,74 @@ import { examApi } from "../../services/examApi";
 import "../../styles/exam.css";
 
 const date = value => value ? new Date(value).toLocaleDateString("vi-VN") : "—";
-const status = { DA_NOP: "Đã nộp", HET_GIO: "Hết giờ" };
-const remaining = value => value == null ? "—" : [Math.floor(value / 3600), Math.floor(value % 3600 / 60), value % 60]
-  .map(n => String(n).padStart(2, "0")).join(":");
+
 export default function FixedExamPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
-  const [history, setHistory] = useState(null);
-  const [active, setActive] = useState(null);
+  const [exams, setExams] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const [page, setPage] = useState(1);
+  const [attempts, setAttempts] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingAttempts, setLoadingAttempts] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const [, setTick] = useState(0);
   useEffect(() => {
     let live = true;
-    Promise.all([examApi.history(token), examApi.active(token)]).then(([past, current]) => {
-      if (live) { setHistory(past); setActive(current); }
-    }).catch(() => { if (live) setError("Không thể tải đề soạn sẵn."); });
-    const timer = setInterval(() => setTick(n => n + 1), 1000);
-    return () => { live = false; clearInterval(timer); };
+    examApi.fixedSummary(token).then(data => { if (live) setExams(data); })
+      .catch(() => { if (live) setError("Không thể tải danh sách đề và lịch sử."); });
+    return () => { live = false; };
   }, [token]);
+  useEffect(() => {
+    if (expanded == null) return;
+    let live = true;
+    examApi.history(token, { mode: "FIXED", examId: expanded, page }).then(data => {
+      if (!live) return;
+      setAttempts(old => page === 1 ? data.items : [...old, ...data.items]);
+      setHasMore(data.hasMore);
+      setLoadingAttempts(false);
+    }).catch(() => { if (live) { setError("Không thể tải các lượt thi của đề này."); setLoadingAttempts(false); } });
+    return () => { live = false; };
+  }, [expanded, page, token]);
   async function start(examId) {
     if (pending) return;
     setPending(true); setError("");
     try {
-      const started = await examApi.start("FIXED", examId, token);
-      navigate(`/exam/${started.attemptId}`);
+      const row = await examApi.start("FIXED", examId, token);
+      navigate(`/exam/${row.attemptId}`);
     } catch (e) { setError(e.data?.message || "Không thể bắt đầu đề thi."); }
     finally { setPending(false); }
   }
+  function toggle(examId) {
+    if (expanded === examId) { setExpanded(null); return; }
+    setAttempts([]); setHasMore(false); setPage(1); setError(""); setLoadingAttempts(true); setExpanded(examId);
+  }
   return <SiteLayout><div className="site-container exam-home">
-    <div className="page-heading"><span><Link to="/mock-test">Thi thử</Link> / Đề soạn sẵn</span>
-      <h1>Đề soạn sẵn</h1><p>Mỗi bộ đề được hiển thị một lần cùng kết quả các lần thi.</p></div>
+    <div className="page-heading"><span>Thi thử / Đề soạn sẵn</span><h1>Đề soạn sẵn</h1>
+      <p>Chọn đề để làm bài hoặc xem mọi lượt thi trước đây của từng đề.</p></div>
     <div className="exam-navigation"><Link className="outline-button" to="/mock-test">← Quay lại Thi thử</Link></div>
     {error && <p className="exam-error" role="alert">{error}</p>}
-    {!history && !error && <p>Đang tải đề thi…</p>}
-    {active && <p className="exam-card-note">Bạn đang có một bài thi chưa hoàn thành: <Link to={`/exam/${active.attemptId}`}>Tiếp tục làm bài</Link>.</p>}
-    <div className="exam-card-list">{history?.fixedExams.map(exam => {
-      const rows = history.attempts.filter(row => row.examId === exam.examId);
-      const ownActive = active?.examId === exam.examId ? active : null;
-      return <article className="exam-card" key={exam.examId}><div><h2>{exam.examName}</h2>
-        <p>200 câu · 120 phút</p>
-        {exam.completedAttempts ? <p>Đã thi: {exam.completedAttempts} lần · Điểm cao nhất: {exam.bestScore ?? "—"}/990 · Lần gần nhất: {exam.latestScore ?? "—"}/990</p> :
-          <p>Chưa thi lần nào</p>}
-        {ownActive && <p>{ownActive.isPaused ? "Đang tạm dừng" : "Bài đang làm"} · Đã trả lời {ownActive.answered}/{ownActive.totalQuestions} · Còn {remaining(ownActive.remainingSeconds)}</p>}
-        {rows.length > 0 && <details><summary>Xem các lần thi</summary><div className="placement-history-list">
-          {rows.map((row, index) => <div key={row.attemptId}><span>Lần {rows.length - index} · {date(row.startedAt)} · {status[row.status]} · {row.totalScore ?? "—"}/990</span>
-            <Link to={`/exam/${row.attemptId}/result`}>Xem kết quả</Link></div>)}</div></details>}
-      </div><div className="exam-card-actions">
-        {ownActive ? <Link className="primary-button" to={`/exam/${ownActive.attemptId}`}>Tiếp tục làm bài</Link> :
-          <button className="primary-button" type="button" disabled={pending || exam.examStatus !== "OPEN"}
-            onClick={() => start(exam.examId)}>{exam.completedAttempts ? "Làm lại đề" : "Bắt đầu thi"}</button>}
-      </div></article>;
-    })}</div>
+    {!exams && !error && <p role="status">Đang tải danh sách đề…</p>}
+    {exams?.length === 0 && <p>Chưa có đề soạn sẵn.</p>}
+    <div className="exam-card-list">{exams?.map(exam => <article className="exam-card fixed-exam-card" key={exam.examId}><div>
+      <h2>{exam.examName}</h2><p>200 câu · {exam.duration} phút · {exam.completedAttempts} lượt đã hoàn thành</p>
+      {exam.bestScore != null && <p>Điểm cao nhất: {exam.bestScore}/990</p>}
+      {exam.activeAttemptId && <p><Link to={`/exam/${exam.activeAttemptId}`}>Tiếp tục bài chưa hoàn thành</Link></p>}
+      {expanded === exam.examId && <div className="fixed-attempts">
+        {loadingAttempts && <p role="status">Đang tải các lượt thi…</p>}
+        {!loadingAttempts && attempts.length === 0 && <p>Chưa có lượt thi đã hoàn thành.</p>}
+        {attempts.map(row => <div className="fixed-attempt-row" key={row.attemptId}>
+          <span>{date(row.startedAt)} · {row.totalScore ?? "—"}/990</span>
+          <div className="action-row"><Link to={`/exam/${row.attemptId}/result`}>Xem kết quả</Link>
+            <Link to={`/exam/${row.attemptId}/review`}>Xem lại bài</Link></div></div>)}
+        {hasMore && <button className="outline-button" type="button" disabled={loadingAttempts}
+          onClick={() => { setLoadingAttempts(true); setPage(value => value + 1); }}>Tải thêm</button>}
+      </div>}
+    </div><div className="exam-card-actions">
+      {exam.examStatus === "OPEN" && exam.duration === 120 && <button className="primary-button" type="button" disabled={pending}
+        onClick={() => start(exam.examId)}>{exam.activeAttemptId ? "Tiếp tục" : "Bắt đầu thi"}</button>}
+      <button className="outline-button" type="button" onClick={() => toggle(exam.examId)}>
+        {expanded === exam.examId ? "Ẩn các lượt thi" : "Xem các lượt thi"}</button>
+    </div></article>)}</div>
   </div></SiteLayout>;
 }

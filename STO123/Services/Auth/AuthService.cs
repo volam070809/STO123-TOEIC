@@ -14,6 +14,7 @@ public sealed class AuthService(
     IOtpService otpService,
     IJwtTokenService jwtTokenService,
     IEmailService emailService,
+    AvatarStorage avatars,
     ILogger<AuthService> logger) : IAuthService
 {
     private const string InvalidOtp = "invalid or expired OTP";
@@ -145,12 +146,17 @@ public sealed class AuthService(
     {
         var user = await context.NguoiDung.AsNoTracking()
             .Where(u => u.MaNguoiDung == userId)
-            .Select(u => new MeResponse(u.MaNguoiDung, u.HoTen, u.Email, u.SoDienThoai, u.AnhDaiDien, u.VaiTro, u.TrangThai,
-                u.XacThucDangNhap != null && u.XacThucDangNhap.LoaiXacThuc == "EMAIL"))
+            .Select(u => new { u.MaNguoiDung, u.HoTen, u.Email, u.SoDienThoai, u.AnhDaiDien,
+                u.VaiTro, u.TrangThai,
+                HasPassword = u.XacThucDangNhap != null && u.XacThucDangNhap.LoaiXacThuc == "EMAIL" })
             .FirstOrDefaultAsync(cancellationToken);
-        return user is null
-            ? AuthResult<MeResponse>.Failure(404, "Account not found.")
-            : AuthResult<MeResponse>.Success(200, user);
+        if (user is null) return AuthResult<MeResponse>.Failure(404, "Account not found.");
+        var custom = AvatarStorage.IsCustomReference(user.MaNguoiDung, user.AnhDaiDien);
+        var providerUrl = await avatars.ProviderUrlAsync(user.MaNguoiDung, user.AnhDaiDien, cancellationToken);
+        return AuthResult<MeResponse>.Success(200,
+            new MeResponse(user.MaNguoiDung, user.HoTen, user.Email, user.SoDienThoai, providerUrl,
+                user.VaiTro, user.TrangThai, user.HasPassword)
+            { HasCustomAvatar = custom, AvatarVersion = custom ? AvatarStorage.Version(user.AnhDaiDien) : null });
     }
 
     public async Task<MessageResponse> ForgotPasswordAsync(EmailRequest request, CancellationToken cancellationToken)

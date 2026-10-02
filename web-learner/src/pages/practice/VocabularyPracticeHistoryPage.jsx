@@ -16,19 +16,25 @@ export default function VocabularyPracticeHistoryPage() {
   const { token } = useAuth();
   const [response, setResponse] = useState(null);
   const [reload, setReload] = useState(0);
-  const requestKey = `${token}:${id || "list"}:${reload}`;
+  const [page, setPage] = useState(1);
+  const [list, setList] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
+  const requestKey = `${token}:${id || "list"}:${page}:${reload}`;
   const loading = response?.key !== requestKey;
   const data = loading ? null : response.data;
   const error = loading ? "" : response.error;
 
   useEffect(() => {
     let active = true;
-    apiRequest(ROOT + (id ? "/" + id : ""), { token })
-      .then(value => { if (active) setResponse({ key: requestKey, data: value, error: "" }); })
+    apiRequest(ROOT + (id ? "/" + id : `?page=${page}`), { token })
+      .then(value => { if (active) {
+        if (!id) { setList(old => page === 1 ? value.items : [...old.slice(0, (page - 1) * 10), ...value.items]); setHasMore(value.hasMore); }
+        setResponse({ key: requestKey, data: value, error: "" });
+      } })
       .catch(err => { if (active) setResponse({ key: requestKey, data: null, error: err.status === 404
         ? "Không tìm thấy lượt luyện tập này." : "Không thể tải lịch sử luyện tập." }); });
     return () => { active = false; };
-  }, [id, token, reload, requestKey]);
+  }, [id, token, reload, requestKey, page]);
 
   return <SiteLayout className="vocab-page"><div className="site-container practice-page">
     <div className="page-heading">
@@ -45,14 +51,16 @@ export default function VocabularyPracticeHistoryPage() {
     {error && <div className="vocab-error" role="alert"><p>{error}</p>
       <button type="button" className="outline-button" onClick={() => setReload(value => value + 1)}>Thử lại</button>
     </div>}
-    {!loading && !error && !id && (data.length ? <div className="practice-history-list">
-      {data.map(item => <article className="vocab-panel practice-panel" key={item.maLanLuyen}>
+    {!error && !id && (list.length ? <div className="practice-history-list">
+      {list.map(item => <article className="vocab-panel practice-panel" key={item.maLanLuyen}>
         <h2>{item.tenChuDe}</h2>
         <p>{dateText(item.ngayNopBai)}</p>
         <p><strong>{item.correct}/{item.total} câu đúng{item.percent !== null ? ` · ${item.percent}%` : ""}</strong></p>
         <Link className="outline-button" to={"/practice/vocabulary/history/" + item.maLanLuyen}>Xem chi tiết</Link>
       </article>)}
-    </div> : <section className="vocab-panel practice-panel">
+      {hasMore && <button type="button" className="outline-button" disabled={loading}
+        onClick={() => setPage(value => value + 1)}>{loading ? "Đang tải…" : "Xem thêm lần luyện"}</button>}
+    </div> : !loading && <section className="vocab-panel practice-panel">
       <p>Bạn chưa có lịch sử luyện từ vựng.</p>
       <Link className="primary-button" to="/practice/vocabulary">Bắt đầu luyện</Link>
     </section>)}

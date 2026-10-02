@@ -3,7 +3,15 @@ import { apiRequest, API_BASE_URL } from "./api";
 const root = "/api/attempts/";
 export const examApi = {
   fixed: token => apiRequest("/api/mock-tests", { token }),
-  history: token => apiRequest("/api/mock-tests/history", { token }),
+  summary: token => apiRequest("/api/mock-tests/summary", { token }),
+  parts: token => apiRequest("/api/mock-tests/parts", { token }),
+  fixedSummary: token => apiRequest("/api/mock-tests/fixed-summary", { token }),
+  history: (token, { mode = "ALL", part = null, examId = null, page = 1, pageSize = 10 } = {}) => {
+    const params = new URLSearchParams({ mode, page: String(page), pageSize: String(pageSize) });
+    if (part != null) params.set("part", String(part));
+    if (examId != null) params.set("examId", String(examId));
+    return apiRequest("/api/mock-tests/history?" + params, { token });
+  },
   active: token => apiRequest("/api/mock-tests/active", { token }),
   start: (source, examId, token, part = null) => apiRequest("/api/mock-tests/start",
     { method: "POST", body: { source, examId, part }, token }),
@@ -22,7 +30,9 @@ export const examApi = {
 
 export const placementApi = {
   state: token => apiRequest("/api/placement", { token }),
-  history: token => apiRequest("/api/placement/history", { token }),
+  summary: token => apiRequest("/api/placement/summary", { token }),
+  history: (token, page = 1, pageSize = 10) => apiRequest(
+    `/api/placement/history?page=${page}&pageSize=${pageSize}`, { token }),
   start: token => apiRequest("/api/placement/start", { method: "POST", token }),
   result: token => apiRequest("/api/placement/result", { token }),
   target: (targetScore, token) => apiRequest("/api/placement/target",

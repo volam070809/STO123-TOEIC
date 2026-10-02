@@ -66,6 +66,7 @@ builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
 builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddSingleton<AvatarStorage>();
 builder.Services.AddScoped<ExamGenerationService>();
 builder.Services.AddScoped<ExamAttemptService>();
 builder.Services.AddScoped<ExamGradingService>();

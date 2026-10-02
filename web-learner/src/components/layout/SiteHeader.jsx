@@ -1,6 +1,7 @@
 ﻿import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
+import Avatar from "../auth/Avatar";
 
 export function BrandLogo() {
   return <span className="site-logo" aria-label="STO123">
@@ -12,7 +13,6 @@ export default function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { token, user, loading, sessionError, logout } = useAuth();
   const navigate = useNavigate();
-  const initials = user?.hoTen?.trim().split(/\s+/).slice(-2).map(part => part[0]).join("").toUpperCase() || "HV";
   function signOut() {
     logout();
     setMenuOpen(false);
@@ -30,12 +30,12 @@ export default function SiteHeader() {
         <Link to="/courses" onClick={() => setMenuOpen(false)}>Khóa học</Link>
         <Link to="/vocabulary" state={{ vocabularyRoot: true }} onClick={() => setMenuOpen(false)}>Từ vựng</Link>
         <Link to="/practice/vocabulary" onClick={() => setMenuOpen(false)}>Luyện tập</Link>
-        {user && <Link to="/placement" onClick={() => setMenuOpen(false)}>Phân lớp</Link>}
+        {user && <Link to="/placement" onClick={() => setMenuOpen(false)}>Lộ trình học</Link>}
         <Link to="/mock-test" onClick={() => setMenuOpen(false)}>Thi thử</Link>
       </nav>
       <div className={"site-account" + (menuOpen ? " is-open" : "")}>
         {loading ? <span className="site-account-loading">Đang tải...</span> : token && sessionError ? <span className="site-account-loading">Không thể tải tài khoản</span> : user ? <>
-          <span className="site-account-identity"><span className="site-account-avatar">{initials}</span><span>{user.hoTen}</span></span>
+          <span className="site-account-identity"><Avatar user={user} /><span>{user.hoTen}</span></span>
           <Link to="/profile" onClick={() => setMenuOpen(false)}>Hồ sơ</Link>
           <button type="button" data-exam-logout onClick={signOut}>Đăng xuất</button>
         </> : <>

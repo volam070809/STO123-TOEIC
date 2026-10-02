@@ -46,6 +46,9 @@ public sealed record ExamResultDto(int AttemptId, string Status, DateTime Starte
 {
     public string? ExamName { get; init; }
     public string Source { get; init; } = ExamCore.Mock;
+    public string Mode { get; init; } = ExamCore.Mock;
+    public int? ExamId { get; init; }
+    public int? Part { get; init; }
 }
 public sealed record ReviewQuestionDto(int AttemptQuestionId, int Order, int Part, string? Text,
     string A, string B, string C, string? D, string? SelectedOption, string CorrectOption,

@@ -17,7 +17,7 @@ export default function ExamReviewPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [partFilter, setPartFilter] = useState("ALL");
   const [current, setCurrent] = useState(null);
-  const [navOpen, setNavOpen] = useState(() => window.matchMedia("(min-width: 801px)").matches);
+  const [navOpen, setNavOpen] = useState(() => window.matchMedia("(min-width: 1051px)").matches);
   const [error, setError] = useState("");
   const reviewArea = useRef(null);
   useEffect(() => {
@@ -40,17 +40,16 @@ export default function ExamReviewPage() {
   const navigatorParts = [...new Set(filtered.map(item => item.question.part))];
   const partMock = result?.source === "PART";
   return <SiteLayout><div className="site-container exam-review">
-    <div className="page-heading"><span>{review?.source === "PLACEMENT" ? "Phân lớp" : "Thi thử"} / Xem lại</span>
+    <div className="page-heading"><span>{review?.source === "PLACEMENT" ? "Lộ trình học" : "Thi thử"} / Xem lại</span>
       <h1>{result?.examName || "Xem lại bài thi"}</h1></div>
     {error && <p className="exam-error" role="alert">{error}</p>}
     {!review && !error && <p>Đang tải phần xem lại…</p>}
     {review && result && <>
       <section className="review-overview"><h2>Thông tin bài thi</h2>
         <p>{new Date(result.startedAt).toLocaleString("vi-VN")} · {result.overall.total} câu · {result.status === "HET_GIO" ? "Hết giờ" : "Đã nộp"}</p>
-        <div className="exam-stat-grid"><div><b>{result.overall.correct}</b><span>Đúng</span></div>
-          <div><b>{result.overall.incorrect}</b><span>Sai</span></div>
-          <div><b>{result.overall.unanswered}</b><span>Chưa trả lời</span></div>
-          <div><b>{result.overall.total}</b><span>Tổng số câu</span></div></div>
+        <div className="exam-stat-grid"><div><b>{result.overall.correct} / {result.overall.total}</b><span>Đúng</span></div>
+          <div><b>{result.overall.incorrect} / {result.overall.total}</b><span>Sai</span></div>
+          <div><b>{result.overall.unanswered} / {result.overall.total}</b><span>Chưa trả lời</span></div></div>
         {!partMock && result.totalScore != null && <p>Điểm TOEIC ước tính: <strong>{result.totalScore} / 990</strong></p>}
       </section>
       <section><h2>Kết quả theo Part</h2><div className="review-part-grid">{testedParts.map(row =>
@@ -90,7 +89,7 @@ export default function ExamReviewPage() {
               <button key={question.attemptQuestionId} type="button"
                 className={[question.order === focused?.question.order && "current", question.status.toLowerCase()].filter(Boolean).join(" ")}
                 aria-label={`Câu ${question.order}, ${statusName[question.status]}`}
-                onClick={() => { setCurrent(question.order); if (window.innerWidth <= 800) setNavOpen(false); }}>
+                onClick={() => { setCurrent(question.order); if (window.innerWidth <= 1050) setNavOpen(false); }}>
                 {question.order}<small aria-hidden="true">{question.status === "CORRECT" ? "✓" : question.status === "INCORRECT" ? "✕" : "–"}</small>
               </button>)}</div></details>)}
         </details>
@@ -98,7 +97,7 @@ export default function ExamReviewPage() {
       <div className="exam-navigation">
         <Link className="outline-button" to={`/exam/${attemptId}/result`}>← Quay lại kết quả</Link>
         <Link className="outline-button" to={review.source === "PLACEMENT" ? "/placement" : "/mock-test"}>
-          {review.source === "PLACEMENT" ? "Về trang Phân lớp" : "Về trang Thi thử"}</Link>
+          {review.source === "PLACEMENT" ? "Về Lộ trình học" : "Về trang Thi thử"}</Link>
       </div>
     </>}
   </div></SiteLayout>;

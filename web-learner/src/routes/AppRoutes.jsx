@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import HomePage from "../pages/HomePage";
 import VocabularyPage from "../pages/vocabulary/VocabularyPage";
@@ -13,6 +13,7 @@ import ProfilePage from "../pages/auth/ProfilePage";
 import ChangePasswordPage from "../pages/auth/ChangePasswordPage";
 import ProtectedRoute from "./ProtectedRoute";
 import MockHomePage from "../pages/exam/MockHomePage";
+import PartMockPage from "../pages/exam/PartMockPage";
 import FixedExamPage from "../pages/exam/FixedExamPage";
 import MockHistoryDetailPage from "../pages/exam/MockHistoryDetailPage";
 import ExamPage from "../pages/exam/ExamPage";
@@ -25,23 +26,39 @@ import CourseListPage from "../pages/exam/CourseListPage";
 function VocabularyRoute() {
   const location = useLocation();
   const rootNavigation = location.state?.vocabularyRoot;
-  useEffect(() => {
-    if (rootNavigation) window.scrollTo(0, 0);
-  }, [location.key, rootNavigation]);
   return <VocabularyPage key={rootNavigation ? location.key : "vocabulary"} />;
 }
 
+function MockHistoryRoute({ kind }) {
+  const location = useLocation();
+  return <MockHistoryDetailPage key={location.pathname} kind={kind} />;
+}
+
+function RouteScroll() {
+  const location = useLocation();
+  useLayoutEffect(() => {
+    if (location.hash) {
+      requestAnimationFrame(() => document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView());
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, [location.key, location.pathname, location.search, location.hash]);
+  return null;
+}
+
 export default function AppRoutes() {
-  return <BrowserRouter><Routes>
+  return <BrowserRouter><RouteScroll /><Routes>
     <Route path="/" element={<HomePage />} />
     <Route path="/vocabulary" element={<VocabularyRoute />} />
     <Route path="/practice/vocabulary" element={<VocabularyPracticePage />} />
     <Route path="/practice/vocabulary/history" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
     <Route path="/practice/vocabulary/history/:id" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
     <Route path="/mock-test" element={<ProtectedRoute><MockHomePage /></ProtectedRoute>} />
+    <Route path="/mock-test/parts" element={<ProtectedRoute><PartMockPage /></ProtectedRoute>} />
     <Route path="/mock-test/fixed" element={<ProtectedRoute><FixedExamPage /></ProtectedRoute>} />
-    <Route path="/mock-test/history/random" element={<ProtectedRoute><MockHistoryDetailPage kind="random" /></ProtectedRoute>} />
-    <Route path="/mock-test/history/part/:part" element={<ProtectedRoute><MockHistoryDetailPage kind="part" /></ProtectedRoute>} />
+    <Route path="/mock-test/history" element={<ProtectedRoute><MockHistoryRoute kind="all" /></ProtectedRoute>} />
+    <Route path="/mock-test/history/random" element={<ProtectedRoute><MockHistoryRoute kind="random" /></ProtectedRoute>} />
+    <Route path="/mock-test/history/part/:part" element={<ProtectedRoute><MockHistoryRoute kind="part" /></ProtectedRoute>} />
     <Route path="/placement" element={<ProtectedRoute><PlacementPage /></ProtectedRoute>} />
     <Route path="/courses" element={<ProtectedRoute><CourseListPage /></ProtectedRoute>} />
     <Route path="/courses/:courseId" element={<ProtectedRoute><CoursePage /></ProtectedRoute>} />

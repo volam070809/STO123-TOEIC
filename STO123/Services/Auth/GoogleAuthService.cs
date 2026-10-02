@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using Google.Apis.Auth;
+using Azure;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using STO123.DTOs.Auth;
@@ -10,6 +11,7 @@ namespace STO123.Services.Auth;
 public sealed class GoogleAuthService(
     ToeicDbContext context,
     IJwtTokenService jwtTokenService,
+    AvatarStorage avatars,
     IConfiguration configuration) : IGoogleAuthService
 {
     public async Task<AuthResult<LoginResponse>> AuthenticateAsync(string idToken, CancellationToken cancellationToken)
@@ -46,6 +48,8 @@ public sealed class GoogleAuthService(
         if (!payload.EmailVerified || string.IsNullOrWhiteSpace(email) ||
             email.Length > 254 || !new EmailAddressAttribute().IsValid(email))
             return AuthResult<LoginResponse>.Failure(403, "Google email must be verified.");
+        // The validated Google ID token carries the optional provider picture claim.
+        var providerPicture = AvatarStorage.ValidProviderUrl(payload.Picture);
 
         var credential = await context.XacThucDangNhap
             .Include(item => item.MaNguoiDungNavigation)
@@ -59,6 +63,16 @@ public sealed class GoogleAuthService(
             if (existingUser.TrangThai != "HOAT_DONG")
                 return AuthResult<LoginResponse>.Failure(403, "Account is not active.");
 
+            if (AvatarStorage.IsCustomReference(existingUser.MaNguoiDung, existingUser.AnhDaiDien))
+            {
+                try { await avatars.UpdateProviderUrlAsync(existingUser.AnhDaiDien, providerPicture, cancellationToken); }
+                catch (RequestFailedException)
+                {
+                    return AuthResult<LoginResponse>.Failure(503, "Avatar storage is temporarily unavailable.");
+                }
+            }
+            else
+                existingUser.AnhDaiDien = providerPicture!;
             existingUser.LanDangNhapCuoi = DateTime.UtcNow;
             await context.SaveChangesAsync(cancellationToken);
             return IssueToken(existingUser);
@@ -80,9 +94,7 @@ public sealed class GoogleAuthService(
             NgayTao = nowUtc,
             LanDangNhapCuoi = nowUtc
         };
-        if (Uri.TryCreate(payload.Picture, UriKind.Absolute, out var picture) &&
-            picture.Scheme == Uri.UriSchemeHttps && payload.Picture.Length <= 512)
-            userToCreate.AnhDaiDien = payload.Picture;
+        userToCreate.AnhDaiDien = providerPicture!;
 
         try
         {
