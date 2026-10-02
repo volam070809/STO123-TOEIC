@@ -430,3 +430,5 @@ FodyWeavers.xsd
 *.msp
 tools/vocabulary-audio/words/
 tools/vocabulary-audio/examples/
+docs/STO123-new-chat-context.md
+tools/exam-data/
