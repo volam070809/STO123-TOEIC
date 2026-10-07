@@ -42,7 +42,23 @@ export default function CourseListPage() {
           <p className="course-score-range">Mức điểm tham khảo: {info?.range || "Đang cập nhật"}</p>
           <p className="course-description">{course.description || info?.description}</p>
           <p className="course-access">🔒 Khóa học đang khóa</p>
-          <Link className="primary-button course-cta" to={`/courses/${course.courseId}`}>Xem khóa học</Link>
+          {/* <Link className="primary-button course-cta" to={`/courses/${course.courseId}`}>Xem khóa học</Link> */}
+          {/* Chỉnh lại link nút bấm */}
+          {course.dangSuDungGoi ? (
+            <Link
+              className="primary-button course-cta"
+              to={`/courses/${course.courseId}`}
+            >
+              Vào học
+            </Link>
+          ) : (
+            <Link
+              className="primary-button course-cta"
+              to={`/goi-hoc/${course.maGoiHoc}`}
+            >
+              Mua khóa học
+            </Link>
+          )}
         </div>
       </article>;
     })}</div>

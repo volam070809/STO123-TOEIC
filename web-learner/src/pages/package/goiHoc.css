@@ -1,0 +1,707 @@
+/* =========================================================
+   GÓI HỌC & THANH TOÁN
+========================================================= */
+
+.package-page {
+  padding-bottom: 40px;
+}
+
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.package-header {
+  margin-bottom: 22px;
+}
+
+.package-header h1 {
+  margin: 0 0 6px;
+
+  color: #0f172a;
+
+  font-size: 28px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.package-header p {
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   ERROR
+========================================================= */
+
+.package-error {
+  margin-bottom: 20px;
+  padding: 12px 14px;
+
+  color: #dc2626;
+
+  background: #fef2f2;
+
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+
+  font-size: 13px;
+}
+
+
+/* =========================================================
+   LOADING / EMPTY
+========================================================= */
+
+.package-loading,
+.package-empty {
+  padding: 32px;
+
+  color: #64748b;
+
+  text-align: center;
+
+  font-size: 13px;
+}
+
+
+/* =========================================================
+   GÓI ĐANG DÙNG
+========================================================= */
+
+.current-package {
+  display: grid;
+
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr) auto;
+
+  align-items: center;
+
+  gap: 30px;
+
+  min-height: 86px;
+
+  padding: 14px 16px;
+
+  box-sizing: border-box;
+
+  background: #eef7ff;
+
+  border: 2px solid #1683f8;
+
+  border-radius: 0;
+}
+
+
+/* ---------- Thông tin ---------- */
+
+.current-package-info {
+  min-width: 0;
+}
+
+.current-package-badge {
+  display: inline-flex;
+  align-items: center;
+
+  margin-bottom: 7px;
+  padding: 4px 11px;
+
+  background: #ffffff;
+
+  border-radius: 999px;
+
+  color: #1683f8;
+
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.current-package-info h2 {
+  margin: 0;
+
+  color: #10234d;
+
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+
+/* ---------- Progress ---------- */
+
+.current-package-progress {
+  min-width: 0;
+}
+
+.current-package-days {
+  margin-bottom: 7px;
+
+  color: #64748b;
+
+  font-size: 11px;
+}
+
+.current-package-days strong {
+  color: #475569;
+
+  font-weight: 600;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 5px;
+
+  overflow: hidden;
+
+  background: #dce5ef;
+
+  border-radius: 10px;
+}
+
+.progress-value {
+  height: 100%;
+
+  background: #1683f8;
+
+  border-radius: 10px;
+
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  display: block;
+
+  margin-top: 5px;
+
+  color: #1683f8;
+
+  font-size: 9px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+
+/* ---------- Xem tiến độ ---------- */
+
+.current-package-button {
+  display: inline-flex;
+
+  justify-content: center;
+  align-items: center;
+
+  min-width: 100px;
+
+  padding: 7px 16px;
+
+  box-sizing: border-box;
+
+  background: #ffffff;
+
+  border: 1px solid #5b9ef7;
+  border-radius: 8px;
+
+  color: #1268db;
+
+  text-decoration: none;
+
+  font-size: 10px;
+  font-weight: 600;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.current-package-button:hover {
+  background: #f0f7ff;
+
+  border-color: #1683f8;
+}
+
+
+/* =========================================================
+   DANH SÁCH GÓI
+========================================================= */
+
+.package-list-section {
+  margin-top: 24px;
+}
+
+.package-list-section > h2 {
+  margin: 0 0 12px 2px;
+
+  color: #0f172a;
+
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   GRID
+========================================================= */
+
+.package-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap: 22px;
+}
+
+
+/* =========================================================
+   CARD
+========================================================= */
+
+.package-card {
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+
+  overflow: hidden;
+
+  background: #ffffff;
+
+  border: 1px solid #dce5ef;
+  border-radius: 12px;
+
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.07);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.package-card:hover {
+  transform: translateY(-3px);
+
+  border-color: #b8cce3;
+
+  box-shadow:
+    0 8px 20px rgba(15, 23, 42, 0.10);
+}
+
+
+/* =========================================================
+   CARD ĐÃ MUA
+========================================================= */
+
+.package-card-active {
+  border-color: #8ebcf4;
+
+  box-shadow:
+    0 4px 14px rgba(37, 99, 235, 0.10);
+}
+
+.package-card-active:hover {
+  border-color: #5b9ef7;
+
+  box-shadow:
+    0 9px 22px rgba(37, 99, 235, 0.14);
+}
+
+
+/* =========================================================
+   CARD HEADER
+========================================================= */
+
+.package-card-top {
+  display: flex;
+
+  justify-content: space-between;
+  align-items: center;
+
+  min-height: 40px;
+
+  padding: 10px 12px;
+
+  box-sizing: border-box;
+
+  background: #eaf4ff;
+}
+
+
+/* Gói đầu tiên - nền xanh nhạt */
+
+.package-card:nth-child(1)
+.package-card-top {
+  background: #eaf8f1;
+}
+
+
+/* =========================================================
+   LOẠI GÓI
+========================================================= */
+
+.package-type {
+  display: inline-flex;
+
+  justify-content: center;
+  align-items: center;
+
+  padding: 4px 10px;
+
+  background: #ffffff;
+
+  border-radius: 999px;
+
+  color: #348b68;
+
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   BADGE ĐANG SỬ DỤNG
+========================================================= */
+
+.package-active-badge {
+  display: inline-flex;
+  align-items: center;
+
+  color: #2563eb;
+
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   CARD BODY
+========================================================= */
+
+.package-card-body {
+  display: flex;
+  flex-direction: column;
+
+  flex: 1;
+
+  padding: 15px 12px 12px;
+}
+
+
+/* =========================================================
+   TÊN GÓI
+========================================================= */
+
+.package-card-body h3 {
+  margin: 0 0 8px;
+
+  color: #14254d;
+
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   GIÁ
+========================================================= */
+
+.package-price {
+  margin-bottom: 6px;
+
+  color: #087f56;
+
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+
+/* Gói thứ 2 */
+
+.package-card:nth-child(2)
+.package-price {
+  color: #1468e8;
+}
+
+
+/* Gói thứ 3 */
+
+.package-card:nth-child(3)
+.package-price {
+  color: #8061b5;
+}
+
+.package-price span {
+  margin-left: 2px;
+
+  font-size: 15px;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   THỜI HẠN
+========================================================= */
+
+.package-duration {
+  margin: 0 0 6px;
+
+  color: #64748b;
+
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+
+/* =========================================================
+   MÔ TẢ
+========================================================= */
+
+.package-description {
+  min-height: 30px;
+
+  margin: 0 0 15px;
+
+  color: #64748b;
+
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   BUTTON CHUNG
+========================================================= */
+
+.package-action {
+  display: flex;
+
+  justify-content: center;
+  align-items: center;
+
+  width: 100%;
+  height: 30px;
+
+  margin-top: auto;
+
+  box-sizing: border-box;
+
+  border-radius: 7px;
+
+  color: #ffffff;
+
+  text-decoration: none;
+
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 600;
+
+  transition:
+    background 0.2s ease,
+    transform 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+.package-action:hover {
+  transform: translateY(-1px);
+}
+
+.package-action:active {
+  transform: translateY(0);
+}
+
+
+/* =========================================================
+   ĐÃ MUA
+   XANH DƯƠNG
+   "Vào học"
+========================================================= */
+
+.package-action-learning {
+  background: #1683f8;
+
+  box-shadow:
+    0 3px 7px rgba(22, 131, 248, 0.20);
+}
+
+.package-action-learning:hover {
+  background: #0873df;
+
+  box-shadow:
+    0 4px 9px rgba(22, 131, 248, 0.25);
+}
+
+
+/* =========================================================
+   CHƯA MUA
+   XANH LÁ
+   "Chọn gói"
+========================================================= */
+
+.package-action-choose {
+  background: #16a34a;
+
+  box-shadow:
+    0 3px 7px rgba(22, 163, 74, 0.18);
+}
+
+.package-action-choose:hover {
+  background: #15803d;
+
+  box-shadow:
+    0 4px 9px rgba(22, 163, 74, 0.23);
+}
+
+
+/* =========================================================
+   PAYMENT HISTORY
+========================================================= */
+
+.payment-history {
+  display: flex;
+
+  justify-content: space-between;
+  align-items: center;
+
+  gap: 16px;
+
+  margin-top: 26px;
+  padding: 12px;
+
+  box-sizing: border-box;
+
+  background: #ffffff;
+
+  border: 1px solid #dce5ef;
+  border-radius: 8px;
+
+  box-shadow:
+    0 2px 7px rgba(15, 23, 42, 0.03);
+}
+
+.payment-history p {
+  margin: 0;
+
+  color: #475569;
+
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.payment-history a {
+  flex-shrink: 0;
+
+  color: #006bea;
+
+  font-size: 9px;
+  line-height: 1.4;
+  font-weight: 600;
+
+  text-decoration: none;
+}
+
+.payment-history a:hover {
+  text-decoration: underline;
+}
+
+
+/* =========================================================
+   RESPONSIVE - TABLET
+========================================================= */
+
+@media (max-width: 900px) {
+
+  .current-package {
+    grid-template-columns: 1fr;
+
+    gap: 14px;
+  }
+
+  .current-package-progress {
+    width: 100%;
+  }
+
+  .current-package-button {
+    width: 100%;
+  }
+
+  .package-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* =========================================================
+   RESPONSIVE - MOBILE
+========================================================= */
+
+@media (max-width: 600px) {
+
+  .package-page {
+    padding-bottom: 28px;
+  }
+
+  .package-header h1 {
+    font-size: 24px;
+  }
+
+  .package-header p {
+    font-size: 12px;
+  }
+
+  .current-package {
+    padding: 14px;
+  }
+
+  .package-grid {
+    grid-template-columns: 1fr;
+
+    gap: 16px;
+  }
+
+  .package-card-body {
+    padding: 16px 14px 14px;
+  }
+
+  .package-card-body h3 {
+    font-size: 15px;
+  }
+
+  .package-price {
+    font-size: 21px;
+  }
+
+  .payment-history {
+    flex-direction: column;
+
+    align-items: flex-start;
+
+    gap: 8px;
+  }
+
+  .payment-history a {
+    align-self: flex-end;
+  }
+}
+
+
+/* =========================================================
+   ACCESSIBILITY
+========================================================= */
+
+.package-action:focus-visible,
+.current-package-button:focus-visible,
+.payment-history a:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.25);
+
+  outline-offset: 2px;
+}

@@ -1,6 +1,5 @@
 using Azure.Identity;
 using Azure.Storage.Blobs;
-using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -9,9 +8,27 @@ using STO123.Models;
 using STO123.Services.Auth;
 using STO123.Services.Exam;
 using STO123.Services.Knn;
+using STO123.Services.Payment;
+using STO123.Services.Practice;
 using STO123.Services.Scoring;
+using System.Text;
+using VNPAY.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<VNPaySettings>(
+    builder.Configuration.GetSection("VNPay")
+);
+builder.Services.AddVnpayClient(config =>
+{
+    config.BaseUrl = builder.Configuration["VNPay:BaseUrl"]!;
+    config.CallbackUrl = builder.Configuration["VNPay:ReturnUrl"]!;
+    config.HashSecret = builder.Configuration["VNPay:HashSecret"]!;
+    config.TmnCode = builder.Configuration["VNPay:TmnCode"]!;
+    config.OrderType = "other";
+    config.Version = "2.1.0";
+});
+builder.Services.AddScoped<IPaymentGateway, VNPayService>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
@@ -56,6 +73,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
             RoleClaimType = System.Security.Claims.ClaimTypes.Role
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+                Console.WriteLine(
+                    "JWT AUTH FAILED: " +
+                    context.Exception.Message);
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
@@ -70,6 +98,7 @@ builder.Services.AddSingleton<AvatarStorage>();
 builder.Services.AddScoped<ExamGenerationService>();
 builder.Services.AddScoped<ExamAttemptService>();
 builder.Services.AddScoped<ExamGradingService>();
+builder.Services.AddScoped<PracticeService>();
 builder.Services.AddSingleton<IKnnClassifier, KnnClassifier>();
 builder.Services.AddSingleton<KnnDiagnosticsStore>();
 builder.Services.AddSingleton<IToeicScoreCalculator, EstimatedLinearToeicScoreCalculator>();
@@ -94,7 +123,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.UseCors(frontendCorsPolicy);
 

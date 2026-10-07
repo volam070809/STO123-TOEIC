@@ -6,54 +6,70 @@ import edge_tts
 VOICE = "en-US-AriaNeural"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-WORDS_DIR = os.path.join(BASE_DIR, "words")
-EXAMPLES_DIR = os.path.join(BASE_DIR, "examples")
-CSV_FILE = os.path.join(BASE_DIR, "vocabulary.csv")
+AUDIO_DIR = os.path.join(BASE_DIR, "audio")
+CSV_FILE = os.path.join(BASE_DIR, "audio.csv")
+
+PAUSE = "800ms"
 
 
-def safe_filename(word):
-    return (
-        word.strip()
-        .lower()
-        .replace(" ", "-")
-        .replace("/", "-")
-    )
+def convert_to_ssml(text):
+    # Thay [PAUSE] bằng khoảng nghỉ 0.8 giây
+    parts = text.split("[PAUSE]")
+
+    ssml = "<speak>"
+
+    for i, part in enumerate(parts):
+        ssml += part.strip()
+
+        if i < len(parts) - 1:
+            ssml += f'<break time="{PAUSE}"/>'
+
+    ssml += "</speak>"
+
+    return ssml
 
 
-async def save_audio(text, path):
+async def save_audio(content, path):
     if os.path.exists(path):
         print("Skip:", os.path.basename(path))
         return
 
-    communicate = edge_tts.Communicate(text, VOICE)
+    ssml = convert_to_ssml(content)
+
+    communicate = edge_tts.Communicate(
+        ssml,
+        VOICE
+    )
+
     await communicate.save(path)
+
     print("Created:", os.path.basename(path))
 
 
 async def main():
-    os.makedirs(WORDS_DIR, exist_ok=True)
-    os.makedirs(EXAMPLES_DIR, exist_ok=True)
+    os.makedirs(AUDIO_DIR, exist_ok=True)
 
     with open(CSV_FILE, "r", encoding="utf-8-sig") as file:
         reader = csv.DictReader(file)
 
         for row in reader:
-            word = row["word"].strip()
-            example = row["example"].strip()
+            content = row["content"].strip()
+            filename = row["filename"].strip()
 
-            if not word or not example:
+            if not content or not filename:
                 continue
 
-            filename = safe_filename(word)
+            if not filename.lower().endswith(".mp3"):
+                filename += ".mp3"
 
-            await save_audio(
-                word,
-                os.path.join(WORDS_DIR, f"{filename}.mp3")
+            audio_path = os.path.join(
+                AUDIO_DIR,
+                filename
             )
 
             await save_audio(
-                example,
-                os.path.join(EXAMPLES_DIR, f"{filename}-example.mp3")
+                content,
+                audio_path
             )
 
 

@@ -101,26 +101,105 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
         catch (ExamProblem e) { return Problem(e); }
     }
 
+    //[HttpGet("courses")]
+    //public async Task<IActionResult> Courses(CancellationToken ct)
+    //{
+    //    try
+    //    {
+    //        var open = await db.KhoaHoc.AsNoTracking().Where(c => c.TrangThai == "DANG_MO")
+    //            .OrderBy(c => c.GiaiDoan).ToListAsync(ct);
+    //        var knn = await CurrentKnn(ct);
+    //        var recommended = CourseRecommendation.RecommendedStages(open, knn?.GiaiDoanDeXuat,
+    //            knn?.DiemMucTieu);
+    //        return Ok(open.Select(c => new { courseId = c.MaKhoaHoc, name = c.TenKhoaHoc,
+    //            stage = c.GiaiDoan, maxTargetScore = c.DiemMucTieuToiDa, description = c.MoTa,
+    //            coverImageUrl = c.DuongDanAnhDaiDien,
+    //            accessStatus = "LOCKED", progress = (object?)null,
+    //            recommended = recommended.Contains(c.GiaiDoan),
+    //            recommendationOrder = recommended.Contains(c.GiaiDoan) ?
+    //                Array.IndexOf(recommended.ToArray(), c.GiaiDoan) + 1 : (int?)null
+    //        }).ToList());
+    //    }
+    //    catch (ExamProblem e) { return Problem(e); }
+    //}
+
+    // Sáng thêm, lỗi xóa dưới uncmt đoạn trên
+
     [HttpGet("courses")]
     public async Task<IActionResult> Courses(CancellationToken ct)
     {
         try
         {
-            var open = await db.KhoaHoc.AsNoTracking().Where(c => c.TrangThai == "DANG_MO")
-                .OrderBy(c => c.GiaiDoan).ToListAsync(ct);
+            var open = await db.KhoaHoc
+                .AsNoTracking()
+                .Include(c => c.MaGoiHoc)
+                .Where(c => c.TrangThai == "DANG_MO")
+                .OrderBy(c => c.GiaiDoan)
+                .ToListAsync(ct);
+
             var knn = await CurrentKnn(ct);
-            var recommended = CourseRecommendation.RecommendedStages(open, knn?.GiaiDoanDeXuat,
+
+            var recommended = CourseRecommendation.RecommendedStages(
+                open,
+                knn?.GiaiDoanDeXuat,
                 knn?.DiemMucTieu);
-            return Ok(open.Select(c => new { courseId = c.MaKhoaHoc, name = c.TenKhoaHoc,
-                stage = c.GiaiDoan, maxTargetScore = c.DiemMucTieuToiDa, description = c.MoTa,
-                coverImageUrl = c.DuongDanAnhDaiDien,
-                accessStatus = "LOCKED", progress = (object?)null,
-                recommended = recommended.Contains(c.GiaiDoan),
-                recommendationOrder = recommended.Contains(c.GiaiDoan) ?
-                    Array.IndexOf(recommended.ToArray(), c.GiaiDoan) + 1 : (int?)null
-            }).ToList());
+
+            var result = open.Select(c =>
+            {
+                // Gói học chứa khóa học này
+                var goiHoc = c.MaGoiHoc.FirstOrDefault();
+
+                var maGoiHoc = goiHoc?.MaGoiHoc;
+
+                // User đã từng mua gói này chưa
+                var daMuaGoi = maGoiHoc.HasValue &&
+                    db.DangKyGoiHoc.Any(d =>
+                        d.MaNguoiDung == LearnerId &&
+                        d.MaGoiHoc == maGoiHoc.Value);
+
+                // Gói hiện tại còn hạn không
+                var dangSuDungGoi = maGoiHoc.HasValue &&
+                    db.DangKyGoiHoc.Any(d =>
+                        d.MaNguoiDung == LearnerId &&
+                        d.MaGoiHoc == maGoiHoc.Value &&
+                        d.TrangThai == "DANG_SU_DUNG" &&
+                        d.NgayKetThuc.HasValue &&
+                        d.NgayKetThuc.Value > DateTime.Now);
+
+                return new
+                {
+                    courseId = c.MaKhoaHoc,
+                    name = c.TenKhoaHoc,
+                    stage = c.GiaiDoan,
+                    maxTargetScore = c.DiemMucTieuToiDa,
+                    description = c.MoTa,
+                    coverImageUrl = c.DuongDanAnhDaiDien,
+
+                    accessStatus = dangSuDungGoi
+                        ? "UNLOCKED"
+                        : "LOCKED",
+
+                    progress = (object?)null,
+
+                    recommended = recommended.Contains(c.GiaiDoan),
+
+                    recommendationOrder = recommended.Contains(c.GiaiDoan)
+                        ? Array.IndexOf(recommended.ToArray(), c.GiaiDoan) + 1
+                        : (int?)null,
+
+                    // Thông tin gói học
+                    maGoiHoc = maGoiHoc,
+                    daMuaGoi = daMuaGoi,
+                    dangSuDungGoi = dangSuDungGoi
+                };
+            }).ToList();
+
+            return Ok(result);
         }
-        catch (ExamProblem e) { return Problem(e); }
+        catch (ExamProblem e)
+        {
+            return Problem(e);
+        }
     }
 
     [HttpGet("summary")]
@@ -155,35 +234,99 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
     }
 
     [HttpGet("courses/{courseId:int}")]
-    public async Task<IActionResult> CourseDetail(int courseId, CancellationToken ct)
+    public async Task<IActionResult> CourseDetail(
+    int courseId,
+    CancellationToken ct)
     {
         try
         {
-        var course = await db.KhoaHoc.AsNoTracking()
-            .Include(c => c.UnitKhoaHoc).ThenInclude(u => u.LessonKhoaHoc)
-            .ThenInclude(l => l.BuocLoTrinh)
-            .FirstOrDefaultAsync(c => c.MaKhoaHoc == courseId && c.TrangThai == "DANG_MO", ct);
-        if (course is null) return NotFound(new { code = "COURSE_NOT_FOUND", message = "Không tìm thấy khóa học đang mở." });
-        var knn = await CurrentKnn(ct);
-        var recommended = CourseRecommendation.RecommendedStages([course], knn?.GiaiDoanDeXuat,
-            knn?.DiemMucTieu);
-        var units = course.UnitKhoaHoc.OrderBy(u => u.ThuTu).Select(u => new {
-            name = u.TenUnit, description = u.MoTa,
-            lessons = u.LessonKhoaHoc.OrderBy(l => l.ThuTu).Select(l => new {
-                name = l.TenLesson, description = l.MoTa,
-                contents = l.BuocLoTrinh.OrderBy(b => b.ThuTu).Select(b => new {
-                    title = b.TieuDe, locked = true
-                }).ToList()
-            }).ToList()
-        }).ToList();
-        return Ok(new { courseId = course.MaKhoaHoc, name = course.TenKhoaHoc,
-            stage = course.GiaiDoan, description = course.MoTa,
-            coverImageUrl = course.DuongDanAnhDaiDien,
-            recommended = recommended.Contains(course.GiaiDoan),
-            accessStatus = "LOCKED", progress = (object?)null,
-            contentCount = units.Sum(u => u.lessons.Sum(l => l.contents.Count)), units });
+            // 1. Lấy thông tin khóa học + Unit + Lesson + Nội dung
+            var course = await db.KhoaHoc
+                .AsNoTracking()
+                .Include(c => c.UnitKhoaHoc)
+                    .ThenInclude(u => u.LessonKhoaHoc)
+                        .ThenInclude(l => l.BuocLoTrinh)
+                .FirstOrDefaultAsync(
+                    c => c.MaKhoaHoc == courseId &&
+                         c.TrangThai == "DANG_MO",
+                    ct);
+            if (course is null)
+            {
+                return NotFound(new
+                {
+                    code = "COURSE_NOT_FOUND",
+                    message = "Không tìm thấy khóa học đang mở."
+                });
+            }
+            // 2. Kiểm tra học viên đã mua gói chứa khóa học này
+            //    và gói đó vẫn còn thời hạn sử dụng
+            var unlocked = await db.DangKyGoiHoc
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.MaNguoiDung == LearnerId &&
+                    x.MaGoiHocNavigation.MaKhoaHoc
+                        .Any(k => k.MaKhoaHoc == courseId) &&
+                    x.TrangThai == "DANG_SU_DUNG" &&
+                    x.NgayKetThuc.HasValue &&
+                    x.NgayKetThuc.Value > DateTime.Now,
+                    ct);
+            // 3. Lấy kết quả phân lớp KNN hiện tại
+            var knn = await CurrentKnn(ct);
+            // 4. Xác định khóa học có được đề xuất hay không
+            var recommended = CourseRecommendation.RecommendedStages(
+                [course],
+                knn?.GiaiDoanDeXuat,
+                knn?.DiemMucTieu);
+            // 5. Tạo danh sách Unit -> Lesson -> Content
+            var units = course.UnitKhoaHoc
+                .OrderBy(u => u.ThuTu)
+                .Select(u => new
+                {
+                    name = u.TenUnit,
+                    description = u.MoTa,
+                    lessons = u.LessonKhoaHoc
+                        .OrderBy(l => l.ThuTu)
+                        .Select(l => new
+                        {
+                            name = l.TenLesson,
+                            description = l.MoTa,
+                            contents = l.BuocLoTrinh
+                                .OrderBy(b => b.ThuTu)
+                                .Select(b => new
+                                {
+                                    title = b.TieuDe,
+                                    // Đã mua + còn hạn -> mở khóa
+                                    // Chưa mua / hết hạn -> khóa
+                                    locked = !unlocked
+                                }).ToList()
+                        }).ToList()
+                }).ToList();
+            // 6. Trả dữ liệu về frontend
+            return Ok(new
+            {
+                courseId = course.MaKhoaHoc,
+                name = course.TenKhoaHoc,
+                stage = course.GiaiDoan,
+                description = course.MoTa,
+                coverImageUrl = course.DuongDanAnhDaiDien,
+                recommended = recommended.Contains(course.GiaiDoan),
+                // Trạng thái khóa học
+                accessStatus = unlocked
+                    ? "UNLOCKED"
+                    : "LOCKED",
+                // Frontend CoursePage.jsx có thể dùng course.unlocked
+                unlocked = unlocked,
+                progress = (object?)null,
+                contentCount = units.Sum(
+                    u => u.lessons.Sum(
+                        l => l.contents.Count)),
+                units
+            });
         }
-        catch (ExamProblem e) { return Problem(e); }
+        catch (ExamProblem e)
+        {
+            return Problem(e);
+        }
     }
 
     private async Task<KetQuaPhanLopKNN?> CurrentKnn(CancellationToken ct)

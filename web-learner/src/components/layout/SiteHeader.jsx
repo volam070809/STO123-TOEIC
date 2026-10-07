@@ -26,8 +26,18 @@ export default function SiteHeader() {
         {menuOpen ? "Đóng" : "Menu"} <span aria-hidden="true">{menuOpen ? "×" : "☰"}</span>
       </button>
       <nav id="site-navigation" className={"site-navigation" + (menuOpen ? " is-open" : "")} aria-label="Điều hướng chính">
-        <Link className="site-nav-active" to="/" onClick={() => setMenuOpen(false)}>Trang chủ</Link>
-        <Link to="/courses" onClick={() => setMenuOpen(false)}>Khóa học</Link>
+        <Link className="site-nav-active" to="/" onClick={() => setMenuOpen(false)}>
+          Trang chủ
+        </Link>
+
+        <Link to="/goi-hoc" onClick={() => setMenuOpen(false)}>
+          Gói học
+        </Link>
+
+        <Link to="/courses" onClick={() => setMenuOpen(false)}>
+          Khóa học
+        </Link>
+
         <Link to="/vocabulary" state={{ vocabularyRoot: true }} onClick={() => setMenuOpen(false)}>Từ vựng</Link>
         <Link to="/practice/vocabulary" onClick={() => setMenuOpen(false)}>Luyện tập</Link>
         {user && <Link to="/placement" onClick={() => setMenuOpen(false)}>Lộ trình học</Link>}

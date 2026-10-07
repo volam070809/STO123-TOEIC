@@ -1,0 +1,71 @@
+
+.payment-page {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #f5f7fb;
+    padding: 30px;
+}
+
+.payment-card {
+    width: 420px;
+    background: white;
+    border-radius: 16px;
+    padding: 30px;
+    text-align: center;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+.payment-card h2 {
+    margin-bottom: 25px;
+}
+
+.payment-info {
+    margin-bottom: 25px;
+}
+
+.payment-info h3 {
+    margin-bottom: 15px;
+}
+
+.payment-info p {
+    margin: 8px 0;
+}
+
+.qr-section {
+    margin: 25px 0;
+}
+
+.qr-code {
+    width: 280px;
+    height: 280px;
+    object-fit: contain;
+}
+
+.qr-section p {
+    margin-top: 15px;
+    color: #666;
+}
+
+.payment-status {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+
+    padding: 12px;
+
+    background: #fff8e1;
+    border-radius: 8px;
+
+    color: #946200;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #f5a623;
+}
+

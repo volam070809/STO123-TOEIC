@@ -69,9 +69,6 @@ public partial class NguoiDung
     public virtual ICollection<LanLuyenTuVung> LanLuyenTuVung { get; set; } = new List<LanLuyenTuVung>();
 
     [InverseProperty("MaNguoiDungNavigation")]
-    public virtual ICollection<TienDoBuocLoTrinh> TienDoBuocLoTrinh { get; set; } = new List<TienDoBuocLoTrinh>();
-
-    [InverseProperty("MaNguoiDungNavigation")]
     public virtual ICollection<TienDoTuVung> TienDoTuVung { get; set; } = new List<TienDoTuVung>();
 
     [InverseProperty("MaNguoiDungNavigation")]

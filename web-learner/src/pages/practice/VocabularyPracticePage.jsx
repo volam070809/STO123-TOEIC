@@ -178,6 +178,20 @@ function LearnerPractice({ token }) {
       onClick={event => {
         if (session && !session.finished) { event.preventDefault(); leavePractice("/practice/vocabulary/history"); }
       }}>Lịch sử luyện từ</Link></div>
+    <section className="vocab-panel practice-panel">
+      <h2>🎯 Luyện tập TOEIC</h2>
+      <p>Chọn Part, số lượng câu hỏi và độ khó để bắt đầu luyện tập TOEIC.</p>
+        <div className="practice-actions">
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => navigate("/practice/toeic")}
+        >
+          Bắt đầu luyện TOEIC
+        </button>
+      </div>            
+    </section>
+
     {loading && <p role="status">Đang tải dữ liệu luyện tập...</p>}
     {error && <div className="vocab-error" role="alert"><p>{error}</p>
       {!topic && <button className="outline-button" type="button" onClick={() => {

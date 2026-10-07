@@ -46,4 +46,7 @@ public partial class DangKyGoiHoc
     [ForeignKey("MaNguoiDung")]
     [InverseProperty("DangKyGoiHoc")]
     public virtual NguoiDung MaNguoiDungNavigation { get; set; }
+
+    [InverseProperty("MaDangKyNavigation")]
+    public virtual ICollection<TienDoBuocLoTrinh> TienDoBuocLoTrinh { get; set; } = new List<TienDoBuocLoTrinh>();
 }

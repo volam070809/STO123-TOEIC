@@ -22,6 +22,13 @@ import ExamReviewPage from "../pages/exam/ExamReviewPage";
 import PlacementPage from "../pages/exam/PlacementPage";
 import CoursePage from "../pages/exam/CoursePage";
 import CourseListPage from "../pages/exam/CourseListPage";
+import PaymentPage from "../pages/payment/PaymentPage";
+import GoiHocPage from "../pages/package/GoiHocPage";
+import GoiHocDetailPage from "../pages/package/GoiHocDetailPage";
+import PracticeSetupPage from "../pages/practice/PracticeSetupPage";
+import PracticePage from "../pages/practice/PracticePage";
+import PracticeResultPage from "../pages/practice/PracticeResultPage";
+import KhoaHocGoiPage from "../pages/package/KhoaHocGoiPage";
 
 function VocabularyRoute() {
   const location = useLocation();
@@ -72,6 +79,27 @@ export default function AppRoutes() {
     <Route path="/reset-password" element={<ResetPasswordPage />} />
     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
     <Route path="/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
+    <Route path="/goi-hoc" element={<ProtectedRoute><GoiHocPage /></ProtectedRoute>} />
+    <Route path="/goi-hoc/:id" element={<ProtectedRoute><GoiHocDetailPage /></ProtectedRoute>} />
+    <Route
+      path="/khoa-hoc-goi/:id"
+      element={
+        <ProtectedRoute>
+          <KhoaHocGoiPage />
+        </ProtectedRoute>
+      }
+    />
+    <Route path="/payment" element={<PaymentPage />} />
     <Route path="*" element={<Navigate to="/" replace />} />
+    <Route path="/practice/toeic" element={ <ProtectedRoute> <PracticeSetupPage /> </ProtectedRoute> } />
+    <Route path="/practice/toeic/:maKetQua" element={<ProtectedRoute><PracticePage /></ProtectedRoute>} />
+    <Route
+    path="/practice/toeic/:maKetQua/result"
+    element={
+        <ProtectedRoute>
+            <PracticeResultPage />
+        </ProtectedRoute>
+    }
+/>
   </Routes></BrowserRouter>;
 }

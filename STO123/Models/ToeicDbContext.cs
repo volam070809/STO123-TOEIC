@@ -120,6 +120,7 @@ public partial class ToeicDbContext : DbContext
         {
             entity.HasKey(e => e.MaCauHoi).HasName("PK__CauHoi__1937D77B43959EB5");
 
+            entity.Property(e => e.LoaiCauHoi).HasDefaultValue("DE_THI", "DF_CauHoi_LoaiCauHoi");
             entity.Property(e => e.PhuongAnDung).IsFixedLength();
             entity.Property(e => e.TrangThai).HasDefaultValue("NHAP", "DF_CauHoi_TrangThai");
 
@@ -448,8 +449,6 @@ public partial class ToeicDbContext : DbContext
 
         modelBuilder.Entity<TienDoBuocLoTrinh>(entity =>
         {
-            entity.HasKey(e => e.MaTienDoBLT).HasName("PK__TienDoBu__09A45B6A4B7B9F6E");
-
             entity.Property(e => e.CapNhatLuc).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.TrangThai).HasDefaultValue("CHUA_LAM");
 
@@ -457,11 +456,11 @@ public partial class ToeicDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__TienDoBuo__MaBuo__2EA5EC27");
 
-            entity.HasOne(d => d.MaKetQuaNavigation).WithMany(p => p.TienDoBuocLoTrinh).HasConstraintName("FK__TienDoBuo__MaKet__32767D0B");
-
-            entity.HasOne(d => d.MaNguoiDungNavigation).WithMany(p => p.TienDoBuocLoTrinh)
+            entity.HasOne(d => d.MaDangKyNavigation).WithMany(p => p.TienDoBuocLoTrinh)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__TienDoBuo__MaNgu__2DB1C7EE");
+                .HasConstraintName("FK_TienDoBuocLoTrinh_DangKyGoiHoc");
+
+            entity.HasOne(d => d.MaKetQuaNavigation).WithMany(p => p.TienDoBuocLoTrinh).HasConstraintName("FK__TienDoBuo__MaKet__32767D0B");
         });
 
         modelBuilder.Entity<TienDoTuVung>(entity =>
