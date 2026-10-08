@@ -65,13 +65,23 @@ public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbConte
     {
         try
         {
-            _ = await attempts.OwnedAsync(id, LearnerId, ct);
-            var group = await db.NhomLuotLam.AsNoTracking().Include(g => g.MaPartNavigation)
-                .FirstOrDefaultAsync(g => g.MaKetQua == id && g.MaNhomLuotLam == groupId, ct);
-            if (group is null) throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Không tìm thấy tệp media.", 404);
+            var learnerId = LearnerId;
+            var group = await db.NhomLuotLam.AsNoTracking()
+                .Where(g => g.MaKetQua == id && g.MaNhomLuotLam == groupId &&
+                    g.MaKetQuaNavigation.MaHocVien == learnerId &&
+                    (g.MaKetQuaNavigation.LoaiBaiLam == ExamCore.Mock ||
+                     g.MaKetQuaNavigation.LoaiBaiLam == ExamCore.Placement ||
+                     g.MaKetQuaNavigation.LoaiBaiLam == PracticeQuestionBank.AttemptType))
+                .Select(g => new { g.DuongDanAudio, g.DuongDanAnh, g.MaKetQuaNavigation.LoaiBaiLam })
+                .FirstOrDefaultAsync(ct);
+            if (group is null)
+            {
+                _ = await attempts.OwnedAsync(id, learnerId, ct);
+                throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Không tìm thấy tệp media.", 404);
+            }
             var path = kind == "audio" ? group.DuongDanAudio : group.DuongDanAnh;
             if (string.IsNullOrWhiteSpace(path)) throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Không tìm thấy tệp media.", 404);
-            var containerName = configuration["ExamMedia:ContainerName"] ?? configuration["AzureBlob:ContainerName"];
+            var containerName = MediaContainer(group.LoaiBaiLam);
             if (string.IsNullOrWhiteSpace(containerName)) throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Media chưa được cấu hình.", 503);
             var blob = blobs.GetBlobContainerClient(containerName).GetBlobClient(path);
             var properties = await blob.GetPropertiesAsync(cancellationToken: ct);
@@ -86,15 +96,23 @@ public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbConte
     {
         try
         {
-            _ = await attempts.OwnedAsync(id, LearnerId, ct);
-            var group = await db.NhomLuotLam.AsNoTracking().Include(g => g.MaPartNavigation)
-                .FirstOrDefaultAsync(g => g.MaKetQua == id && g.MaNhomLuotLam == groupId, ct);
+            var learnerId = LearnerId;
+            var group = await db.NhomLuotLam.AsNoTracking()
+                .Where(g => g.MaKetQua == id && g.MaNhomLuotLam == groupId &&
+                    g.MaKetQuaNavigation.MaHocVien == learnerId &&
+                    (g.MaKetQuaNavigation.LoaiBaiLam == ExamCore.Mock ||
+                     g.MaKetQuaNavigation.LoaiBaiLam == ExamCore.Placement ||
+                     g.MaKetQuaNavigation.LoaiBaiLam == PracticeQuestionBank.AttemptType))
+                .Select(g => new { g.TaiLieuJson, g.MaKetQuaNavigation.LoaiBaiLam }).FirstOrDefaultAsync(ct);
             if (group is null)
+            {
+                _ = await attempts.OwnedAsync(id, learnerId, ct);
                 throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Không tìm thấy hình ảnh.", 404);
+            }
             var document = ExamDocumentCodec.Decode(group.TaiLieuJson).FirstOrDefault(d => d.Order == order);
             if (string.IsNullOrWhiteSpace(document?.ImagePath))
                 throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Không tìm thấy hình ảnh.", 404);
-            var containerName = configuration["ExamMedia:ContainerName"] ?? configuration["AzureBlob:ContainerName"];
+            var containerName = MediaContainer(group.LoaiBaiLam);
             if (string.IsNullOrWhiteSpace(containerName)) throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Media chưa được cấu hình.", 503);
             var blob = blobs.GetBlobContainerClient(containerName).GetBlobClient(document.ImagePath);
             var properties = await blob.GetPropertiesAsync(cancellationToken: ct);
@@ -114,6 +132,10 @@ public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbConte
             ".jpg" or ".jpeg" => "image/jpeg", _ => "application/octet-stream"
         };
     }
+
+    private string? MediaContainer(string attemptType) =>
+        attemptType == PracticeQuestionBank.AttemptType ? "practice-question" :
+        configuration["ExamMedia:ContainerName"] ?? configuration["AzureBlob:ContainerName"];
 }
 
 public sealed record FlagRequest(bool Flagged);

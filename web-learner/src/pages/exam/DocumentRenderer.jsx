@@ -45,11 +45,11 @@ function FormDocument({ content }) {
   </div>;
 }
 
-function ImageDocument({ document, token }) {
-  return document.imageUrl && <PrivateImage endpoint={document.imageUrl} token={token} alt="Hình tài liệu" />;
+function ImageDocument({ document, token, ImageComponent }) {
+  return document.imageUrl && <ImageComponent endpoint={document.imageUrl} token={token} alt="Hình tài liệu" />;
 }
 
-export default function DocumentRenderer({ document, token }) {
+export default function DocumentRenderer({ document, token, ImageComponent = PrivateImage }) {
   const { type, content } = document ?? {};
   const structured = content && typeof content === "object" && !Array.isArray(content);
   const valid = type === "IMAGE" ? Boolean(document.imageUrl) :
@@ -66,9 +66,9 @@ export default function DocumentRenderer({ document, token }) {
       {type === "TABLE" && <TableDocument content={content} />}
       {type === "CHAT" && <ChatDocument content={content} />}
       {type === "FORM" && <FormDocument content={content} />}
-      {type === "IMAGE" && <ImageDocument document={document} token={token} />}
+      {type === "IMAGE" && <ImageDocument document={document} token={token} ImageComponent={ImageComponent} />}
       {type !== "IMAGE" && document.imageUrl &&
-        <ImageDocument document={document} token={token} />}
+        <ImageDocument document={document} token={token} ImageComponent={ImageComponent} />}
     </>}
   </article>;
 }

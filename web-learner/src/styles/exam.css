@@ -54,16 +54,40 @@
 .exam-content-grouped.is-stacked { display: block; }
 .exam-content-grouped.is-stacked .exam-source { position: static; max-height: none; overflow: visible; }
 .exam-content-grouped.is-stacked .exam-group-questions { max-width: 52rem; }
+.exam-content-grouped.is-part-one { display: block; border: 0; padding: 0; background: transparent; }
+.exam-content-grouped.is-part-one .exam-source { position: static; max-height: none; overflow: visible; }
+.exam-content-grouped.is-part-one .exam-source .exam-context { display: block; max-height: none; overflow: visible;
+  border: 0; padding: 0; margin: 0; }
+.exam-content-grouped.is-part-one .exam-group-questions { width: min(100%, 640px); margin-inline: auto; }
+.exam-part-one-image-frame { display: grid; grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr); place-items: center;
+  width: min(100%, 640px); max-height: 430px; aspect-ratio: 3 / 2;
+  margin: 0 auto .5rem; background: transparent; overflow: hidden; }
+.exam-part-one-image-frame .exam-image { display: block; width: auto; height: auto;
+  max-width: 100%; max-height: 100%; margin: 0; object-fit: contain; object-position: center; }
 .exam-source { position: sticky; top: 6rem; min-width: 0; max-height: calc(100vh - 7rem); overflow: auto; }
 .exam-source-toggle { display: none; }
 .exam-group-questions { min-width: 0; }
 .exam-question { scroll-margin-top: 7rem; }
 .exam-context { border-bottom: 1px solid #e3eaef; padding-bottom: 1rem; margin-bottom: 1rem; }
 .exam-context audio { display: none; }
-.exam-audio { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: 1rem; }
-.exam-audio span { font-variant-numeric: tabular-nums; }
-.exam-audio small { flex-basis: 100%; color: #566574; }
-.exam-audio-finished { margin-top: 1rem; color: #566574; }
+.exam-audio { min-width: 0; margin-top: 1rem; }
+.exam-content-grouped.is-part-one .exam-audio { width: min(100%, 640px); margin: 0 auto .75rem; }
+.exam-audio-controls { display: grid; grid-template-columns: auto auto minmax(2rem, 1fr) auto;
+  align-items: center; gap: .7rem; width: 100%; min-width: 0; padding: .65rem;
+  border: 1px solid #cbdde5; border-radius: 10px; background: #f5fafc; }
+.exam-audio-button { padding: .5rem .8rem; border: 1px solid #145876; border-radius: 7px;
+  background: #145876; color: #fff; font: inherit; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.exam-audio-button:hover:not(:disabled) { background: #1b6a87; }
+.exam-audio-button:focus-visible { outline: 3px solid #78b7cb; outline-offset: 2px; }
+.exam-audio-button:disabled { border-color: #bdcbd6; background: #e7edf0; color: #435766; cursor: default; }
+.exam-audio-time { color: #25495c; font-variant-numeric: tabular-nums; font-size: .9rem; white-space: nowrap; }
+.exam-audio-progress { height: .55rem; min-width: 0; border-radius: 99px; background: #d7e4eb;
+  overflow: hidden; pointer-events: none; touch-action: none; user-select: none; }
+.exam-audio-progress > span { display: block; height: 100%; border-radius: inherit; background: #2784a0;
+  transition: width .15s linear; }
+.exam-audio-loading { display: block; margin-top: .35rem; color: #566574; font-size: .85rem; }
+.exam-audio small { display: block; margin-top: .5rem; color: #566574; }
 .exam-image { max-width: 100%; width: auto; height: auto; max-height: min(70vh, 42rem); object-fit: contain; display: block; margin: 1rem auto; }
 .exam-preserve-lines { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
 .exam-document + .exam-document { border-top: 1px solid #e3eaef; margin-top: 1.2rem; padding-top: 1.2rem; }
@@ -144,6 +168,10 @@
   .exam-score-sections { grid-template-columns: 1fr; }
   .exam-stat-grid { grid-template-columns: 1fr; }
   .exam-content { padding: .9rem; }
+  .exam-part-one-image-frame { width: 100%; }
+  .exam-audio-controls { gap: .35rem; padding: .45rem; }
+  .exam-audio-button { padding: .45rem .5rem; font-size: .8rem; }
+  .exam-audio-time { font-size: .78rem; }
   .exam-source { top: 9rem; max-height: min(55vh, 26rem); }
   .exam-content-grouped.is-wide .exam-source, .exam-content-grouped.is-stacked .exam-source { top: 9rem; max-height: min(55vh, 26rem); }
 }

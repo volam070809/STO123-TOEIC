@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "../../contexts/AuthState";
-import { avatarApi } from "../../services/avatarApi";
 import { initialsFromName } from "./avatarInitials";
 
 function validProviderUrl(value) {
@@ -9,29 +8,16 @@ function validProviderUrl(value) {
 }
 
 export default function Avatar({ user, size = 36 }) {
-  const { token } = useAuth();
-  const [asset, setAsset] = useState(null);
+  const { avatarAsset } = useAuth();
   const [failed, setFailed] = useState({});
   const [loaded, setLoaded] = useState("");
-  const key = user?.hasCustomAvatar && token ? `${token}:${user.avatarVersion}` : null;
-  useEffect(() => {
-    if (!key) return;
-    const controller = new AbortController();
-    let objectUrl = "";
-    avatarApi.image(token, controller.signal).then(blob => {
-      if (!controller.signal.aborted) {
-        objectUrl = URL.createObjectURL(blob);
-        setAsset({ key, url: objectUrl });
-      }
-    }).catch(() => {});
-    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [key, token]);
-
-  const custom = asset?.key === key && !failed[asset.url] ? asset.url : null;
+  const key = user?.hasCustomAvatar ? `${user.maNguoiDung}:${user.avatarVersion}` : null;
+  const custom = avatarAsset?.key === key && avatarAsset.url && !failed[avatarAsset.url] ? avatarAsset.url : null;
   const provider = validProviderUrl(user?.anhDaiDien) && !failed[user.anhDaiDien] ? user.anhDaiDien : null;
   const src = custom || provider;
   return <span className="sto-avatar" style={{ "--avatar-size": `${size}px` }}
-    role="img" aria-label={`Ảnh đại diện của ${user?.hoTen || "học viên"}`}>
+    role="img" aria-label={`Ảnh đại diện của ${user?.hoTen || "học viên"}`}
+    title={avatarAsset?.key === key && avatarAsset.error ? "Không thể tải ảnh đại diện" : undefined}>
     <span className="sto-avatar-initials" aria-hidden="true">{initialsFromName(user?.hoTen)}</span>
     {src && <img src={src} alt="" aria-hidden="true" className={loaded === src ? "is-loaded" : ""}
       onLoad={() => setLoaded(src)}

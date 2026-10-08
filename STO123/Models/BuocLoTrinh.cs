@@ -43,7 +43,4 @@ public partial class BuocLoTrinh
     [ForeignKey("MaLesson")]
     [InverseProperty("BuocLoTrinh")]
     public virtual LessonKhoaHoc MaLessonNavigation { get; set; }
-
-    [InverseProperty("MaBuocNavigation")]
-    public virtual ICollection<TienDoBuocLoTrinh> TienDoBuocLoTrinh { get; set; } = new List<TienDoBuocLoTrinh>();
 }

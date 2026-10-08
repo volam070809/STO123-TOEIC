@@ -1,5 +1,5 @@
 ﻿import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import Avatar from "../auth/Avatar";
 
@@ -13,6 +13,7 @@ export default function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { token, user, loading, sessionError, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   function signOut() {
     logout();
     setMenuOpen(false);
@@ -26,17 +27,18 @@ export default function SiteHeader() {
         {menuOpen ? "Đóng" : "Menu"} <span aria-hidden="true">{menuOpen ? "×" : "☰"}</span>
       </button>
       <nav id="site-navigation" className={"site-navigation" + (menuOpen ? " is-open" : "")} aria-label="Điều hướng chính">
-        <Link className="site-nav-active" to="/" onClick={() => setMenuOpen(false)}>Trang chủ</Link>
-        <Link to="/courses" onClick={() => setMenuOpen(false)}>Khóa học</Link>
-        <Link to="/vocabulary" state={{ vocabularyRoot: true }} onClick={() => setMenuOpen(false)}>Từ vựng</Link>
-        <Link to="/practice/vocabulary" onClick={() => setMenuOpen(false)}>Luyện tập</Link>
-        {user && <Link to="/placement" onClick={() => setMenuOpen(false)}>Lộ trình học</Link>}
-        <Link to="/mock-test" onClick={() => setMenuOpen(false)}>Thi thử</Link>
+        <Link className={pathname === "/" ? "site-nav-active" : undefined} to="/" onClick={() => setMenuOpen(false)}>Trang chủ</Link>
+        <Link className={pathname.startsWith("/courses") ? "site-nav-active" : undefined} to="/courses" onClick={() => setMenuOpen(false)}>Khóa học</Link>
+        <Link className={pathname === "/vocabulary" ? "site-nav-active" : undefined} to="/vocabulary" state={{ vocabularyRoot: true }} onClick={() => setMenuOpen(false)}>Từ vựng</Link>
+        <Link className={pathname.startsWith("/practice") ? "site-nav-active" : undefined} to="/practice" onClick={() => setMenuOpen(false)}>Luyện tập</Link>
+        {user && <Link className={pathname === "/placement" ? "site-nav-active" : undefined} to="/placement" onClick={() => setMenuOpen(false)}>Lộ trình học</Link>}
+        <Link className={pathname.startsWith("/mock-test") ? "site-nav-active" : undefined} to="/mock-test" onClick={() => setMenuOpen(false)}>Thi thử</Link>
       </nav>
       <div className={"site-account" + (menuOpen ? " is-open" : "")}>
         {loading ? <span className="site-account-loading">Đang tải...</span> : token && sessionError ? <span className="site-account-loading">Không thể tải tài khoản</span> : user ? <>
           <span className="site-account-identity"><Avatar user={user} /><span>{user.hoTen}</span></span>
-          <Link to="/profile" onClick={() => setMenuOpen(false)}>Hồ sơ</Link>
+          <Link className={pathname === "/profile" || pathname === "/change-password" ? "site-nav-active" : undefined}
+            to="/profile" onClick={() => setMenuOpen(false)}>Hồ sơ</Link>
           <button type="button" data-exam-logout onClick={signOut}>Đăng xuất</button>
         </> : <>
           <Link to="/login" onClick={() => setMenuOpen(false)}>Đăng nhập</Link>

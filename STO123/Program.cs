@@ -68,15 +68,23 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddSingleton<AvatarStorage>();
 builder.Services.AddScoped<ExamGenerationService>();
+builder.Services.AddScoped<PersistedExamTemplate>();
+builder.Services.AddScoped<PersistedExamSnapshotWriter>();
+builder.Services.AddScoped<RandomStartProfiler>();
+builder.Services.AddScoped<RandomStartCommandInterceptor>();
+builder.Services.AddScoped<ExamPartLookup>();
 builder.Services.AddScoped<ExamAttemptService>();
+builder.Services.AddScoped<ExamSnapshotQueryService>();
+builder.Services.AddScoped<PracticePartService>();
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ExamGradingService>();
 builder.Services.AddSingleton<IKnnClassifier, KnnClassifier>();
 builder.Services.AddSingleton<KnnDiagnosticsStore>();
 builder.Services.AddSingleton<IToeicScoreCalculator, EstimatedLinearToeicScoreCalculator>();
 
-builder.Services.AddDbContext<ToeicDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("ToeicDb")));
+builder.Services.AddDbContext<ToeicDbContext>((services, options) =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("ToeicDb"))
+        .AddInterceptors(services.GetRequiredService<RandomStartCommandInterceptor>()));
 
 var blobAccountName = builder.Configuration["AzureBlob:AccountName"]
     ?? throw new InvalidOperationException(

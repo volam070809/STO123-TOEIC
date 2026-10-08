@@ -1,20 +1,33 @@
 import { apiRequest, API_BASE_URL } from "./api";
 
 const root = "/api/attempts/";
+let catalogInFlight = null;
+let catalogToken = null;
+function mockCatalog(token) {
+  if (catalogInFlight && catalogToken === token) return catalogInFlight;
+  catalogToken = token;
+  const request = apiRequest("/api/mock-tests", { token });
+  catalogInFlight = request;
+  request.finally(() => { if (catalogInFlight === request) catalogInFlight = null; }).catch(() => {});
+  return request;
+}
+const resumeInFlight = new Map();
+function resumeAttempt(id, token) {
+  const key = `${id}:${token}`;
+  if (resumeInFlight.has(key)) return resumeInFlight.get(key);
+  const request = apiRequest(root + id + "/resume", { method: "POST", token });
+  resumeInFlight.set(key, request);
+  request.finally(() => { if (resumeInFlight.get(key) === request) resumeInFlight.delete(key); }).catch(() => {});
+  return request;
+}
 export const examApi = {
-  fixed: token => apiRequest("/api/mock-tests", { token }),
-  summary: token => apiRequest("/api/mock-tests/summary", { token }),
-  parts: token => apiRequest("/api/mock-tests/parts", { token }),
-  fixedSummary: token => apiRequest("/api/mock-tests/fixed-summary", { token }),
-  history: (token, { mode = "ALL", part = null, examId = null, page = 1, pageSize = 10 } = {}) => {
-    const params = new URLSearchParams({ mode, page: String(page), pageSize: String(pageSize) });
-    if (part != null) params.set("part", String(part));
-    if (examId != null) params.set("examId", String(examId));
+  catalog: mockCatalog,
+  history: (token, { page = 1, pageSize = 10 } = {}) => {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     return apiRequest("/api/mock-tests/history?" + params, { token });
   },
-  active: token => apiRequest("/api/mock-tests/active", { token }),
-  start: (source, examId, token, part = null) => apiRequest("/api/mock-tests/start",
-    { method: "POST", body: { source, examId, part }, token }),
+  start: (examId, token) => apiRequest("/api/mock-tests/start",
+    { method: "POST", body: { examId }, token }),
   attempt: (id, token) => apiRequest(root + id, { token }),
   answer: (id, questionId, selectedOption, token) => apiRequest(root + id + "/answers/" + questionId,
     { method: "PUT", body: { selectedOption }, token }),
@@ -22,7 +35,7 @@ export const examApi = {
     { method: "PUT", body: { flagged }, token }),
   submit: (id, token) => apiRequest(root + id + "/submit", { method: "POST", token }),
   pause: (id, token) => apiRequest(root + id + "/pause", { method: "POST", token }),
-  resume: (id, token) => apiRequest(root + id + "/resume", { method: "POST", token }),
+  resume: resumeAttempt,
   heartbeat: (id, token) => apiRequest(root + id + "/heartbeat", { method: "POST", token }),
   result: (id, token) => apiRequest(root + id + "/result", { token }),
   review: (id, token) => apiRequest(root + id + "/review", { token }),
@@ -41,8 +54,25 @@ export const placementApi = {
   course: (id, token) => apiRequest("/api/placement/courses/" + id, { token }),
 };
 
-export async function examMediaBlob(endpoint, token, signal) {
-  const response = await fetch(API_BASE_URL + endpoint, { headers: { Authorization: "Bearer " + token }, signal });
-  if (!response.ok) throw new Error("Không thể tải media.");
-  return response.blob();
+let cachedMediaToken = null;
+const mediaCache = new Map();
+export function examMediaBlob(endpoint, token) {
+  if (cachedMediaToken !== token) { mediaCache.clear(); cachedMediaToken = token; }
+  if (mediaCache.has(endpoint)) {
+    const cached = mediaCache.get(endpoint);
+    mediaCache.delete(endpoint);
+    mediaCache.set(endpoint, cached);
+    return cached;
+  }
+  const pending = fetch(API_BASE_URL + endpoint, { headers: { Authorization: "Bearer " + token } })
+    .then(response => {
+      if (!response.ok) throw new Error("Không thể tải media.");
+      return response.blob();
+    }).catch(error => {
+      if (mediaCache.get(endpoint) === pending) mediaCache.delete(endpoint);
+      throw error;
+    });
+  mediaCache.set(endpoint, pending);
+  if (mediaCache.size > 16) mediaCache.delete(mediaCache.keys().next().value);
+  return pending;
 }

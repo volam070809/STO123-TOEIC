@@ -21,16 +21,13 @@ public class RandomExamPlannerTests
     }
 
     [Fact]
-    public void SparseBankUsesEveryPartWithoutRepeatingUnits()
+    public void SparseBankFailsBeforeProducingAnIncompleteFullMock()
     {
         var sparse = FullUnits().ToDictionary(pair => pair.Key,
             pair => new List<PlannedUnit> { pair.Value[0] });
-        var plan = RandomExamPlanner.Select(sparse, new Random(42));
-        Assert.Equal(7, plan.Count);
-        Assert.Equal(16, plan.Sum(unit => unit.Questions.Count));
-        Assert.Equal(7, plan.Select(unit => unit.Part).Distinct().Count());
-        Assert.Equal(plan.Sum(unit => unit.Questions.Count),
-            plan.SelectMany(unit => unit.Questions).Select(q => q.MaCauHoi).Distinct().Count());
+        var incomplete = Assert.Throws<ExamProblem>(() => RandomExamPlanner.Select(sparse, new Random(42)));
+        Assert.Equal(ExamCore.Insufficient, incomplete.Code);
+        Assert.Contains("Part 1", incomplete.Message);
         sparse[7].Clear();
         var error = Assert.Throws<ExamProblem>(() => RandomExamPlanner.Select(sparse, new Random(42)));
         Assert.Equal(ExamCore.Insufficient, error.Code);
@@ -40,7 +37,11 @@ public class RandomExamPlannerTests
     public void FullBankCanBeSelectedWithoutExtraSourcesAndPicksRandomSubsetWhenAvailable()
     {
         var units = FullUnits();
-        Assert.Equal(200, RandomExamPlanner.Select(units, new Random(42)).Sum(unit => unit.Questions.Count));
+        var full = RandomExamPlanner.Select(units, new Random(42));
+        Assert.Equal(200, full.Sum(unit => unit.Questions.Count));
+        Assert.All(ExamCore.PartCounts, pair => Assert.Equal(pair.Value,
+            full.Where(unit => unit.Part == pair.Key).Sum(unit => unit.Questions.Count)));
+        Assert.Equal(200, full.SelectMany(unit => unit.Questions).Select(q => q.MaCauHoi).Distinct().Count());
         units[1].Add(new(1, null, [new CauHoi { MaCauHoi = 9999 }], []));
         var selections = Enumerable.Range(0, 20).Select(seed =>
             RandomExamPlanner.Select(units, new Random(seed)).SelectMany(u => u.Questions)
@@ -51,15 +52,47 @@ public class RandomExamPlannerTests
     }
 
     [Fact]
-    public void MixedPartSevenGroupsFindLargestCompleteSubset()
+    public void PartSevenWithoutExactWholeGroupCombinationFails()
     {
         var units = FullUnits();
         units[7] = Enumerable.Range(0, 11).Select(i => new PlannedUnit(7, null,
             Enumerable.Range(1, 5).Select(n => new CauHoi { MaCauHoi = 1000 + 5 * i + n }).ToList(), []))
             .ToList();
+        var error = Assert.Throws<ExamProblem>(() => RandomExamPlanner.Select(units, new Random(7)));
+        Assert.Equal(ExamCore.Insufficient, error.Code);
+        Assert.Contains("Part 7", error.Message);
+    }
+
+    [Fact]
+    public void PartSevenFindsExactCombinationOfWholeMixedSizeGroups()
+    {
+        var units = FullUnits();
+        var nextId = 1000;
+        units[7] = Enumerable.Range(0, 10).Select(_ => new PlannedUnit(7, null,
+            Enumerable.Range(0, 5).Select(_ => new CauHoi { MaCauHoi = ++nextId }).ToList(), []))
+            .Concat(Enumerable.Range(0, 2).Select(_ => new PlannedUnit(7, null,
+                Enumerable.Range(0, 2).Select(_ => new CauHoi { MaCauHoi = ++nextId }).ToList(), [])))
+            .ToList();
         var plan = RandomExamPlanner.Select(units, new Random(7));
-        Assert.Equal(50, plan.Where(unit => unit.Part == 7).Sum(unit => unit.Questions.Count));
-        Assert.All(plan.Where(unit => unit.Part == 7), unit => Assert.Equal(5, unit.Questions.Count));
+        Assert.Equal(200, plan.Sum(unit => unit.Questions.Count));
+        Assert.Equal(54, plan.Where(unit => unit.Part == 7).Sum(unit => unit.Questions.Count));
+        Assert.Equal(12, plan.Count(unit => unit.Part == 7));
+    }
+
+    [Fact]
+    public void InvalidPartSevenGroupCannotBeSplitToCompleteFullMock()
+    {
+        var units = FullUnits();
+        var nextId = 1000;
+        units[7] = Enumerable.Range(0, 10).Select(_ => new PlannedUnit(7, null,
+            Enumerable.Range(0, 5).Select(_ => new CauHoi { MaCauHoi = ++nextId }).ToList(), []))
+            .Append(new PlannedUnit(7, null,
+                Enumerable.Range(0, 6).Select(_ => new CauHoi { MaCauHoi = ++nextId }).ToList(), []))
+            .ToList();
+
+        var error = Assert.Throws<ExamProblem>(() => RandomExamPlanner.Select(units, new Random(7)));
+        Assert.Equal(ExamCore.Insufficient, error.Code);
+        Assert.Contains("Part 7", error.Message);
     }
 
     [Fact]

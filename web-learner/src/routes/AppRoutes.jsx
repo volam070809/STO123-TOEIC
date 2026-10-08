@@ -4,6 +4,7 @@ import HomePage from "../pages/HomePage";
 import VocabularyPage from "../pages/vocabulary/VocabularyPage";
 import VocabularyPracticePage from "../pages/practice/VocabularyPracticePage";
 import VocabularyPracticeHistoryPage from "../pages/practice/VocabularyPracticeHistoryPage";
+import PracticePartsPage from "../pages/practice/PracticePartsPage";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import VerifyEmailPage from "../pages/auth/VerifyEmailPage";
@@ -13,8 +14,6 @@ import ProfilePage from "../pages/auth/ProfilePage";
 import ChangePasswordPage from "../pages/auth/ChangePasswordPage";
 import ProtectedRoute from "./ProtectedRoute";
 import MockHomePage from "../pages/exam/MockHomePage";
-import PartMockPage from "../pages/exam/PartMockPage";
-import FixedExamPage from "../pages/exam/FixedExamPage";
 import MockHistoryDetailPage from "../pages/exam/MockHistoryDetailPage";
 import ExamPage from "../pages/exam/ExamPage";
 import ExamResultPage from "../pages/exam/ExamResultPage";
@@ -51,14 +50,16 @@ export default function AppRoutes() {
     <Route path="/" element={<HomePage />} />
     <Route path="/vocabulary" element={<VocabularyRoute />} />
     <Route path="/practice/vocabulary" element={<VocabularyPracticePage />} />
+    <Route path="/practice" element={<ProtectedRoute><PracticePartsPage /></ProtectedRoute>} />
+    <Route path="/practice/vocabulary/parts" element={<Navigate to="/practice" replace />} />
     <Route path="/practice/vocabulary/history" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
     <Route path="/practice/vocabulary/history/:id" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
     <Route path="/mock-test" element={<ProtectedRoute><MockHomePage /></ProtectedRoute>} />
-    <Route path="/mock-test/parts" element={<ProtectedRoute><PartMockPage /></ProtectedRoute>} />
-    <Route path="/mock-test/fixed" element={<ProtectedRoute><FixedExamPage /></ProtectedRoute>} />
+    <Route path="/mock-test/parts" element={<Navigate to="/mock-test" replace />} />
+    <Route path="/mock-test/fixed" element={<Navigate to="/mock-test" replace />} />
     <Route path="/mock-test/history" element={<ProtectedRoute><MockHistoryRoute kind="all" /></ProtectedRoute>} />
-    <Route path="/mock-test/history/random" element={<ProtectedRoute><MockHistoryRoute kind="random" /></ProtectedRoute>} />
-    <Route path="/mock-test/history/part/:part" element={<ProtectedRoute><MockHistoryRoute kind="part" /></ProtectedRoute>} />
+    <Route path="/mock-test/history/random" element={<Navigate to="/mock-test/history" replace />} />
+    <Route path="/mock-test/history/part/:part" element={<Navigate to="/mock-test/history" replace />} />
     <Route path="/placement" element={<ProtectedRoute><PlacementPage /></ProtectedRoute>} />
     <Route path="/courses" element={<ProtectedRoute><CourseListPage /></ProtectedRoute>} />
     <Route path="/courses/:courseId" element={<ProtectedRoute><CoursePage /></ProtectedRoute>} />

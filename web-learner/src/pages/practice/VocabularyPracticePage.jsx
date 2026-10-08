@@ -19,6 +19,7 @@ export default function VocabularyPracticePage() {
         <span>Luyện tập / Luyện từ vựng</span>
         <h1>Luyện từ vựng</h1>
         <p>Kiểm tra khả năng nhớ từ với câu hỏi trắc nghiệm. Kết quả hoàn thành được lưu trong lịch sử luyện tập.</p>
+        <Link className="outline-button" to="/practice">Luyện tập TOEIC theo Part</Link>
       </div>
       {user && token ? <LearnerPractice key={token} token={token} /> :
         <section className="vocab-panel">

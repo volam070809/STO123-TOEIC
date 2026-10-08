@@ -8,10 +8,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STO123.Models;
 
-[Index("MaNguoiDung", "MaBuoc", Name = "UQ_TienDoBuocLoTrinh", IsUnique = true)]
+[Keyless]
+[Index("MaDangKy", "MaBuoc", Name = "UQ_TienDoBuocLoTrinh_MaDangKy_MaBuoc", IsUnique = true)]
 public partial class TienDoBuocLoTrinh
 {
-    [Key]
     public int MaTienDoBLT { get; set; }
 
     public int MaNguoiDung { get; set; }
@@ -30,15 +30,14 @@ public partial class TienDoBuocLoTrinh
     [Column(TypeName = "datetime")]
     public DateTime CapNhatLuc { get; set; }
 
+    public int MaDangKy { get; set; }
+
     [ForeignKey("MaBuoc")]
-    [InverseProperty("TienDoBuocLoTrinh")]
     public virtual BuocLoTrinh MaBuocNavigation { get; set; }
 
-    [ForeignKey("MaKetQua")]
-    [InverseProperty("TienDoBuocLoTrinh")]
-    public virtual KetQuaLamBai MaKetQuaNavigation { get; set; }
+    [ForeignKey("MaDangKy")]
+    public virtual DangKyGoiHoc MaDangKyNavigation { get; set; }
 
-    [ForeignKey("MaNguoiDung")]
-    [InverseProperty("TienDoBuocLoTrinh")]
-    public virtual NguoiDung MaNguoiDungNavigation { get; set; }
+    [ForeignKey("MaKetQua")]
+    public virtual KetQuaLamBai MaKetQuaNavigation { get; set; }
 }

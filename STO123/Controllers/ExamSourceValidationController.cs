@@ -61,6 +61,7 @@ public sealed class ExamSourceValidationController(ToeicDbContext db, BlobServic
         }
         var report = ExamSourceValidator.ValidateFixed(exam, links, questions, parts,
             memberships, resources, documents, existing.Keys.ToHashSet());
-        return Ok(new { examId, examStatus = exam.TrangThai, report.Valid, report.Issues });
+        return Ok(new { examId, examCode = MockExamCode.FromId(examId),
+            examStatus = exam.TrangThai, report.Valid, report.Issues });
     }
 }

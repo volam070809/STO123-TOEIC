@@ -13,8 +13,7 @@ export default function CourseListPage() {
   const [error, setError] = useState("");
   useEffect(() => {
     let live = true;
-    Promise.all([placementApi.courses(token), placementApi.result(token)
-      .catch(e => e.status === 404 ? null : Promise.reject(e))])
+    Promise.all([placementApi.courses(token), placementApi.summary(token)])
       .then(([data, current]) => { if (live) { setCourses(data); setPlacement(current); } })
       .catch(() => { if (live) setError("Không thể tải danh sách khóa học."); });
     return () => { live = false; };
@@ -25,7 +24,7 @@ export default function CourseListPage() {
       <p>Chọn khóa học phù hợp với mục tiêu của bạn.</p></div>
     {courses && <p className="course-intro">{hasRecommendation ?
       "Dựa trên năng lực hiện tại và mục tiêu đã xác nhận, các khóa học đề xuất đã được đánh dấu theo thứ tự." :
-      placement?.stage && placement.targetScore == null ?
+      placement?.currentStage && placement.targetScore == null ?
         <>Bạn đã có kết quả kiểm tra đầu vào. <Link to="/placement">Xác nhận điểm mục tiêu</Link> để xem khóa học đề xuất.</> :
         <>Bạn có thể <Link to="/placement">làm bài kiểm tra đầu vào</Link> để nhận đề xuất phù hợp hơn.</>}</p>}
     {error && <p className="exam-error" role="alert">{error}</p>}
@@ -42,7 +41,7 @@ export default function CourseListPage() {
           <p className="course-score-range">Mức điểm tham khảo: {info?.range || "Đang cập nhật"}</p>
           <p className="course-description">{course.description || info?.description}</p>
           <p className="course-access">🔒 Khóa học đang khóa</p>
-          <Link className="primary-button course-cta" to={`/courses/${course.courseId}`}>Xem khóa học</Link>
+          <Link className="primary-button course-cta" to={`/courses/${course.courseId}`}>Xem đề cương</Link>
         </div>
       </article>;
     })}</div>

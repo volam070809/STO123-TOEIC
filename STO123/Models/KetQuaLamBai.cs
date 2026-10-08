@@ -71,7 +71,4 @@ public partial class KetQuaLamBai
 
     [InverseProperty("MaKetQuaNavigation")]
     public virtual ICollection<NhomLuotLam> NhomLuotLam { get; set; } = new List<NhomLuotLam>();
-
-    [InverseProperty("MaKetQuaNavigation")]
-    public virtual ICollection<TienDoBuocLoTrinh> TienDoBuocLoTrinh { get; set; } = new List<TienDoBuocLoTrinh>();
 }

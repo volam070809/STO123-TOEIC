@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { examMediaBlob } from "../../services/examApi";
-import { advanceAudioSession, audioSession, finishAudioSession, resetUnplayedAudioSession, startAudioSession } from "./audioSession";
+import { advanceAudioSession, audioSession, finishAudioSession, resetUnplayedAudioSession, setAudioSessionDuration, startAudioSession } from "./audioSession";
 
 export function PrivateImage({ endpoint, token, alt, onDimensions }) {
   const [url, setUrl] = useState("");
@@ -30,7 +30,7 @@ export function PrivateAudio({ endpoint, token, mode = "MOCK" }) {
   const [playing, setPlaying] = useState(false);
   const [ended, setEnded] = useState(session.ended);
   const [position, setPosition] = useState(session.position);
-  const [duration, setDuration] = useState(null);
+  const [duration, setDuration] = useState(session.duration);
   const [ready, setReady] = useState(false);
   const [url, setUrl] = useState("");
   const [error, setError] = useState(false);
@@ -62,13 +62,22 @@ export function PrivateAudio({ endpoint, token, mode = "MOCK" }) {
   }
 
   if (error) return <p className="exam-media-error">Không thể tải âm thanh.</p>;
-  if (ended) return <p className="exam-audio-finished">Đã nghe xong · Không thể phát lại trong phiên này.</p>;
+  const progress = ended ? 100 : duration > 0 ? Math.min(100, Math.max(0, position / duration * 100)) : 0;
   return <div className="exam-audio" aria-label="Âm thanh câu hỏi">
     {url && <audio ref={audioRef} src={url} preload="auto" onError={() => setError(true)}
       onLoadedMetadata={event => {
         const audio = event.currentTarget;
+        if (session.started && (session.position <= 0 ||
+          session.position >= audio.duration - 0.25)) {
+          finishAudioSession(session, audio.duration);
+          setDuration(audio.duration);
+          setPosition(session.position);
+          setEnded(true);
+          return;
+        }
         if (session.position > 0) audio.currentTime = session.position;
         setDuration(audio.duration);
+        setAudioSessionDuration(session, audio.duration);
         setReady(true);
       }}
       onTimeUpdate={event => setPosition(advanceAudioSession(session, event.currentTarget.currentTime))}
@@ -78,11 +87,23 @@ export function PrivateAudio({ endpoint, token, mode = "MOCK" }) {
       }}
       onRateChange={event => { if (event.currentTarget.playbackRate !== 1) event.currentTarget.playbackRate = 1; }}
       onPause={event => { advanceAudioSession(session, event.currentTarget.currentTime); setPlaying(false); }}
-      onEnded={event => { finishAudioSession(session, event.currentTarget.duration); setPlaying(false); setEnded(true); }} />}
-    <button type="button" className="outline-button" disabled={!ready} onClick={toggle}>
-      {playing ? "Tạm dừng" : session.started ? "Tiếp tục" : "Phát âm thanh"}
-    </button>
-    <span aria-live="polite">{!url || !ready ? "Đang tải âm thanh…" : `${timeLabel(position)} / ${timeLabel(duration)}`}</span>
+      onEnded={event => { finishAudioSession(session, event.currentTarget.duration);
+        setPosition(session.position); setPlaying(false); setEnded(true); }} />}
+    <div className="exam-audio-controls">
+      <button type="button" className="exam-audio-button" disabled={!ready || ended} onClick={toggle}
+        aria-label={ended ? "Đã nghe âm thanh" : playing ? "Tạm dừng âm thanh" :
+          session.started ? "Tiếp tục âm thanh" : "Nghe âm thanh"}>
+        {ended ? "✓ Đã nghe" : playing ? "Ⅱ Tạm dừng" : session.started ? "▶ Tiếp tục" : "▶ Nghe"}
+      </button>
+      <span className="exam-audio-time">{timeLabel(position)}</span>
+      <div className="exam-audio-progress" role="progressbar" aria-label="Tiến độ âm thanh"
+        aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)}
+        aria-valuetext={`${timeLabel(position)} / ${timeLabel(duration)}`}>
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <span className="exam-audio-time">{timeLabel(duration)}</span>
+    </div>
+    {!ready && !ended && <span className="exam-audio-loading" role="status">Đang tải âm thanh…</span>}
     <small>{mode === "PRACTICE" ? "Có thể tạm dừng và tiếp tục. Không thể tua hoặc phát lại." :
       "Chỉ phát một lượt. Không thể tua, bắt đầu lại hoặc phát lại."}</small>
   </div>;

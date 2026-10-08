@@ -3,7 +3,7 @@ namespace STO123.Services.Exam;
 public static class RandomExamPlanner
 {
     private static ExamProblem Insufficient(int part) => new(ExamCore.Insufficient,
-        $"Hiện chưa đủ dữ liệu hợp lệ để tạo bài thi Part {part}.", 409);
+        $"Chưa có tổ hợp dữ liệu hợp lệ đạt đúng số câu cho Part {part}.", 409);
 
     public static IReadOnlyDictionary<byte, int> DifficultyCounts(IEnumerable<PlannedUnit> units) =>
         units.SelectMany(unit => unit.Questions).GroupBy(question => question.DoKho)
@@ -38,8 +38,10 @@ public static class RandomExamPlanner
                 foreach (var question in unit.Questions) seenQuestions.Add(question.MaCauHoi);
                 if (unit.Resource is not null) seenGroups.Add(unit.Resource.MaNguLieu);
             }
-            var selected = BestUnits(unique, target);
-            if (selected is null || selected.Count == 0) throw Insufficient(part);
+            var selected = selectedPart is null ? ExactUnits(unique, target) : BestUnits(unique, target);
+            if (selected is null || selected.Count == 0 ||
+                (selectedPart is null && selected.Sum(unit => unit.Questions.Count) != target))
+                throw Insufficient(part);
             plan.AddRange(selected);
             foreach (var unit in selected)
             {
@@ -61,6 +63,32 @@ public static class RandomExamPlanner
                 if (best[n] is null && n >= unit.Questions.Count && best[n - unit.Questions.Count] is { } prior)
                     best[n] = [.. prior, unit];
         return best.LastOrDefault(selection => selection is not null);
+    }
+
+    // Keep one predecessor per reachable count instead of copying partial plans for every unit.
+    private static List<PlannedUnit>? ExactUnits(IReadOnlyList<PlannedUnit> pool, int target)
+    {
+        var reachable = new bool[target + 1];
+        var previous = new int[target + 1];
+        var chosen = new int[target + 1];
+        reachable[0] = true;
+        for (var index = 0; index < pool.Count && !reachable[target]; index++)
+        {
+            var size = pool[index].Questions.Count;
+            for (var count = target; count >= size; count--)
+            {
+                if (reachable[count] || !reachable[count - size]) continue;
+                reachable[count] = true;
+                previous[count] = count - size;
+                chosen[count] = index;
+            }
+        }
+        if (!reachable[target]) return null;
+        var selected = new List<PlannedUnit>();
+        for (var count = target; count > 0; count = previous[count])
+            selected.Add(pool[chosen[count]]);
+        selected.Reverse();
+        return selected;
     }
 
     internal static bool ValidUnitSize(int part, int count) => part switch

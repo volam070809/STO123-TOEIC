@@ -128,13 +128,13 @@ CREATE TABLE dbo.GiaoDichThanhToan(
     MaDangKy int not null foreign key references DangKyGoiHoc(MaDangKy),
     MaCongThanhToan int not null foreign key references CongThanhToan(MaCongThanhToan),
     SoTien decimal(18,2) not null check (SoTien >= 0),
-    MaGiaoDichCongThanhToan varchar(128) null,
+    MaGiaoDichCongThanhToan varchar(128) not null,
     TrangThai varchar(32) not null default 'CHO_XU_LY' check (TrangThai in ('CHO_XU_LY','THANH_CONG','THAT_BAI')),
     NgayTao datetime not null default getdate(),
     NgayThanhToan datetime null,
     constraint CK_GiaoDichThanhToan_ThanhCong check (
         TrangThai <> 'THANH_CONG'
-        or (NgayThanhToan is not null and nullif(ltrim(rtrim(MaGiaoDichCongThanhToan)), '') is not null)
+        or (NgayThanhToan is not null and ltrim(rtrim(MaGiaoDichCongThanhToan)) <> '')
     )
 );
 GO
@@ -179,6 +179,7 @@ CREATE TABLE dbo.CauHoi(
     MaPart int not null foreign key references PartTOEIC(MaPart),
     DoKho tinyint not null check (DoKho between 1 and 3),
     TrangThai varchar(16) not null default 'NHAP' check (TrangThai in ('NHAP','XUAT_BAN','AN')),
+    LoaiCauhoi varchar(15) default 'DE_THI' check (LoaiCauHoi in ('LUYEN_TAP', 'DE_THI')),
     constraint CK_CauHoi_PhuongAn check (PhuongAnD is not null or PhuongAnDung in ('A','B','C'))
 );
 GO
@@ -437,13 +438,13 @@ GO
 -- 05. TIEN DO VA LUYEN TU VUNG
 CREATE TABLE dbo.TienDoBuocLoTrinh(
     MaTienDoBLT int primary key identity(1,1),
-    MaNguoiDung int not null foreign key references NguoiDung(MaNguoiDung),
+    MaDangKy int not null foreign key references DangKyGoiHoc(MaDangKy),
     MaBuoc int not null foreign key references BuocLoTrinh(MaBuoc),
     TrangThai varchar(16) not null default 'CHUA_LAM' check (TrangThai in ('CHUA_LAM','DANG_LAM','HOAN_THANH')),
     TyLeHoanThanh tinyint null check (TyLeHoanThanh between 0 and 100),
     MaKetQua int null foreign key references KetQuaLamBai(MaKetQua),
     CapNhatLuc datetime not null default getdate(),
-    constraint UQ_TienDoBuocLoTrinh unique (MaNguoiDung, MaBuoc)
+    constraint UQ_TienDoBuocLoTrinh unique (MaDangKy, MaBuoc)
 );
 GO
 

@@ -24,19 +24,18 @@ export default function ExamResultPage() {
   const partMock = result?.source === "PART";
   const navigation = examNavigation(result);
   async function retry() {
-    if (retrying || !navigation.mode) return;
+    if (retrying || result?.source !== "PLACEMENT") return;
     setRetrying(true); setError("");
     try {
-      const started = navigation.mode === "PLACEMENT" ? await placementApi.start(token) :
-        await examApi.start(navigation.mode, navigation.examId ?? null, token,
-          navigation.mode === "PART" ? navigation.part : null);
+      const started = await placementApi.start(token);
       navigate(`/exam/${started.attemptId}`);
     } catch { setError("Không thể bắt đầu lại bài thi."); }
     finally { setRetrying(false); }
   }
   return <SiteLayout><div className="site-container exam-result">
     <div className="page-heading"><span>{result?.source === "PLACEMENT" ? "Lộ trình học" : "Thi thử"} / Kết quả</span>
-      <h1>{result?.examName || "Kết quả bài thi"}</h1></div>
+      <h1>{result?.examName || "Kết quả bài thi"}</h1>
+      {result?.examCode && <p>{result.examCode}</p>}</div>
     {error && <p className="exam-error" role="alert">{error}</p>}
     {!result && !error && <p>Đang tải kết quả…</p>}
     {result && <>
@@ -59,10 +58,10 @@ export default function ExamResultPage() {
           <span>{row.stats.correct}/{row.stats.total} đúng</span><span>{row.stats.percentage}%</span></div>)}</div></section>
       <div className="exam-navigation">
         <Link className="outline-button" to={navigation.back}>← Quay lại</Link>
-        <Link className="primary-button" to={`/exam/${attemptId}/review`}>Xem lại bài</Link>
-        {navigation.mode && (navigation.mode !== "FIXED" || navigation.examId != null) &&
+        {result.source === "PLACEMENT" && <Link className="primary-button" to={`/exam/${attemptId}/review`}>Xem lại bài</Link>}
+        {result.source === "PLACEMENT" &&
           <button className="outline-button" type="button" disabled={retrying} onClick={retry}>
-            {result.source === "PLACEMENT" ? "Làm lại kiểm tra" : "Thi lại"}</button>}
+            Làm lại kiểm tra</button>}
         {navigation.root !== navigation.back && <Link className="outline-button" to={navigation.root}>
           {navigation.rootLabel}</Link>}
       </div>

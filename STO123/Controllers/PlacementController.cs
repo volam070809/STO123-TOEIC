@@ -57,9 +57,8 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
     {
         try
         {
-            var id = await attempts.StartPlacementAsync(LearnerId, ct);
-            var row = await attempts.OwnedAsync(id, LearnerId, ct);
-            return Ok(new { attemptId = id, status = row.TrangThai });
+            var started = await attempts.StartPlacementAsync(LearnerId, ct);
+            return Ok(new { attemptId = started.AttemptId, status = started.Status });
         }
         catch (ExamProblem e) { return Problem(e); }
     }
@@ -133,7 +132,9 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
         var latestCompletedAt = await query.OrderByDescending(x => x.NgayLamBai)
             .ThenByDescending(x => x.MaKetQua).Select(x => x.NgayNopBai).FirstOrDefaultAsync(ct);
         var current = await CurrentKnn(ct);
-        return Ok(new { completedCount, latestCompletedAt, currentStage = current?.GiaiDoanDeXuat });
+        return Ok(new { completedCount,
+            latestCompletedAt = latestCompletedAt.HasValue ? ExamCore.Utc(latestCompletedAt.Value) : (DateTime?)null,
+            currentStage = current?.GiaiDoanDeXuat, targetScore = current?.DiemMucTieu });
     }
 
     [HttpGet("history")]
@@ -150,7 +151,9 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
             .Select(x => new { attemptId = x.MaKetQua, completedAt = x.NgayNopBai,
                 status = x.TrangThai, stage = x.GiaiDoanLucNop }).ToListAsync(ct);
         return Ok(new { items = rows.Select((row, index) => new { row.attemptId,
-            number = total - (page - 1) * pageSize - index, row.completedAt, row.status, row.stage }),
+            number = total - (page - 1) * pageSize - index,
+            completedAt = row.completedAt.HasValue ? ExamCore.Utc(row.completedAt.Value) : (DateTime?)null,
+            row.status, row.stage }),
             total, page, pageSize, hasMore = page * pageSize < total });
     }
 

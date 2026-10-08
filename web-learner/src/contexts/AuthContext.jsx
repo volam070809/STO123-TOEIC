@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { authApi } from "../services/authApi";
 import { AuthContext } from "./AuthState";
 import { disableGoogleAutoSelect } from "../services/googleIdentity";
+import { clearAvatarCache, loadAvatarOnce } from "../services/avatarCache";
 
 const ACCOUNT_LOAD_ERROR = "Không thể tải tài khoản. Vui lòng thử lại.";
 
@@ -10,12 +11,16 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(() => !!sessionStorage.getItem("accessToken"));
   const [sessionError, setSessionError] = useState("");
+  const [avatarAsset, setAvatarAsset] = useState({ key: null, url: null, error: false });
   const tokenRef = useRef(sessionStorage.getItem("accessToken"));
   const generationRef = useRef(0);
   const startupRequestedRef = useRef(false);
+  const renewPendingRef = useRef(null);
 
   function clearSession() {
     generationRef.current += 1;
+    clearAvatarCache();
+    setAvatarAsset({ key: null, url: null, error: false });
     tokenRef.current = null;
     sessionStorage.removeItem("accessToken");
     sessionStorage.removeItem("expiresAtUtc");
@@ -88,20 +93,39 @@ export function AuthProvider({ children }) {
   }
 
   async function renewToken() {
+    if (renewPendingRef.current) return renewPendingRef.current;
     const current = tokenRef.current;
     if (!current) throw new Error("Phiên đăng nhập đã kết thúc.");
-    const result = await authApi.renew(current);
-    if (tokenRef.current !== current) return;
-    tokenRef.current = result.token;
-    sessionStorage.setItem("accessToken", result.token);
-    sessionStorage.setItem("expiresAtUtc", result.expiresAtUtc);
-    setToken(result.token);
-    return result.token;
+    const pending = authApi.renew(current).then(result => {
+      if (tokenRef.current !== current) return;
+      tokenRef.current = result.token;
+      sessionStorage.setItem("accessToken", result.token);
+      sessionStorage.setItem("expiresAtUtc", result.expiresAtUtc);
+      setToken(result.token);
+      return result.token;
+    });
+    renewPendingRef.current = pending;
+    try { return await pending; }
+    finally { if (renewPendingRef.current === pending) renewPendingRef.current = null; }
   }
 
   function updateAvatar(details) {
+    clearAvatarCache();
+    setAvatarAsset({ key: null, url: null, error: false });
     setUser(current => current ? { ...current, ...details } : current);
   }
+
+  const avatarKey = user?.hasCustomAvatar && token ? `${user.maNguoiDung}:${user.avatarVersion}` : null;
+  useEffect(() => {
+    let active = true;
+    if (!avatarKey) return () => { active = false; };
+    loadAvatarOnce(avatarKey, token).then(url => {
+      if (active) setAvatarAsset({ key: avatarKey, url, error: false });
+    }).catch(() => {
+      if (active) setAvatarAsset({ key: avatarKey, url: null, error: true });
+    });
+    return () => { active = false; };
+  }, [avatarKey, token]);
 
   useEffect(() => {
     if (!startupRequestedRef.current && tokenRef.current) {
@@ -117,6 +141,6 @@ export function AuthProvider({ children }) {
 
   return <AuthContext.Provider value={{
     token, user, loading, sessionError, isAuthenticated: !!token && !!user,
-    login, loginWithGoogle, logout, loadCurrentUser, renewToken, updateAvatar,
+    login, loginWithGoogle, logout, loadCurrentUser, renewToken, updateAvatar, avatarAsset,
   }}>{children}</AuthContext.Provider>;
 }

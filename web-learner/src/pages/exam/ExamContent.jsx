@@ -67,18 +67,23 @@ export default function ExamContent({ group, independentQuestion, attemptId, tok
   const [sourceOpen, setSourceOpen] = useState(false);
   const [imageSize, setImageSize] = useState(null);
   const questions = group?.questions ?? [independentQuestion];
+  const partOne = group?.part === 1;
   const base = `/api/attempts/${attemptId}/groups/${group?.groupId}`;
-  return <div className={`exam-content${group ? " exam-content-grouped" + materialLayout(group, imageSize) : ""}`}>
+  return <div className={`exam-content${group ? " exam-content-grouped" + (partOne ? " is-part-one" : materialLayout(group, imageSize)) : ""}`}>
     {group && <div className="exam-source">
-      <button className="outline-button exam-source-toggle" type="button" aria-expanded={sourceOpen}
-        onClick={() => setSourceOpen(value => !value)}>{sourceOpen ? "Thu gọn đề" : "Xem đề"}</button>
-      <div className={`exam-context${sourceOpen ? " is-open" : ""}`}>
+      {!partOne && <button className="outline-button exam-source-toggle" type="button" aria-expanded={sourceOpen}
+        onClick={() => setSourceOpen(value => !value)}>{sourceOpen ? "Thu gọn đề" : "Xem đề"}</button>}
+      <div className={`exam-context${sourceOpen || partOne ? " is-open" : ""}`}>
       {group.context && <p className="exam-preserve-lines">{group.context}</p>}
       {group.documents?.map(document =>
         <DocumentRenderer key={document.order} document={document} token={token} />)}
-      {group.hasImage && <PrivateImage endpoint={base + "/image"} token={token} alt="Hình minh họa câu hỏi"
+      {partOne && group.hasAudio && !review && <PrivateAudio key={base} endpoint={base + "/audio"} token={token} mode={mode} />}
+      {partOne && group.hasImage && <div className="exam-part-one-image-frame">
+        <PrivateImage endpoint={base + "/image"} token={token} alt="Hình minh họa câu hỏi" />
+      </div>}
+      {group.hasImage && !partOne && <PrivateImage endpoint={base + "/image"} token={token} alt="Hình minh họa câu hỏi"
         onDimensions={(width, height) => setImageSize({ width, height })} />}
-      {group.hasAudio && !review && <PrivateAudio key={base} endpoint={base + "/audio"} token={token} mode={mode} />}
+      {group.hasAudio && !partOne && !review && <PrivateAudio key={base} endpoint={base + "/audio"} token={token} mode={mode} />}
       </div>
     </div>}
     <div className="exam-group-questions">{questions.map(question => <Question key={question.attemptQuestionId} question={question} review={review}

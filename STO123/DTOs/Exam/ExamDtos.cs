@@ -3,8 +3,12 @@ using STO123.Services.Exam;
 namespace STO123.DTOs.Exam;
 
 public sealed record StartExamRequest(string Source, int? ExamId, int? Part = null);
+public sealed record StartMockRequest(int ExamId);
 public sealed record SaveAnswerRequest(string? SelectedOption, bool? Flagged);
-public sealed record FixedMockDto(int ExamId, string ExamName, int Duration, string Status);
+public sealed record FixedMockDto(int ExamId, string ExamName, int Duration, string Status)
+{
+    public string ExamCode => MockExamCode.FromId(ExamId);
+}
 public sealed record ExamQuestionDto(int AttemptQuestionId, int Order, int PartOrder, int Part,
     string? Text, string? A, string? B, string? C, string? D, string? SelectedOption, bool Flagged);
 public sealed record ExamDocumentDto(int Order, string Type, object? Content, bool HasImage, string? ImageUrl);
@@ -18,6 +22,7 @@ public sealed record ExamAttemptDto(int AttemptId, string Source, string Status,
     public int? RemainingSeconds { get; init; }
     public bool IsPaused { get; init; }
 }
+public sealed record ExamTimerDto(string Status, int? RemainingSeconds, bool IsPaused);
 public sealed record ExamHistoryDto(int AttemptId, string Status, DateTime StartedAt, DateTime? ExpiresAt,
     int? TotalScore);
 public sealed record FixedMockHistoryDto(int ExamId, string ExamName, string ExamStatus,
@@ -35,6 +40,7 @@ public sealed record MockAttemptSummaryDto(int AttemptId, string Name, string St
     int? Part, int? TotalScore, int? Correct, decimal? Percentage, string Mode,
     int? ExamId = null)
 {
+    public string? ExamCode => MockExamCode.FromId(ExamId);
     public int? RemainingSeconds { get; init; }
     public bool IsPaused { get; init; }
 }
@@ -44,6 +50,7 @@ public sealed record ExamResultDto(int AttemptId, string Status, DateTime Starte
     int TimeUsedSeconds, int? ListeningScore, int? ReadingScore, int? TotalScore, bool IsEstimated,
     RawStatsDto Overall, RawStatsDto Listening, RawStatsDto Reading, IReadOnlyList<PartStatsDto> Parts)
 {
+    public string? ExamCode => Source == ExamCore.Mock ? MockExamCode.FromId(ExamId) : null;
     public string? ExamName { get; init; }
     public string Source { get; init; } = ExamCore.Mock;
     public string Mode { get; init; } = ExamCore.Mock;
@@ -59,4 +66,5 @@ public sealed record ExamReviewDto(int AttemptId, IReadOnlyList<ReviewGroupDto> 
     IReadOnlyList<ReviewQuestionDto> IndependentQuestions)
 {
     public string Source { get; init; } = ExamCore.Mock;
+    public ExamResultDto? Result { get; init; }
 }

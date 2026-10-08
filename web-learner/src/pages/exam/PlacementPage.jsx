@@ -69,10 +69,14 @@ export default function PlacementPage() {
   async function start() {
     if (pending) return;
     setPending(true); setError("");
+    if (import.meta.env.DEV) performance.mark("placement-start-click");
     try {
       const started = await placementApi.start(token);
       navigate(`/exam/${started.attemptId}`);
-    } catch (e) { setError(e.data?.message || "Không thể bắt đầu bài kiểm tra đầu vào."); }
+    } catch (e) {
+      if (import.meta.env.DEV) performance.clearMarks("placement-start-click");
+      setError(e.data?.message || "Không thể bắt đầu bài kiểm tra đầu vào.");
+    }
     finally { setPending(false); }
   }
 

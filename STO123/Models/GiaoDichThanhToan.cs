@@ -20,6 +20,7 @@ public partial class GiaoDichThanhToan
     [Column(TypeName = "decimal(18, 2)")]
     public decimal SoTien { get; set; }
 
+    [Required]
     [StringLength(128)]
     [Unicode(false)]
     public string MaGiaoDichCongThanhToan { get; set; }

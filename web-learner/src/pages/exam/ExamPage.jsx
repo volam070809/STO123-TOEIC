@@ -18,6 +18,7 @@ export default function ExamPage() {
   const [error, setError] = useState("");
   const [current, setCurrent] = useState(1);
   const [remaining, setRemaining] = useState(null);
+  const [timerAnchor, setTimerAnchor] = useState(null);
   const [pending, setPending] = useState(false);
   const [exitTarget, setExitTarget] = useState(null);
   const [saveStates, setSaveStates] = useState({});
@@ -28,48 +29,51 @@ export default function ExamPage() {
   const tokenRef = useRef(token);
   const renewRef = useRef(renewToken);
   const leaving = useRef(false);
+  const checkingExpiry = useRef(false);
   useEffect(() => { tokenRef.current = token; }, [token]);
   useEffect(() => { renewRef.current = renewToken; }, [renewToken]);
   useEffect(() => {
-    const renew = () => renewRef.current().catch(() => {});
-    renew();
-    const timer = setInterval(renew, 20 * 60 * 1000);
-    const onVisible = () => { if (document.visibilityState === "visible") renew(); };
+    const renewIfNeeded = () => {
+      const expiry = Date.parse(sessionStorage.getItem("expiresAtUtc") || "");
+      if (!Number.isFinite(expiry) || expiry - Date.now() < 2 * 60 * 1000)
+        renewRef.current().catch(() => {});
+    };
+    renewIfNeeded();
+    const timer = setInterval(renewIfNeeded, 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === "visible") renewIfNeeded(); };
     document.addEventListener("visibilitychange", onVisible);
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, []);
   useEffect(() => {
     let live = true;
-    examApi.attempt(attemptId, tokenRef.current).then(async data => {
+    examApi.resume(attemptId, tokenRef.current).then(data => {
       if (!live) return;
-      if (data.status === "DANG_LAM" || data.status === "BO_DO") {
-        if (data.isPaused) data = await examApi.resume(attemptId, tokenRef.current);
-        if (!live) return;
-      }
       if (data.status !== "DANG_LAM" && data.status !== "BO_DO")
         navigate(`/exam/${attemptId}/result`, { replace: true });
-      else setAttempt(data);
+      else { setAttempt(data); setRemaining(data.remainingSeconds);
+        setTimerAnchor({ seconds: data.remainingSeconds, at: Date.now() }); }
     }).catch(() => { if (live) setError("Không thể tải bài thi hoặc bạn không có quyền truy cập."); });
     return () => { live = false; };
   }, [attemptId, navigate]);
+  const timerPaused = attempt?.isPaused;
   useEffect(() => {
-    if (!attempt) return;
-    setRemaining(attempt.remainingSeconds);
-    if (attempt.isPaused) return;
-    const started = Date.now();
+    if (!timerAnchor || timerPaused) return;
     const timer = setInterval(() => setRemaining(Math.max(0,
-      attempt.remainingSeconds - Math.floor((Date.now() - started) / 1000))), 1000);
+      timerAnchor.seconds - Math.floor((Date.now() - timerAnchor.at) / 1000))), 1000);
     return () => clearInterval(timer);
-  }, [attempt?.remainingSeconds, attempt?.isPaused]);
+  }, [timerAnchor, timerPaused]);
+  const timerActive = Boolean(attempt && !attempt.isPaused);
   useEffect(() => {
-    if (!attempt || attempt.isPaused || remaining !== 0) return;
-    examApi.attempt(attemptId, token).then(data => {
+    if (!timerActive || remaining !== 0 || checkingExpiry.current) return;
+    checkingExpiry.current = true;
+    examApi.heartbeat(attemptId, tokenRef.current).then(data => {
       if (data.status !== "DANG_LAM") navigate(`/exam/${attemptId}/result`, { replace: true });
-      else setAttempt(data);
-    }).catch(() => {});
-  }, [remaining, attempt, attemptId, token, navigate]);
+      else { setRemaining(data.remainingSeconds);
+        setTimerAnchor({ seconds: data.remainingSeconds, at: Date.now() }); }
+    }).catch(() => {}).finally(() => { checkingExpiry.current = false; });
+  }, [remaining, timerActive, attemptId, navigate]);
   useEffect(() => {
-    if (!attempt || attempt.isPaused || attempt.status !== "DANG_LAM") return;
+    if (!timerActive || attempt?.status !== "DANG_LAM") return;
     let live = true;
     const timer = setInterval(async () => {
       try {
@@ -79,24 +83,42 @@ export default function ExamPage() {
           data = await examApi.resume(attemptId, tokenRef.current);
         if (live && !leaving.current) {
           if (data.status !== "DANG_LAM") navigate(`/exam/${attemptId}/result`, { replace: true });
-          else setAttempt(data);
+          else {
+            if (data.groups) setAttempt(data);
+            setRemaining(data.remainingSeconds);
+            setTimerAnchor({ seconds: data.remainingSeconds, at: Date.now() });
+          }
         }
       } catch { if (live) setError("Không thể đồng bộ đồng hồ. Vui lòng kiểm tra kết nối."); }
     }, 15000);
     return () => { live = false; clearInterval(timer); };
-  }, [attempt?.isPaused, attempt?.status, attemptId, navigate]);
+  }, [timerActive, attempt?.status, attemptId, navigate]);
   useEffect(() => {
     if (!attempt) return;
     const warn = event => { event.preventDefault(); event.returnValue = ""; };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [attempt]);
+  useEffect(() => {
+    if (!import.meta.env.DEV || !attempt) return;
+    const kind = attempt.source === "PLACEMENT" ? "placement" : attempt.source === "FIXED" ? "mock" : null;
+    if (!kind || !performance.getEntriesByName(`${kind}-start-click`, "mark").length) return;
+    const frame = requestAnimationFrame(() => {
+      performance.mark(`${kind}-first-question-usable`);
+      const measure = performance.measure(`${kind}-click-to-usable`, `${kind}-start-click`, `${kind}-first-question-usable`);
+      console.info(`${kind === "placement" ? "Placement" : "Mock"} click to first usable question: ${measure.duration.toFixed(1)} ms`);
+      performance.clearMarks(`${kind}-start-click`);
+      performance.clearMarks(`${kind}-first-question-usable`);
+      performance.clearMeasures(`${kind}-click-to-usable`);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [attempt]);
   const questions = useMemo(() => attempt ? [...attempt.groups.flatMap(g => g.questions), ...attempt.independentQuestions]
     .sort((a, b) => a.order - b.order) : [], [attempt]);
   const selected = questions.find(q => q.order === current);
   const currentPart = selected?.part;
   const rootDestination = attempt?.source === "PLACEMENT" ? "/placement" : "/mock-test";
-  const backDestination = attempt?.source === "FIXED" ? "/mock-test/fixed" : rootDestination;
+  const backDestination = rootDestination;
   const group = attempt?.groups.find(g => g.groupId === selected?.groupId || g.questions.some(q => q.attemptQuestionId === selected?.attemptQuestionId));
   const answered = questions.filter(q => q.selectedOption).length;
 
@@ -122,6 +144,7 @@ export default function ExamPage() {
     });
   }
   function answer(question, option) {
+    if (question.selectedOption === option) return;
     updateQuestion(question.attemptQuestionId, { selectedOption: option });
     enqueue(question, () => examApi.answer(attemptId, question.attemptQuestionId, option, token));
   }

@@ -47,6 +47,11 @@ public partial class CauHoi
     [Unicode(false)]
     public string TrangThai { get; set; }
 
+    [Required]
+    [StringLength(16)]
+    [Unicode(false)]
+    public string LoaiCauHoi { get; set; }
+
     [InverseProperty("MaCauHoiNavigation")]
     public virtual ICollection<CauHoiDeThi> CauHoiDeThi { get; set; } = new List<CauHoiDeThi>();
 

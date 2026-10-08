@@ -11,7 +11,7 @@ function LearnerHome({ user }) {
   const [placement, setPlacement] = useState(null);
   useEffect(() => {
     let live = true;
-    examApi.summary(token).then(value => { if (live) setMock(value); }).catch(() => {});
+    examApi.catalog(token).then(value => { if (live) setMock(value); }).catch(() => {});
     placementApi.summary(token).then(value => { if (live) setPlacement(value); }).catch(() => {});
     return () => { live = false; };
   }, [token]);
@@ -23,10 +23,11 @@ function LearnerHome({ user }) {
       <p>Luyện theo chủ đề, kiểm tra năng lực và theo dõi từng lượt thi đã hoàn thành.</p>
       <div className="action-row"><Link className="primary-button" to="/courses">Tiếp tục học</Link>
         <Link className="outline-button" to="/mock-test">Thi thử TOEIC</Link></div></section>
-    {mock?.active && <section className="home-hero"><span className="small-badge">BÀI ĐANG LÀM</span>
-      <h2>{mock.active.name}</h2>
-      <p>Đã trả lời {mock.active.answered}/{mock.active.totalQuestions} câu. Thời gian còn lại được giữ khi rời bài.</p>
-      <Link className="primary-button" to={`/exam/${mock.active.attemptId}`}>Tiếp tục bài thi</Link></section>}
+    {mock?.find(exam => exam.state === "IN_PROGRESS") && <section className="home-hero">
+      <span className="small-badge">BÀI ĐANG LÀM</span>
+      <h2>{mock.find(exam => exam.state === "IN_PROGRESS").examName}</h2>
+      <Link className="primary-button" to={`/exam/${mock.find(exam => exam.state === "IN_PROGRESS").attemptId}`}>
+        Tiếp tục bài thi</Link></section>}
     {placement?.currentStage && <section className="home-progress-card">
       <div><span className="small-badge">LỘ TRÌNH HIỆN TẠI</span><h2>Giai đoạn {placement.currentStage}</h2>
         <p>Từ kết quả kiểm tra đầu vào gần nhất. Xem khóa học phù hợp với mục tiêu của bạn.</p></div>
@@ -37,11 +38,12 @@ function LearnerHome({ user }) {
         <p>{placement?.completedCount ? `${placement.completedCount} lần đã hoàn thành` : "Xác định trình độ hiện tại và lộ trình học."}</p>
         <Link className="primary-button" to="/placement">Xem lộ trình học</Link></article>
       <article className="access-card"><span className="access-number orange">02</span><h3>Thi thử TOEIC</h3>
-        <p>{mock?.completedCount ? `${mock.completedCount} lần thi đã hoàn thành` : "Chọn đề có sẵn, đề ngẫu nhiên hoặc thi theo Part."}</p>
+        <p>{mock?.some(exam => exam.state === "COMPLETED") ?
+          `${mock.filter(exam => exam.state === "COMPLETED").length} đề đã hoàn thành` : "Chọn một đề thi thử để bắt đầu."}</p>
         <Link className="primary-button" to="/mock-test">Mở thi thử</Link></article>
       <article className="access-card"><span className="access-number purple">03</span><h3>Luyện từ vựng</h3>
         <p>Học theo chủ đề và xem lại mọi lần luyện đã lưu.</p>
-        <Link className="outline-button" to="/practice/vocabulary">Bắt đầu luyện</Link></article>
+        <Link className="outline-button" to="/practice">Bắt đầu luyện</Link></article>
       <article className="access-card"><span className="access-number green">04</span><h3>Từ vựng</h3>
         <p>Khám phá danh sách và chủ đề từ vựng.</p>
         <Link className="outline-button" to="/vocabulary">Mở từ vựng</Link></article>

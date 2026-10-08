@@ -22,10 +22,11 @@ export default function ExamReviewPage() {
   const reviewArea = useRef(null);
   useEffect(() => {
     let live = true;
-    Promise.all([examApi.review(attemptId, token), examApi.result(attemptId, token)])
-      .then(([data, score]) => { if (live) { setReview(data); setResult(score); } })
-      .catch(e => { if (live) setError(e.data?.code === "ATTEMPT_NOT_FINALIZED" ?
-        "Bài thi chưa kết thúc." : "Không thể tải phần xem lại."); });
+    examApi.review(attemptId, token)
+      .then(data => { if (live) { setReview(data); setResult(data.result); } })
+      .catch(e => { if (live) setError(e.data?.code === "MOCK_REVIEW_UNAVAILABLE" ?
+        "Đề thi thử chỉ hiển thị điểm và thống kê theo Part." :
+        e.data?.code === "ATTEMPT_NOT_FINALIZED" ? "Bài thi chưa kết thúc." : "Không thể tải phần xem lại."); });
     return () => { live = false; };
   }, [attemptId, token]);
   const items = useMemo(() => review ? [
