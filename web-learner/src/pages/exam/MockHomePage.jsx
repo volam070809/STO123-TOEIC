@@ -40,10 +40,11 @@ export default function MockHomePage() {
     {!exams && !error && <p role="status">Đang tải danh sách đề…</p>}
     {exams?.length === 0 && <p>Chưa có đề thi thử đang mở.</p>}
     <div className="exam-card-list">{exams?.map(exam => <article className="exam-card fixed-exam-card" key={exam.examId}>
-      <div><p>{exam.examCode}</p><h2>{exam.examName}</h2>
-        <p>200 câu · {exam.duration} phút</p>
-        {exam.state === "COMPLETED" && <p>Đã hoàn thành · {exam.totalScore ?? "—"}/990</p>}
-        {exam.state === "IN_PROGRESS" && <p>Đang làm</p>}</div>
+      <div><span className="mock-exam-code">{exam.examCode}</span><h2>{exam.examName}</h2>
+        <p className="mock-exam-meta"><span>200 câu</span><span>{exam.duration} phút</span></p>
+        {exam.state === "COMPLETED" && <p className="mock-exam-status is-complete">Đã hoàn thành · {exam.totalScore ?? "—"}/990</p>}
+        {exam.state === "IN_PROGRESS" && <p className="mock-exam-status is-progress">Đang làm</p>}
+        {exam.state === "NOT_STARTED" && <p className="mock-exam-status">Chưa bắt đầu</p>}</div>
       <div className="exam-card-actions">
         {exam.state === "NOT_STARTED" && <button className="primary-button" type="button"
           disabled={pending !== null} onClick={() => start(exam.examId)}>

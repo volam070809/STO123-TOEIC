@@ -41,6 +41,10 @@ export const authApi = {
     });
   },
 
+  updateProfile(data, token) {
+    return apiRequest("/api/profile", { method: "PUT", body: data, token });
+  },
+
   renew(token) {
     return apiRequest("/api/auth/renew", { method: "POST", token });
   },

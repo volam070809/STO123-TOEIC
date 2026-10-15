@@ -1,6 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-export async function apiRequest(endpoint, { method = "GET", body = null, token = null, timeoutMs = 30_000 } = {}) {
+export async function apiRequest(endpoint, { method = "GET", body = null, token = null, timeoutMs = 30_000, cache } = {}) {
   const headers = { Accept: "application/json" };
   if (body !== null) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = "Bearer " + token;
@@ -9,7 +9,7 @@ export async function apiRequest(endpoint, { method = "GET", body = null, token 
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(API_BASE_URL + endpoint, {
-      method, headers, body: body !== null ? JSON.stringify(body) : undefined, signal: controller.signal,
+      method, headers, body: body !== null ? JSON.stringify(body) : undefined, signal: controller.signal, cache,
     });
     let data = null;
     if (response.headers.get("content-type")?.includes("json")) {

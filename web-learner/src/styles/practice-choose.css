@@ -1,0 +1,30 @@
+.practice-choice-page { background: var(--background); }
+.practice-choice-container { padding-block: clamp(2.5rem, 5vw, 4.5rem) 5rem; }
+.practice-choice-heading { max-width: 760px; margin-bottom: clamp(1.8rem, 3vw, 2.5rem); }
+.practice-choice-kicker { display: inline-block; margin-bottom: .85rem; color: var(--primary); font-size: .8rem; font-weight: 700; letter-spacing: .14em; }
+.practice-choice-heading h1 { margin: 0 0 .75rem; color: var(--color-heading); font-size: clamp(2rem, 4vw, 3rem); line-height: 1.15; letter-spacing: -.035em; }
+.practice-choice-heading p { max-width: 620px; margin: 0; color: var(--text-muted); font-size: clamp(.98rem, 1.6vw, 1.1rem); line-height: 1.65; }
+.practice-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(1rem, 2.5vw, 2rem); }
+.practice-choice-card { display: flex; flex-direction: column; min-width: 0; min-height: 510px; overflow: hidden; border: 1px solid var(--sto-border); border-radius: 22px; background: #fff; box-shadow: 0 12px 34px rgb(31 64 117 / 6%); color: var(--text); text-decoration: none; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.practice-choice-card:hover { transform: translateY(-5px); border-color: #9eb9e5; box-shadow: 0 20px 42px rgb(31 64 117 / 12%); text-decoration: none; }
+.practice-choice-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 4px; }
+.practice-choice-media { position: relative; display: block; width: 100%; height: clamp(190px, 18vw, 235px); overflow: hidden; background: var(--color-brand-light); }
+.practice-choice-media::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, rgb(7 27 90 / 28%), transparent 58%); pointer-events: none; }
+.practice-choice-media img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; transition: transform .3s ease; }
+.practice-choice-vocabulary .practice-choice-media img { object-position: center 42%; }
+.practice-choice-card:hover .practice-choice-media img { transform: scale(1.035); }
+.practice-choice-art { position: absolute; z-index: 1; bottom: 16px; left: 20px; display: grid; place-items: center; width: 56px; height: 56px; border: 1px solid rgb(255 255 255 / 70%); border-radius: 16px; background: rgb(255 255 255 / 94%); color: var(--primary); box-shadow: 0 4px 12px rgb(7 27 90 / 14%); }
+.practice-choice-toeic .practice-choice-art { color: #2564a5; }
+.practice-choice-art svg { width: 43px; height: 43px; }
+.practice-choice-content { display: flex; flex: 1; flex-direction: column; align-items: flex-start; min-width: 0; padding: clamp(1.5rem, 2.5vw, 2rem); }
+.practice-choice-eyebrow { color: var(--primary); font-size: .75rem; font-weight: 700; letter-spacing: .12em; }
+.practice-choice-card h2 { margin: .65rem 0 .65rem; color: var(--color-heading); font-size: clamp(1.4rem, 2.1vw, 1.85rem); line-height: 1.25; overflow-wrap: anywhere; }
+.practice-choice-card p { max-width: 480px; margin: 0; color: #596b85; font-size: 1rem; line-height: 1.6; }
+.practice-choice-details { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.4rem 0 1.8rem; }
+.practice-choice-details span { padding: .4rem .7rem; border-radius: 999px; background: #edf3ff; color: #35539b; font-size: .78rem; font-weight: 600; }
+.practice-choice-action { display: inline-flex; align-items: center; justify-content: space-between; gap: 1.6rem; min-height: 46px; margin-top: auto; padding: .55rem 1rem .55rem 1.15rem; border-radius: var(--radius-control); background: var(--color-action); color: #fff; font-size: .9rem; font-weight: 700; }
+.practice-choice-action svg { width: 20px; height: 20px; transition: transform .2s ease; }
+.practice-choice-card:hover .practice-choice-action svg, .practice-choice-card:focus-visible .practice-choice-action svg { transform: translateX(3px); }
+@media (max-width: 760px) { .practice-choice-grid { grid-template-columns: 1fr; } .practice-choice-card { min-height: 0; } .practice-choice-media { height: 215px; } }
+@media (max-width: 540px) { .practice-choice-container { padding-block: 2rem 3rem; } .practice-choice-media { height: 185px; } .practice-choice-content { padding: 1.4rem; } .practice-choice-art { bottom: 12px; left: 16px; width: 50px; height: 50px; border-radius: 14px; } .practice-choice-art svg { width: 38px; height: 38px; } .practice-choice-details { margin-bottom: 1.5rem; } }
+@media (prefers-reduced-motion: reduce) { .practice-choice-card, .practice-choice-action svg, .practice-choice-media img { transition: none; } .practice-choice-card:hover, .practice-choice-card:hover .practice-choice-media img { transform: none; } }

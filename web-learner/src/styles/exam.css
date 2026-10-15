@@ -232,6 +232,98 @@
 .review-legend { font-size: .82rem; color: #566574; }
 .exam-option.review-correct-option { border: 2px solid #247a58; background: #e5f4ef; }
 .exam-option.review-selected-wrong { border: 2px solid #b34840; background: #fff0ec; }
+
+/* Mock catalog and active exam presentation. Review result colors stay separate. */
+.exam-home:has(.fixed-exam-card) .page-heading, .placement-page .placement-heading { padding: 32px 0 12px; }
+.exam-home:has(.fixed-exam-card) .page-heading h1, .placement-page .placement-heading h1 { color: var(--sto-navy); font-size: clamp(1.9rem, 3vw, 2.35rem); }
+.exam-home:has(.fixed-exam-card) .exam-card-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 18px; }
+.exam-home .fixed-exam-card { flex-direction: column; gap: 24px; min-height: 240px; padding: 24px; border-color: var(--sto-border); border-radius: var(--sto-radius); box-shadow: var(--sto-shadow); }
+.fixed-exam-card h2 { margin: 12px 0 14px; color: var(--sto-navy); font-size: 1.25rem; }
+.mock-exam-code { color: var(--primary); font-size: .8rem; font-weight: 700; letter-spacing: .03em; }
+.fixed-exam-card .mock-exam-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.mock-exam-meta span { padding: 5px 10px; border-radius: 999px; background: var(--color-brand-light); color: var(--primary-hover); font-size: .85rem; font-weight: 600; }
+.fixed-exam-card .mock-exam-status { display: inline-block; padding: 5px 10px; border-radius: 999px; background: #f1f4f8; color: var(--text-muted); font-size: .82rem; font-weight: 700; }
+.fixed-exam-card .mock-exam-status.is-progress { background: #fff4e4; color: #8b570d; }
+.fixed-exam-card .mock-exam-status.is-complete { background: var(--color-green-light); color: var(--success); }
+.fixed-exam-card .exam-card-actions { margin-top: auto; justify-items: stretch; }
+.fixed-exam-card .exam-card-actions > * { width: 100%; }
+.exam-page .exam-top { top: 0; padding: 16px 20px; border: 1px solid var(--sto-border); border-radius: 0 0 14px 14px; box-shadow: var(--sto-shadow); }
+.exam-page .exam-top h1 { color: var(--sto-navy); font-size: clamp(1.1rem, 2vw, 1.4rem); }
+.exam-page .exam-top p { color: var(--text-muted); font-size: .88rem; }
+.exam-page .exam-top-actions strong { padding: 8px 12px; border-radius: 8px; background: var(--color-brand-light); color: var(--primary-hover); }
+.exam-page .exam-content, .exam-page .exam-navigator { border-color: var(--sto-border); border-radius: 16px; box-shadow: var(--sto-shadow); }
+.exam-page .exam-part-instruction { border-left: 4px solid var(--primary); background: var(--color-brand-light); color: var(--sto-navy); }
+.exam-page .exam-navigator { top: 6rem; max-height: calc(100vh - 7rem); overscroll-behavior: contain; padding: 16px; }
+.exam-page .exam-navigator summary { color: var(--sto-navy); }
+.exam-page .exam-navigator h3 { padding-top: 10px; border-top: 1px solid var(--sto-border); color: var(--primary-hover); }
+.exam-number-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 14px 0; color: var(--text-muted); font-size: .72rem; }
+.exam-number-legend span { display: flex; align-items: center; gap: 6px; }
+.exam-number-legend i { display: inline-block; flex: none; width: 16px; height: 16px; border: 1px solid var(--sto-border); border-radius: 4px; background: #fff; }
+.exam-number-legend i.answered { border-color: var(--success); background: var(--color-green-light); }
+.exam-number-legend i.current { border: 2px solid var(--primary); background: var(--color-brand-light); }
+.exam-number-legend i.flagged { border: 2px solid #b87418; background: #fff4e4; }
+.exam-page .exam-number-grid { gap: 6px; }
+.exam-page .exam-navigator .exam-number-grid button { min-height: 42px; border-color: var(--sto-border); border-radius: 8px; color: var(--text); font-weight: 700; }
+.exam-page .exam-number-grid button.unanswered { background: #fff; }
+.exam-page .exam-number-grid button.answered { border-color: var(--success); background: var(--color-green-light); color: #19583f; }
+.exam-page .exam-number-grid button.flagged { border: 2px solid #b87418; }
+.exam-page .exam-navigator .exam-number-grid button.flagged.unanswered { background: #fff8ed; }
+.exam-page .exam-number-grid button.current { outline: 3px solid var(--primary); outline-offset: 1px; box-shadow: inset 0 0 0 1px #fff; }
+.exam-page .exam-number-grid button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.exam-page .exam-option:has(input:checked) { border-color: var(--primary); background: var(--color-brand-light); }
+.exam-page .exam-audio-controls { border-color: var(--sto-border); background: var(--sto-background); }
+.exam-page .exam-audio-button { border-color: var(--primary); background: var(--primary); }
+.exam-page .exam-audio-button:hover:not(:disabled) { background: var(--primary-hover); }
+
+/* Placement page uses the same API states and actions with clearer hierarchy. */
+.placement-page { padding-bottom: 32px; }
+.placement-page .exam-navigation { margin-top: 0; }
+.placement-page .exam-card { margin-bottom: 18px; border-color: var(--sto-border); border-radius: var(--sto-radius); box-shadow: var(--sto-shadow); }
+.placement-page .placement-action-card { padding: clamp(20px, 3vw, 32px); border-color: #b8cef1; background: linear-gradient(120deg, #e9f3ff, #fff 70%); }
+.placement-page .placement-action-card h2, .placement-page .placement-latest-card h2 { margin: 8px 0; color: var(--sto-navy); }
+.placement-page .placement-action-card p, .placement-page .placement-latest-card p { margin-top: 8px; line-height: 1.6; }
+.placement-eyebrow { color: var(--primary); font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.placement-page .placement-latest-card { padding: 24px; }
+.placement-page .placement-history-card { display: block; padding: 24px; }
+.placement-page .placement-history-card > div { width: 100%; }
+.placement-page .placement-history-list > div { padding: 14px 0; border-color: var(--sto-border); }
+.placement-page .placement-history-list strong { color: var(--sto-navy); }
+.placement-page .placement-history-list .action-row { gap: 12px; font-weight: 600; }
+.placement-page .exam-score, .placement-page .placement-summary > div, .placement-page .placement-knn { border-color: var(--sto-border); border-radius: 14px; background: #fff; }
+.placement-page .placement-summary strong, .placement-page .placement-stage > strong { color: var(--primary); }
+.placement-page .placement-bar span, .placement-page .placement-average span { background: var(--primary); }
+.placement-page .placement-bar .good { background: var(--success); }
+.placement-page .placement-bar .needs_improvement { background: #ae5344; }
+.placement-page .learning-path-number { background: var(--primary); }
+.placement-page .learning-path-content { border-color: var(--sto-border); box-shadow: var(--sto-shadow); }
+@media (max-width: 1050px) { .exam-page .exam-navigator { top: auto; max-height: min(60vh, 26rem); } }
+@media (max-width: 560px) { .placement-page .placement-action-card, .placement-page .placement-latest-card { flex-direction: column; align-items: stretch; } .placement-page .placement-action-card > :is(button, a), .placement-page .placement-latest-card > :is(button, a) { width: 100%; } .exam-page .exam-top { padding: 12px; } .exam-page .exam-top-actions strong { font-size: 1rem; } }
 .review-option-tag { display: inline-block; margin-left: .5rem; padding: .15rem .35rem; border-radius: 4px; background: #fff; font-size: .8rem; font-style: normal; font-weight: 700; }
 @media (max-width: 850px) { .mock-mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mock-part-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .mock-mode-grid, .mock-history-grid { grid-template-columns: 1fr; } .mock-part-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mock-choice-row { align-items: stretch; flex-direction: column; } }
+
+/* KNN details appear only on the placement attempt result. */
+.exam-result .placement-result-analysis { padding: clamp(20px, 3vw, 32px); border: 1px solid var(--sto-border); border-radius: 16px; background: #fff; box-shadow: var(--sto-shadow); }
+.placement-result-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.placement-result-heading h2 { margin: 5px 0 0; color: var(--sto-navy); }
+.placement-result-analysis > p { max-width: 70ch; color: var(--text-muted); line-height: 1.6; }
+.exam-result .placement-analysis-view > section { margin-top: 24px; }
+.exam-result .placement-analysis-view .placement-summary > div { border-color: var(--sto-border); border-radius: 12px; background: #fff; }
+.exam-result .placement-analysis-view .placement-summary strong,
+.exam-result .placement-analysis-view .placement-stage > strong { color: var(--primary); }
+.exam-result .placement-analysis-view .placement-bar span,
+.exam-result .placement-analysis-view .placement-average span { background: var(--primary); }
+.exam-result .placement-analysis-view .placement-bar .good { background: var(--success); }
+.exam-result .placement-analysis-view .placement-bar .needs_improvement { background: #ae5344; }
+.exam-result .placement-analysis-view .learning-path-number { background: var(--primary); }
+.exam-result .placement-analysis-view .learning-path-content { border-color: var(--sto-border); box-shadow: var(--sto-shadow); }
+.placement-stage-destination { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 22px; border: 1px solid var(--sto-border); border-radius: 14px; background: var(--color-brand-light); }
+.placement-stage-destination p { margin: 0; line-height: 1.6; }
+.placement-stage-destination .primary-button { flex: none; }
+@media (max-width: 650px) {
+  .exam-result .placement-result-analysis { padding: 18px; }
+  .exam-result .placement-analysis-view .placement-summary { grid-template-columns: minmax(0, 1fr); }
+  .exam-result .placement-analysis-view .exam-target-form > * { max-width: 100%; }
+  .placement-stage-destination { flex-direction: column; align-items: stretch; }
+  .placement-stage-destination .primary-button { width: 100%; }
+}

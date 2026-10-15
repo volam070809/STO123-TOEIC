@@ -36,7 +36,7 @@ export default function RegisterPage() {
       } else setError(authError(err, "Không thể đăng ký. Vui lòng thử lại."));
     } finally { setLoading(false); }
   }
-  return <AuthLayout title="Tạo tài khoản" subtitle="Bắt đầu luyện tập TOEIC cùng STO123." wide
+  return <AuthLayout entry="register" title="Tạo tài khoản" subtitle="Bắt đầu luyện tập TOEIC cùng STO123." wide
     footer={<>Đã có tài khoản? <Link to="/login">Đăng nhập</Link></>}>
     <form onSubmit={submit} className="auth-form">
       <FormInput id="hoTen" label="Họ tên" value={form.hoTen} onChange={change("hoTen")} autoComplete="name" maxLength={64} />

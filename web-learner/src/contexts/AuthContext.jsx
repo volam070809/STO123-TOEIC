@@ -3,6 +3,7 @@ import { authApi } from "../services/authApi";
 import { AuthContext } from "./AuthState";
 import { disableGoogleAutoSelect } from "../services/googleIdentity";
 import { clearAvatarCache, loadAvatarOnce } from "../services/avatarCache";
+import { applyProfileUpdate } from "../services/profileData";
 
 const ACCOUNT_LOAD_ERROR = "Không thể tải tài khoản. Vui lòng thử lại.";
 
@@ -115,6 +116,10 @@ export function AuthProvider({ children }) {
     setUser(current => current ? { ...current, ...details } : current);
   }
 
+  function updateProfile(details) {
+    setUser(current => applyProfileUpdate(current, details));
+  }
+
   const avatarKey = user?.hasCustomAvatar && token ? `${user.maNguoiDung}:${user.avatarVersion}` : null;
   useEffect(() => {
     let active = true;
@@ -141,6 +146,6 @@ export function AuthProvider({ children }) {
 
   return <AuthContext.Provider value={{
     token, user, loading, sessionError, isAuthenticated: !!token && !!user,
-    login, loginWithGoogle, logout, loadCurrentUser, renewToken, updateAvatar, avatarAsset,
+    login, loginWithGoogle, logout, loadCurrentUser, renewToken, updateAvatar, updateProfile, avatarAsset,
   }}>{children}</AuthContext.Provider>;
 }

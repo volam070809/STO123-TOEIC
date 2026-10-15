@@ -1,0 +1,56 @@
+.toeic-structure { padding-block: 2rem 4rem; color: var(--sto-navy); line-height: 1.6; }
+.toeic-structure-hero { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); min-height: 340px; overflow: hidden; border: 1px solid var(--sto-border); border-radius: 18px; background: #fff; box-shadow: var(--sto-shadow); }
+.toeic-structure-intro { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; padding: clamp(1.5rem, 4vw, 3rem); }
+.toeic-structure-back { margin-bottom: 1.1rem; color: var(--sto-blue); font-size: .94rem; font-weight: 700; }
+.toeic-structure h1 { max-width: 16ch; margin: 0 0 1rem; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.16; letter-spacing: -.025em; }
+.toeic-structure-intro > p { max-width: 58ch; margin: 0; color: var(--sto-muted); }
+.toeic-structure-hero > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.toeic-structure-jump { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.6rem; }
+.toeic-structure-jump a { display: inline-flex; align-items: center; min-height: 44px; padding: .55rem 1rem; border: 1px solid #b9cce7; border-radius: 9px; color: var(--sto-blue); font-weight: 700; text-decoration: none; }
+.toeic-structure-jump a:hover { background: var(--sto-blue-light); }
+.toeic-structure-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1.35rem 0 3rem; }
+.toeic-structure-overview > div { display: flex; flex-direction: column; gap: .2rem; min-width: 0; padding: 1.15rem 1.4rem; border: 1px solid var(--sto-border); border-radius: 12px; background: #fff; }
+.toeic-structure-overview strong { color: #155681; font-size: clamp(1.45rem, 2.4vw, 2rem); line-height: 1.2; }
+.toeic-structure-overview span { color: var(--sto-muted); font-size: .94rem; }
+.toeic-section { --section-accent: #135e9b; --section-soft: #eaf3fd; scroll-margin-top: 1.5rem; margin-top: 3rem; }
+.toeic-section#reading { --section-accent: #1b715f; --section-soft: #ebf6f1; }
+.toeic-section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem; padding-bottom: 1.1rem; border-bottom: 1px solid var(--sto-border); }
+.toeic-section-heading > div:first-child { min-width: 0; }
+.toeic-section-heading p { margin: 0 0 .15rem; color: var(--section-accent); font-size: .94rem; font-weight: 700; }
+.toeic-section-heading h2 { margin: 0 0 .4rem; font-size: clamp(1.65rem, 3vw, 2.15rem); line-height: 1.2; }
+.toeic-section-heading div:first-child > span { color: var(--sto-muted); }
+.toeic-section-facts { display: flex; flex-direction: column; flex: none; text-align: right; }
+.toeic-section-facts strong { color: var(--section-accent); font-size: 1.25rem; }
+.toeic-section-facts span { color: var(--sto-muted); font-size: .94rem; }
+.toeic-part-distribution { display: flex; gap: 3px; height: 14px; overflow: hidden; margin-top: 1.45rem; border-radius: 999px; background: var(--section-soft); }
+.toeic-part-distribution span { flex-basis: 0; min-width: 0; background: var(--section-accent); }
+.toeic-part-distribution span:nth-child(even) { opacity: .74; }
+.toeic-part-distribution span:nth-child(3) { opacity: .54; }
+.toeic-part-legend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin: .6rem 0 1.45rem; color: var(--sto-muted); font-size: .88rem; }
+.toeic-part-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr)); gap: 1rem; }
+.toeic-part-card { min-width: 0; padding: 1.25rem; border: 1px solid var(--sto-border); border-radius: 12px; background: #fff; box-shadow: 0 4px 14px rgb(10 41 92 / 5%); }
+.toeic-part-card-heading { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; color: var(--section-accent); font-size: .9rem; font-weight: 700; }
+.toeic-part-card-heading strong { flex: none; }
+.toeic-part-card h3 { margin: .8rem 0 .15rem; font-size: 1.12rem; line-height: 1.35; overflow-wrap: anywhere; }
+.toeic-part-vietnamese { margin: 0 0 .95rem; color: var(--section-accent); font-size: .94rem; font-weight: 600; }
+.toeic-part-card > p:not(.toeic-part-vietnamese) { margin: .65rem 0 0; color: #435b70; font-size: .94rem; }
+.toeic-part-material { padding-top: .75rem; border-top: 1px solid var(--sto-border); }
+.toeic-structure-finish { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 1.5rem; margin-top: 3rem; padding: clamp(1.3rem, 3vw, 2rem); border: 1px solid #cddff1; border-radius: 14px; background: #f5f9fe; }
+.toeic-structure-finish h2 { margin: 0 0 .65rem; font-size: 1.35rem; }
+.toeic-structure-finish p { max-width: 75ch; margin: .55rem 0 0; color: #435b70; font-size: .94rem; }
+.toeic-structure-finish p a { color: var(--sto-blue); font-weight: 700; }
+.toeic-structure-actions { display: flex; flex-wrap: wrap; gap: .7rem; }
+.toeic-structure-actions > a { min-height: 44px; white-space: nowrap; }
+@media (max-width: 850px) {
+  .toeic-structure-hero { grid-template-columns: minmax(0, 1fr); }
+  .toeic-structure-hero > img { max-height: 260px; }
+  .toeic-structure-finish { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .toeic-structure { padding-block: 1.4rem 3rem; }
+  .toeic-structure-overview { grid-template-columns: minmax(0, 1fr); gap: .6rem; margin-bottom: 2rem; }
+  .toeic-structure-overview > div { padding: .85rem 1rem; }
+  .toeic-section-heading { align-items: flex-start; flex-direction: column; gap: .7rem; }
+  .toeic-section-facts { flex-direction: row; align-items: baseline; gap: .6rem; text-align: left; }
+  .toeic-structure-actions > a { flex: 1; justify-content: center; }
+}

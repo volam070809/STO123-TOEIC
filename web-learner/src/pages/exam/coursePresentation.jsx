@@ -6,11 +6,20 @@ export const courseStage = {
   3: { name: "Advanced", range: "700+", description: "Tối ưu chiến thuật và nâng cao độ chính xác." },
 };
 
+const stagePhotos = {
+  1: "/images/home/foundation.jpg",
+  2: "/images/home/listening.jpg",
+  3: "/images/home/students.jpg",
+};
+
 export function CourseCover({ course }) {
-  const [failed, setFailed] = useState(false);
+  const [failedSource, setFailedSource] = useState(null);
   const stage = courseStage[course.stage];
+  const stagePhoto = stagePhotos[course.stage];
+  const source = course.coverImageUrl && failedSource !== course.coverImageUrl ?
+    course.coverImageUrl : failedSource !== stagePhoto ? stagePhoto : null;
   return <div className={`course-cover course-cover-${course.stage}`}>
-    {course.coverImageUrl && !failed ? <img src={course.coverImageUrl} alt="" onError={() => setFailed(true)} /> :
+    {source ? <img src={source} alt="" onError={() => setFailedSource(source)} /> :
       <div className="course-cover-fallback" aria-hidden="true"><span>STO123</span><strong>{stage?.name || "TOEIC"}</strong><small>TOEIC LEARNING</small></div>}
   </div>;
 }

@@ -5,7 +5,7 @@ import Avatar from "../auth/Avatar";
 
 export function BrandLogo() {
   return <span className="site-logo" aria-label="STO123">
-    <span className="site-logo-icon">T</span><span>STO</span><span className="site-logo-numbers">123</span>
+    <span className="site-logo-icon">S</span><span>STO</span><span className="site-logo-numbers">123</span>
   </span>;
 }
 
@@ -24,7 +24,7 @@ export default function SiteHeader() {
       <Link to="/" className="site-logo-link" onClick={() => setMenuOpen(false)}><BrandLogo /></Link>
       <button type="button" className="site-menu-toggle" aria-label={menuOpen ? "Đóng menu" : "Mở menu"}
         aria-expanded={menuOpen} aria-controls="site-navigation" onClick={() => setMenuOpen(!menuOpen)}>
-        {menuOpen ? "Đóng" : "Menu"} <span aria-hidden="true">{menuOpen ? "×" : "☰"}</span>
+        {menuOpen ? "Đóng" : "Menu"} <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">{menuOpen ? <path d="m6 6 12 12M6 18 18 6" /> : <path d="M4 6h16M4 12h16M4 18h16" />}</svg>
       </button>
       <nav id="site-navigation" className={"site-navigation" + (menuOpen ? " is-open" : "")} aria-label="Điều hướng chính">
         <Link className={pathname === "/" ? "site-nav-active" : undefined} to="/" onClick={() => setMenuOpen(false)}>Trang chủ</Link>
@@ -41,7 +41,7 @@ export default function SiteHeader() {
             to="/profile" onClick={() => setMenuOpen(false)}>Hồ sơ</Link>
           <button type="button" data-exam-logout onClick={signOut}>Đăng xuất</button>
         </> : <>
-          <Link to="/login" onClick={() => setMenuOpen(false)}>Đăng nhập</Link>
+          <Link className="site-account-login" to="/login" onClick={() => setMenuOpen(false)}>Đăng nhập</Link>
           <Link className="site-account-register" to="/register" onClick={() => setMenuOpen(false)}>Đăng ký</Link>
         </>}
       </div>

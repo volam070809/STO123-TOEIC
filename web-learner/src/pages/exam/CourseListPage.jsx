@@ -8,20 +8,23 @@ import "../../styles/course.css";
 
 export default function CourseListPage() {
   const { token } = useAuth();
-  const [courses, setCourses] = useState(null);
-  const [placement, setPlacement] = useState(null);
-  const [error, setError] = useState("");
+  const [view, setView] = useState({ token: undefined, courses: null,
+    placement: null, error: "" });
+  const { courses, placement, error } = view.token === token ? view :
+    { courses: null, placement: null, error: "" };
   useEffect(() => {
     let live = true;
     Promise.all([placementApi.courses(token), placementApi.summary(token)])
-      .then(([data, current]) => { if (live) { setCourses(data); setPlacement(current); } })
-      .catch(() => { if (live) setError("Không thể tải danh sách khóa học."); });
+      .then(([data, current]) => { if (live) setView({ token, courses: data,
+        placement: current, error: "" }); })
+      .catch(() => { if (live) setView({ token, courses: null,
+        placement: null, error: "Không thể tải danh sách khóa học." }); });
     return () => { live = false; };
   }, [token]);
   const hasRecommendation = courses?.some(course => course.recommended);
   return <SiteLayout><div className="site-container course-page">
-    <div className="page-heading"><span>Học tập</span><h1>Khóa học</h1>
-      <p>Chọn khóa học phù hợp với mục tiêu của bạn.</p></div>
+    <div className="page-heading course-page-heading"><div><h1>Khóa học</h1>
+      <p>Khám phá nội dung từng giai đoạn.</p></div></div>
     {courses && <p className="course-intro">{hasRecommendation ?
       "Dựa trên năng lực hiện tại và mục tiêu đã xác nhận, các khóa học đề xuất đã được đánh dấu theo thứ tự." :
       placement?.currentStage && placement.targetScore == null ?
@@ -36,12 +39,13 @@ export default function CourseListPage() {
         <CourseCover course={course} />
         <div className="course-card-body">
           <div className="course-badges"><span className="course-stage-badge">Giai đoạn {course.stage}</span>
-            {course.recommended && <span className="course-recommend-badge">★ Bước {course.recommendationOrder} đề xuất</span>}</div>
+            {course.recommended && <span className="course-recommend-badge">Đề xuất {course.recommendationOrder}</span>}</div>
           <h2>{course.name}</h2>
           <p className="course-score-range">Mức điểm tham khảo: {info?.range || "Đang cập nhật"}</p>
           <p className="course-description">{course.description || info?.description}</p>
-          <p className="course-access">🔒 Khóa học đang khóa</p>
-          <Link className="primary-button course-cta" to={`/courses/${course.courseId}`}>Xem đề cương</Link>
+          <div className="course-card-bottom"><p className="course-access">Khóa học đang khóa</p>
+            <div className="course-card-actions"><Link className="primary-button course-cta"
+              to={`/courses/${course.courseId}`}>Xem đề cương</Link></div></div>
         </div>
       </article>;
     })}</div>

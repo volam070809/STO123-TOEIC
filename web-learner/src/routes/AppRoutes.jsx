@@ -5,6 +5,7 @@ import VocabularyPage from "../pages/vocabulary/VocabularyPage";
 import VocabularyPracticePage from "../pages/practice/VocabularyPracticePage";
 import VocabularyPracticeHistoryPage from "../pages/practice/VocabularyPracticeHistoryPage";
 import PracticePartsPage from "../pages/practice/PracticePartsPage";
+import PracticeChoosePage from "../pages/practice/PracticeChoosePage";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import VerifyEmailPage from "../pages/auth/VerifyEmailPage";
@@ -21,6 +22,7 @@ import ExamReviewPage from "../pages/exam/ExamReviewPage";
 import PlacementPage from "../pages/exam/PlacementPage";
 import CoursePage from "../pages/exam/CoursePage";
 import CourseListPage from "../pages/exam/CourseListPage";
+import ToeicStructurePage from "../pages/toeic/ToeicStructurePage";
 
 function VocabularyRoute() {
   const location = useLocation();
@@ -31,6 +33,15 @@ function VocabularyRoute() {
 function MockHistoryRoute({ kind }) {
   const location = useLocation();
   return <MockHistoryDetailPage key={location.pathname} kind={kind} />;
+}
+
+function PracticeRoute() {
+  const { search } = useLocation();
+  const params = new URLSearchParams(search);
+  if (params.has("attempt") || params.has("review")) {
+    return <Navigate to={`/practice/parts${search}`} replace />;
+  }
+  return <PracticeChoosePage />;
 }
 
 function RouteScroll() {
@@ -48,10 +59,12 @@ function RouteScroll() {
 export default function AppRoutes() {
   return <BrowserRouter><RouteScroll /><Routes>
     <Route path="/" element={<HomePage />} />
+    <Route path="/toeic/structure" element={<ToeicStructurePage />} />
     <Route path="/vocabulary" element={<VocabularyRoute />} />
     <Route path="/practice/vocabulary" element={<VocabularyPracticePage />} />
-    <Route path="/practice" element={<ProtectedRoute><PracticePartsPage /></ProtectedRoute>} />
-    <Route path="/practice/vocabulary/parts" element={<Navigate to="/practice" replace />} />
+    <Route path="/practice" element={<ProtectedRoute><PracticeRoute /></ProtectedRoute>} />
+    <Route path="/practice/parts" element={<ProtectedRoute><PracticePartsPage /></ProtectedRoute>} />
+    <Route path="/practice/vocabulary/parts" element={<Navigate to="/practice/parts" replace />} />
     <Route path="/practice/vocabulary/history" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
     <Route path="/practice/vocabulary/history/:id" element={<ProtectedRoute><VocabularyPracticeHistoryPage /></ProtectedRoute>} />
     <Route path="/mock-test" element={<ProtectedRoute><MockHomePage /></ProtectedRoute>} />

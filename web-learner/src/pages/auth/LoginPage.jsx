@@ -4,9 +4,11 @@ import { useAuth } from "../../contexts/AuthState";
 import GoogleSignIn from "../../components/auth/GoogleSignIn";
 import { authError } from "../../services/authErrors";
 import { AuthLayout, FormInput, PasswordInput, AlertMessage, LoadingButton } from "../../components/auth/AuthUI";
+import { protectedReturnPath } from "../../routes/protectedReturnPath";
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const returnTo = protectedReturnPath(location.state?.returnTo) ?? "/";
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,7 +19,7 @@ export default function LoginPage() {
     e.preventDefault();
     if (loading) return;
     setError(""); setUnverified(false); setLoading(true);
-    try { await login(email.trim(), password); navigate("/", { replace: true }); }
+    try { await login(email.trim(), password); navigate(returnTo, { replace: true }); }
     catch (err) {
       if (err.status === 401) setError("Email hoặc mật khẩu không đúng.");
       else if (err.status === 403) {
@@ -27,7 +29,7 @@ export default function LoginPage() {
       } else setError(authError(err, "Đăng nhập không thành công. Vui lòng thử lại."));
     } finally { setLoading(false); }
   }
-  return <AuthLayout title="Chào mừng bạn trở lại" subtitle="Đăng nhập để tiếp tục lộ trình TOEIC của bạn."
+  return <AuthLayout entry="login" title="Chào mừng bạn trở lại" subtitle="Đăng nhập để tiếp tục lộ trình TOEIC của bạn."
     footer={<>Chưa có tài khoản? <Link to="/register">Đăng ký ngay</Link></>}>
     <AlertMessage type="success">{location.state?.notice}</AlertMessage>
     <form onSubmit={handleSubmit} className="auth-form">
@@ -38,7 +40,7 @@ export default function LoginPage() {
       <AlertMessage>{error}{unverified && <> <Link to="/verify-email">Xác thực ngay</Link></>}</AlertMessage>
       <LoadingButton loading={loading} busyText="Đang đăng nhập...">Đăng nhập</LoadingButton>
     </form>
-    <GoogleSignIn />
+    <GoogleSignIn returnTo={returnTo} />
   </AuthLayout>;
 }
 

@@ -45,13 +45,13 @@ export const placementApi = {
   state: token => apiRequest("/api/placement", { token }),
   summary: token => apiRequest("/api/placement/summary", { token }),
   history: (token, page = 1, pageSize = 10) => apiRequest(
-    `/api/placement/history?page=${page}&pageSize=${pageSize}`, { token }),
+    `/api/placement/history?page=${page}&pageSize=${pageSize}`, { token, cache: "no-store" }),
   start: token => apiRequest("/api/placement/start", { method: "POST", token }),
-  result: token => apiRequest("/api/placement/result", { token }),
+  result: token => apiRequest("/api/placement/result", { token, cache: "no-store" }),
   target: (targetScore, token) => apiRequest("/api/placement/target",
     { method: "PUT", body: { targetScore }, token }),
-  courses: token => apiRequest("/api/placement/courses", { token }),
-  course: (id, token) => apiRequest("/api/placement/courses/" + id, { token }),
+  courses: token => apiRequest("/api/placement/courses", { token, cache: "no-store" }),
+  course: (id, token) => apiRequest("/api/placement/courses/" + id, { token, cache: "no-store" }),
 };
 
 let cachedMediaToken = null;

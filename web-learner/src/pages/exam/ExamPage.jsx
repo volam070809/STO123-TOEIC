@@ -224,11 +224,16 @@ export default function ExamPage() {
         <div className="exam-step"><button className="outline-button" disabled={current <= 1} onClick={() => setCurrent(current - 1)}>Câu trước</button>
           <button className="outline-button" disabled={current >= attempt.totalQuestions} onClick={() => setCurrent(current + 1)}>Câu tiếp</button></div>
       </main><aside className="exam-navigator"><details open={navOpen} onToggle={event => setNavOpen(event.currentTarget.open)}><summary>Điều hướng câu hỏi</summary>
+        <div className="exam-number-legend" aria-label="Chú giải trạng thái câu hỏi">
+          <span><i className="unanswered" />Chưa trả lời</span><span><i className="answered" />Đã trả lời</span>
+          <span><i className="current" />Đang xem</span><span><i className="flagged" />Đánh dấu</span>
+        </div>
         {parts.filter(part => questions.some(q => q.part === part)).map(part => <div key={part}><h3>Part {part}</h3><div className="exam-number-grid">
           {questions.filter(q => q.part === part).map(q => <button type="button" key={q.attemptQuestionId}
             className={[q.order === current && "current", q.selectedOption ? "answered" : "unanswered",
               q.flagged && "flagged"].filter(Boolean).join(" ")}
-            aria-label={`Câu ${q.order}${q.selectedOption ? ", đã trả lời" : ", chưa trả lời"}${q.flagged ? ", đã đánh dấu" : ""}`}
+            aria-current={q.order === current ? "step" : undefined}
+            aria-label={`Câu ${q.order}${q.selectedOption ? ", đã trả lời" : ", chưa trả lời"}${q.flagged ? ", đã đánh dấu" : ""}${q.order === current ? ", đang xem" : ""}`}
             onClick={() => { setCurrent(q.order); if (window.innerWidth <= 1050) setNavOpen(false);
               requestAnimationFrame(() => document.getElementById("question-" + q.attemptQuestionId)?.focus()); }}>{q.order}</button>)}</div></div>)}
       </details></aside></div>
