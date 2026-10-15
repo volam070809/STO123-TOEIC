@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
 
 const vite = await createServer({ server: { middlewareMode: true, hmr: false }, appType: "custom" });
-const { PracticeGroup, PracticeQuestion, QuestionNavigation } =
+const { PracticeGroup, PracticeQuestion, PracticeQuestionNumbers, QuestionNavigation } =
   await vite.ssrLoadModule("/src/pages/practice/PracticePartsPage.jsx");
 
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
@@ -107,6 +107,71 @@ test("See Answer still permits selection; Check locks only that question", () =>
     result: { selectedOption: "B", checked: true, isCorrect: false, correctOption: "A" } });
   assert.match(completed, /Làm lại câu này/);
   assert.doesNotMatch(completed, /Kiểm tra câu này/);
+});
+
+for (const part of [1, 2, 3, 4, 5, 6, 7]) {
+  test(`Part ${part}: sidebar jumps 1 → 6 → 2 without unlocking and preserves group data and answers`, () => {
+    const groupSize = part === 3 || part === 4 ? 3 : part === 6 ? 4 : part === 7 ? 3 : 1;
+    const groups = [10, 20, 30, 40, 50, 60].map((groupId, index) => ({ groupId,
+      audioUrl: part <= 4 ? `/group-${groupId}/audio` : null,
+      imageUrl: part === 1 ? `/group-${groupId}/image` : null,
+      context: `Context for group ${groupId}`,
+      documents: part === 7 ? Array.from({ length: index === 1 ? 3 : 1 }, (_, i) =>
+        ({ order: i + 1, type: "TEXT", content: `Group ${groupId} passage ${i + 1}` })) : []
+    }));
+    const questions = Array.from({ length: 6 }, (_, i) => ({ ...question(part, i + 1),
+      groupId: part === 5 ? null : groups[Math.floor(i / groupSize)].groupId }));
+    const feedback = { 2: { selectedOption: "B", checked: false } };
+    const original = structuredClone({ questions, groups, feedback });
+    let current = 0;
+    const props = () => ({ questions, feedback, current, onChange: index => { current = index; } });
+    const buttons = () => PracticeQuestionNumbers(props()).props.children.map(li => li.props.children);
+    assert.ok(buttons().every(button => !button.props.disabled));
+    assert.ok(buttons().every(button => button.props.type === "button"));
+    buttons()[5].props.onClick();
+    assert.equal(current, 5);
+    assert.equal(buttons()[5].props["aria-current"], "step");
+    assert.equal(buttons()[0].props["aria-current"], undefined);
+    const target = questions[current];
+    const group = groups.find(g => g.groupId === target.groupId);
+    assert.equal(group?.groupId, part === 5 ? undefined : groups[Math.floor(5 / groupSize)].groupId);
+    assert.match(render(PracticeQuestion, { question: target }), /Câu 6/);
+    if (group) {
+      const source = render(PracticeGroup, { group, part });
+      assert.equal((source.match(/Đang tải âm thanh/g) || []).length, part <= 4 ? 1 : 0);
+      if (part > 2) assert.match(source, new RegExp(group.context));
+      if (part === 7) {
+        assert.equal((source.match(/class="exam-document"/g) || []).length, 3);
+        assert.match(source, /Group 20 passage 3/);
+        assert.doesNotMatch(source, /Group 10 passage/);
+      }
+    }
+    buttons()[1].props.onClick();
+    assert.equal(current, 1);
+    assert.equal(buttons()[1].props["aria-current"], "step");
+    const selected = render(PracticeQuestion, { question: questions[current], value: feedback[2].selectedOption });
+    assert.match(selected, /Câu 2/);
+    assert.match(selected, /checked=""/);
+    assert.deepEqual({ questions, groups, feedback }, original);
+    const html = render(PracticeQuestionNumbers, props());
+    assert.equal((html.match(/type="button"/g) || []).length, 6);
+    assert.doesNotMatch(html, /disabled|chưa mở/);
+  });
+}
+
+test("sidebar keeps all status types and Redo states navigable", () => {
+  const questions = [1, 2, 3, 4].map(id => question(5, id));
+  const feedback = { 1: { checked: true, isCorrect: true },
+    2: { checked: true, isCorrect: false }, 3: { viewed: true } };
+  let current = 0;
+  const props = () => ({ questions, feedback, current, onChange: index => { current = index; } });
+  const buttons = () => PracticeQuestionNumbers(props()).props.children.map(li => li.props.children);
+  assert.deepEqual(buttons().map(b => b.props["data-state"]), ["correct", "incorrect", "viewed", "unchecked"]);
+  feedback[1] = { checked: false, selectedOption: null };
+  buttons()[3].props.onClick();
+  assert.equal(current, 3);
+  assert.ok(buttons().every(button => !button.props.disabled));
+  assert.equal(buttons()[0].props["data-state"], "unchecked");
 });
 
 test.after(async () => { await vite.close(); });

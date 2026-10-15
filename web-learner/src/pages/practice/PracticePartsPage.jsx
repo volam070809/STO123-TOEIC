@@ -185,33 +185,33 @@ export default function PracticePartsPage() {
   const leave = () => { setAttempt(null); setSummary(null); setHistoryLoading(true); setSearchParams({}); };
   return <SiteLayout className="vocab-page"><SessionBoundary><div className="site-container practice-page practice-parts">
     <div className="page-heading"><span><Link to="/practice">Luyện tập</Link> / TOEIC theo Part</span>
-      <h1>Luyện tập TOEIC theo Part</h1><p>Luyện không giới hạn thời gian, kiểm tra từng câu và xem lại lời giải.</p></div>
+      <h1>Luyện tập TOEIC theo Part</h1><p>Luyện không giới hạn thời gian, kiểm tra từng câu và xem lại lời giải.</p>
+      <Link className="outline-button" to="/practice">← Quay lại chọn hình thức</Link></div>
     {error && <p className="vocab-error" role="alert">{error}</p>}
     {busy && !attempt && (routeAttemptId || routeReviewId) && <p role="status">Đang tải bài luyện tập…</p>}
-    {!attempt && !routeAttemptId && !routeReviewId && <>
-      <p><Link to="/practice/vocabulary">Luyện từ vựng</Link></p>
-      <section className="vocab-panel"><h2>Bài đang làm</h2>
+    {!attempt && !routeAttemptId && !routeReviewId && <div className="practice-parts-hub">
+      <section className="vocab-panel practice-active-panel"><h2><span className="practice-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></svg></span>Bài đang làm</h2>
         {activeAttempts === null ? <p role="status">Đang tải…</p> : activeAttempts.length === 0 ?
           <p>Chưa có bài luyện nào đang làm.</p> : activeAttempts.map(row =>
             <article className="practice-part-history" key={row.attemptId}>
-              <span>Part {row.part} · {row.checkedQuestions}/{row.totalQuestions} câu đã kiểm tra · {new Date(row.startedAt).toLocaleString("vi-VN")}</span>
+              <div className="practice-active-details"><span className="practice-active-part">Part {row.part}</span><span className="practice-active-progress">{row.checkedQuestions}/{row.totalQuestions} câu đã kiểm tra</span><span className="practice-active-date">{new Date(row.startedAt).toLocaleString("vi-VN")}</span></div>
               <button type="button" className="outline-button" onClick={() => { setError(""); setSearchParams({ attempt: String(row.attemptId) }); }}>Tiếp tục</button>
             </article>)}</section>
-      <section className="vocab-panel"><h2>Chọn bài luyện</h2>
+      <section className="vocab-panel practice-selection-panel"><h2><span className="practice-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h3" /></svg></span>Chọn bài luyện</h2>
         {available === null && <p role="status">Đang tải số lượng câu hỏi và nhóm hợp lệ…</p>}
-        <label>Part<select value={part} onChange={e => { setPart(Number(e.target.value)); setPreset("SHORT"); }}>{parts.map((name, i) =>
+        <div className="practice-selection-fields"><label>Part<select value={part} onChange={e => { setPart(Number(e.target.value)); setPreset("SHORT"); }}>{parts.map((name, i) =>
           <option key={i + 1} value={i + 1}>Part {i + 1} · {name}</option>)}</select></label>
         <label>Độ khó<select value={difficulty} onChange={e => { setDifficulty(Number(e.target.value)); setPreset("SHORT"); }}>{[1,2,3].map(x =>
-          <option key={x} value={x}>Mức {x} · {counts.find(c => c.difficulty === x)?.validUnitCount || 0} {counts.find(c => c.difficulty === x)?.unitType === "GROUP" ? "nhóm" : "câu"} hợp lệ</option>)}</select></label>
+          <option key={x} value={x}>Mức {x} · {counts.find(c => c.difficulty === x)?.validUnitCount || 0} {counts.find(c => c.difficulty === x)?.unitType === "GROUP" ? "nhóm" : "câu"} hợp lệ</option>)}</select></label></div>
         <fieldset className="practice-part-presets"><legend>Mức luyện tập</legend>
           {(selectedAvailability?.presets || []).map(option => <label key={option.preset}>
             <input type="radio" name="practice-preset" value={option.preset} checked={preset === option.preset}
               disabled={!option.available} onChange={() => setPreset(option.preset)} />
-            {option.preset} · {option.targetUnitCount} {selectedAvailability.unitType === "GROUP" ? "nhóm" : "câu"}
+            <span className="practice-preset-content"><strong>{option.preset}</strong><span>{option.targetUnitCount} {selectedAvailability.unitType === "GROUP" ? "nhóm" : "câu"}</span></span>
           </label>)}
         </fieldset>
-        {!canStart && <p>Chưa đủ nội dung hợp lệ cho mức luyện tập này.</p>}
-        <button className="primary-button" disabled={busy || !canStart} onClick={start}>Bắt đầu luyện</button>
+        <div className="practice-selection-action">{!canStart && <p>Chưa đủ nội dung hợp lệ cho mức luyện tập này.</p>}
+        <button className="primary-button" disabled={busy || !canStart} onClick={start}>Bắt đầu luyện<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 12h14m-5-5 5 5-5 5" /></svg></button></div>
       </section>
       <PracticeHistoryDashboard history={history} loading={historyLoading} error={historyError}
         partFilter={historyPart} sort={historySort} page={historyPage}
@@ -223,11 +223,14 @@ export default function PracticePartsPage() {
           setHistoryPage(value); setHistoryLoading(true); setHistoryError(""); }}
         onRetry={() => { setHistoryLoading(true); setHistoryError(""); setHistoryRetry(value => value + 1); }}
         onReview={review} />
-    </>}
+    </div>}
     {!attempt && (routeAttemptId || routeReviewId) && !busy && <button type="button" className="outline-button" onClick={leave}>← Quay lại chọn bài</button>}
-    {attempt && !activeReview && !summary && <>
-      <button className="vocab-text-button" onClick={leave}>← Rời bài luyện</button>
+    {attempt && !activeReview && !summary && <div className="practice-session" data-part={attempt.part}>
+      <div className="practice-session-top"><div>
       <h2>Part {attempt.part} · {attempt.preset ? `${attempt.preset} · ` : ""}{attempt.selectedUnitCount} {attempt.part === 3 || attempt.part === 4 || attempt.part === 6 || attempt.part === 7 ? "nhóm" : "câu"} · {attempt.actualQuestionCount} câu hỏi</h2>
+      <p>Câu {current + 1} / {questions.length}</p></div>
+      <button className="vocab-text-button" onClick={leave}>← Rời bài luyện</button></div>
+      <div className="practice-session-layout"><div className="practice-session-content"><div className="practice-session-material">
       {activeGroup && <PracticeGroup key={activeGroup.groupId} group={activeGroup} part={attempt.part} token={token}
         revealedContext={questions.filter(q => q.groupId === activeGroup.groupId)
           .map(q => feedback[q.questionOccurrenceId]?.reveal?.context).find(Boolean)} />}
@@ -238,10 +241,17 @@ export default function PracticePartsPage() {
           setFeedback(old => ({ ...old, [activeQuestion.questionOccurrenceId]: { ...old[activeQuestion.questionOccurrenceId], selectedOption: value } }))} onCheck={() => check(activeQuestion)}
         onSeeAnswer={() => seeAnswer(activeQuestion.questionOccurrenceId)} onRedo={() => redo(activeQuestion.questionOccurrenceId)}
         onNext={current < questions.length - 1 && currentUnlocked ? () => setCurrent(current + 1) : null} />}
+      </div></div>
+      <aside className="practice-session-navigator" aria-label="Tiến độ và điều hướng bài luyện">
+        <details open><summary>Điều hướng câu hỏi</summary>
+          <h3>Part {attempt.part}</h3>
+          <PracticeQuestionNumbers questions={questions} feedback={feedback} current={current} onChange={setCurrent} />
+        </details>
       <QuestionNavigation current={current} total={questions.length} onChange={setCurrent}
         canPrevious={current > 0} canNext={!!currentUnlocked && canNavigateTo(questions, feedback, current + 1)} />
       <button className="primary-button" disabled={busy || Object.values(questionBusy).some(Boolean)} onClick={finish}>Hoàn thành bài luyện</button>
-    </>}
+      </aside></div>
+    </div>}
     {routeReviewId === summary?.attemptId && <section className="vocab-panel"><h2>Kết quả luyện tập</h2>
       <p>Tổng: {summary.total} · Đã trả lời: {summary.attempted} · Đúng: {summary.correct} · Sai: {summary.incorrect}</p>
       <p>Chưa trả lời: {summary.unanswered} · Chính xác: {summary.accuracy}%</p>
@@ -254,6 +264,18 @@ export default function PracticePartsPage() {
       <QuestionNavigation current={current} total={questions.length} onChange={setCurrent}
         canPrevious={current > 0} canNext={current < questions.length - 1} /></>}
   </div></SessionBoundary></SiteLayout>;
+}
+
+export function PracticeQuestionNumbers({ questions, feedback, current, onChange }) {
+  return <ol className="practice-session-numbers" aria-label="Trạng thái từng câu hỏi">{questions.map((question, index) =>
+    <li key={question.questionOccurrenceId}>
+      <button type="button" aria-current={index === current ? "step" : undefined}
+        aria-label={`Câu ${question.thuTu}`}
+        data-state={checked(question, feedback) ? ((feedback[question.questionOccurrenceId]?.isCorrect ?? question.isCorrect) ? "correct" : "incorrect") : feedback[question.questionOccurrenceId]?.viewed ? "viewed" : "unchecked"}
+        onClick={() => onChange(index)}>
+        <span>{question.thuTu}</span><small>{checked(question, feedback) ? ((feedback[question.questionOccurrenceId]?.isCorrect ?? question.isCorrect) ? "Đúng" : "Sai") : feedback[question.questionOccurrenceId]?.viewed ? "Đã xem" : "Chưa kiểm tra"}</small>
+      </button>
+    </li>)}</ol>;
 }
 
 export function QuestionNavigation({ current, total, onChange, canPrevious, canNext }) {
@@ -286,9 +308,11 @@ export function PracticeQuestion({ question: q, transcriptContext, value, result
   return <article className="practice-part-question">
     <h3>Câu {q.thuTu}</h3>
     {q.part > 2 && (revealed?.noiDung ?? q.noiDung) && <p>{revealed?.noiDung ?? q.noiDung}</p>}
-    <div className="practice-part-options">{choices.map(([letter, text]) => <label key={letter}>
+    <div className="practice-part-options">{choices.map(([letter, text]) => <label key={letter}
+      data-correct={(isChecked || result?.viewed) && result.correctOption === letter ? "true" : undefined}
+      data-incorrect={isChecked && result.selectedOption === letter && !result.isCorrect ? "true" : undefined}>
       <input type="radio" name={`q-${q.questionOccurrenceId}`} checked={(review ? q.selectedOption : value) === letter} disabled={review || isChecked || pending}
-        onChange={() => onSelect?.(letter)} /> <b>{letter}.</b> {!lettersOnly && text}
+        onChange={() => onSelect?.(letter)} /> <span><b>{letter}.</b> {!lettersOnly && text}</span>
     </label>)}</div>
     {lettersOnly && visibleTranscript && <div className="practice-part-transcript"><h4>Nội dung nghe</h4>
       {(transcriptContext || visibleTranscript.context) ? <p>{transcriptContext || visibleTranscript.context}</p> : <>
@@ -301,7 +325,7 @@ export function PracticeQuestion({ question: q, transcriptContext, value, result
     {review ? <div className="practice-feedback"><p>Đã chọn: {q.selectedOption || "Chưa trả lời"} · Đáp án đúng: {q.correctOption}</p>
       {q.explanation && <p>Giải thích: {q.explanation}</p>}</div> : <>
       {(result?.viewed || isChecked) &&
-      <div className="practice-feedback">
+      <div className="practice-feedback" data-state={isChecked ? result.isCorrect ? "correct" : "incorrect" : "viewed"}>
         <p>{isChecked ? <><b>{result.isCorrect ? "Đúng" : "Sai"}</b> · Đã chọn: {result.selectedOption}</> : "Đã xem đáp án"} · Đáp án đúng: {result.correctOption}</p>
         {result.explanation && <p>Giải thích: {result.explanation}</p>}
         <div className="practice-part-actions"><button type="button" className="outline-button" disabled={pending} onClick={onRedo}>Làm lại câu này</button>

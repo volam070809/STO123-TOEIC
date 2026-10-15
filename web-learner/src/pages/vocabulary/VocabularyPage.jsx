@@ -4,6 +4,7 @@ import SiteLayout from "../../layouts/SiteLayout";
 import { useAuth } from "../../contexts/AuthState";
 import SessionBoundary from "../../components/auth/SessionBoundary";
 import { apiRequest, API_BASE_URL } from "../../services/api";
+import { INITIAL_TOPIC_COUNT, topicCatalogView, topicGridStyle, useMobileTopicCatalog } from "../practice/topicCatalog";
 import "../../styles/vocabulary.css";
 
 const ROOT = "/api/tu-vung";
@@ -14,6 +15,9 @@ export default function VocabularyPage() {
   const { user, token } = useAuth();
   const isLearner = !!user;
   const [topics, setTopics] = useState([]);
+  const [topicQuery, setTopicQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(INITIAL_TOPIC_COUNT);
+  const mobileCatalog = useMobileTopicCatalog();
   const [topic, setTopic] = useState(null);
   const [words, setWords] = useState([]);
   const [stage, setStage] = useState("topics");
@@ -32,6 +36,8 @@ export default function VocabularyPage() {
     setLoading(true);
     setError("");
     setStage("topics");
+    setTopicQuery("");
+    setVisibleCount(INITIAL_TOPIC_COUNT);
     setTopic(null);
     setWords([]);
     const endpoint = isLearner ? ROOT + "/topics" : ROOT + "/demo";
@@ -158,11 +164,13 @@ export default function VocabularyPage() {
   const doneInSession = Object.values(answers).filter(Boolean).length;
   const missedInSession = Object.values(answers).filter(value => !value).length;
   const title = topic?.tenChuDe || "Office Essentials";
+  const catalogTopics = isLearner ? topics : [topic].filter(Boolean);
+  const { filteredTopics, shownTopics, hasMore } = topicCatalogView(catalogTopics, topicQuery, visibleCount, mobileCatalog);
 
-  return <SiteLayout className="vocab-page"><SessionBoundary><div className="site-container">
+  return <SiteLayout className="vocab-page"><SessionBoundary><div className={"site-container" + (stage === "topics" ? " vocabulary-topics-page" : "")}>
     <div className="page-heading">
       <span>Web / {isLearner ? "Học viên" : "Khách vãng lai"} / Từ vựng</span>
-      <h1>{stage === "topics" ? "Chọn chủ đề từ vựng" :
+      <h1>{stage === "topics" ? "Từ vựng theo chủ đề" :
         stage === "list" ? title : stage === "cards" ? "Học từ vựng" : "Kết quả học"}</h1>
       <p>{isLearner
         ? "Học theo chủ đề, nghe phát âm và lưu tiến độ của bạn."
@@ -177,16 +185,26 @@ export default function VocabularyPage() {
         <strong>Office Essentials: 10 từ học thử</strong>
         <span>Đăng ký tài khoản để học thêm nhiều chủ đề, nghe phát âm và lưu tiến độ học.</span>
       </div>}
-      <div className="vocab-topic-grid">
-        {(isLearner ? topics : [topic]).filter(Boolean).map(item => {
+      <div className="vocabulary-topics-heading"><h2>Chọn chủ đề để học</h2><p>Học bằng thẻ ghi nhớ và theo dõi số từ đã nhớ trong từng chủ đề.</p></div>
+      {isLearner && topics.length > INITIAL_TOPIC_COUNT && <div className="vocabulary-topic-tools">
+        <label htmlFor="learning-topic-search">Tìm chủ đề</label>
+        <input id="learning-topic-search" type="search" value={topicQuery}
+          placeholder="Nhập tên chủ đề" onChange={event => {
+            setTopicQuery(event.target.value); setVisibleCount(INITIAL_TOPIC_COUNT);
+          }} />
+        <span>{filteredTopics.length} chủ đề</span>
+      </div>}
+      <div className="vocab-topic-grid" style={topicGridStyle(filteredTopics.length)}>
+        {shownTopics.map(item => {
           const remembered = Math.min(Math.max(item.completedWords || 0, 0), item.totalWords || 0);
           const percent = item.totalWords > 0 ? Math.round(remembered / item.totalWords * 100) : 0;
           return <article className="vocab-topic-card" key={item.maChuDe || "demo"}>
+            <VocabularyTopicCover name={item.tenChuDe} />
+            <div className="vocabulary-topic-details">
             <span className="vocab-pill available">{isLearner ? item.status : "HỌC THỬ"}</span>
-            <h2>{item.tenChuDe}</h2>
-            <p>{item.totalWords} từ</p>
+            <p className="vocabulary-topic-count">{item.totalWords} từ</p>
             {isLearner && <>
-              <p>{remembered}/{item.totalWords} từ đã nhớ · {percent}%</p>
+              <p className="vocabulary-topic-remembered">{remembered}/{item.totalWords} từ đã nhớ · {percent}%</p>
               <progress value={remembered} max={item.totalWords || 1} aria-label={`Tiến độ ${item.tenChuDe}: ${percent}%`} />
             </>}
             <button type="button" className="primary-button" onClick={() => openTopic(item)}>
@@ -194,9 +212,14 @@ export default function VocabularyPage() {
                 ? "Tiếp tục học" : remembered === item.totalWords && item.totalWords > 0
                   ? "Học lại" : "Bắt đầu học" : "Xem danh sách"}
             </button>
+            </div>
           </article>})}
       </div>
+      {isLearner && hasMore && <button type="button" className="outline-button vocabulary-show-more"
+        onClick={() => setVisibleCount(count => count + INITIAL_TOPIC_COUNT)}>
+        Xem thêm chủ đề ({filteredTopics.length - visibleCount} còn lại)</button>}
       {isLearner && !topics.length && !error && <p>Chưa có chủ đề từ vựng đang mở.</p>}
+      {isLearner && topics.length > 0 && filteredTopics.length === 0 && <p>Không tìm thấy chủ đề phù hợp.</p>}
       {!isLearner && <p className="vocab-note">Mở khóa thêm chủ đề bằng cách <Link to="/login">đăng nhập</Link> hoặc <Link to="/register">đăng ký</Link>.</p>}
     </>}
 
@@ -213,15 +236,17 @@ export default function VocabularyPage() {
       <div className="vocab-list-grid">
         <section className="vocab-panel vocab-word-list">
           <h2>Danh sách: {title}</h2>
-          <ol>{words.map((item, index) => <li key={item.maTuVung}>
-            <button type="button" className="vocab-word-row" onClick={() => start("all", index)}
-              aria-label={`Mở thẻ ${item.word}`}>
-              <strong>{item.word}</strong>
-              {isLearner && <span className="vocab-list-status">
-                {item.trangThai === COMPLETED ? "Đã nhớ" : item.trangThai === LEARNING ? "Đang học" : "Chưa học"}
-              </span>}
-            </button>
-          </li>)}</ol>
+          <div className="vocab-word-scroll" role="region" aria-label={`Danh sách từ ${title}`} tabIndex={0}>
+            <ol>{words.map((item, index) => <li key={item.maTuVung}>
+              <button type="button" className="vocab-word-row" onClick={() => start("all", index)}
+                aria-label={`Mở thẻ ${item.word}`}>
+                <strong>{item.word}</strong>
+                {isLearner && <span className="vocab-list-status">
+                  {item.trangThai === COMPLETED ? "Đã nhớ" : item.trangThai === LEARNING ? "Đang học" : "Chưa học"}
+                </span>}
+              </button>
+            </li>)}</ol>
+          </div>
           <div className="vocab-list-actions">
             <button type="button" className="primary-button" disabled={!words.length}
               onClick={() => start(isLearner && topic.completedWords > 0 && topic.completedWords < words.length
@@ -241,55 +266,52 @@ export default function VocabularyPage() {
       </div>
     </>}
 
-    {!loading && stage === "cards" && word && <>
-      <button type="button" className="vocab-text-button" onClick={returnToList}>← Quay lại danh sách</button>
+    {!loading && stage === "cards" && word && <div className="vocabulary-flashcard-view">
+      <button type="button" className="outline-button vocab-flashcard-back" onClick={returnToList}><FlashcardIcon kind="previous" />Quay lại danh sách</button>
       <div className="vocab-study-grid">
-      <div className="vocab-study-heading">
-        <strong>{title}</strong><span>{position + 1}/{order.length}</span>
-        <progress value={position + 1} max={order.length} />
-      </div>
-      <section className="vocab-panel vocab-flashcard-panel">
-        <button type="button" className={"vocab-flashcard" + (revealed ? " is-revealed" : "")}
-          onClick={() => setRevealed(value => !value)}>
-          <span className="vocab-card-label">{revealed ? "MẶT SAU" : "MẶT TRƯỚC"}</span>
-          <strong>{word.word}</strong>
-          <span>{word.pronunciation} · {word.partOfSpeech}</span>
-          {revealed && <>
-            <b>{word.meaning}</b>
-            {word.example && <small>Ví dụ: {word.example}</small>}
-            {word.exampleMeaning && <small>Dịch: {word.exampleMeaning}</small>}
-          </>}
-        </button>
-        <div className="vocab-card-actions">
-          {isLearner && word.hasAudio && <button type="button" className="outline-button"
-            onClick={() => playAudio()}>🔊 Nghe từ</button>}
-          {isLearner && revealed && word.hasExampleAudio && <button type="button" className="outline-button"
-            onClick={() => playAudio(true)}>🔊 Nghe câu ví dụ</button>}
-          <button type="button" className="outline-button" onClick={() => setRevealed(value => !value)}>
-            {revealed ? "Xem mặt trước" : "Lật thẻ"}</button>
-          <button type="button" className="vocab-text-button" disabled={position === 0}
-            onClick={() => { setPosition(value => value - 1); setRevealed(false); }}>← Từ trước</button>
-          <button type="button" className="vocab-text-button" disabled={position + 1 === order.length}
-            onClick={() => { setPosition(value => value + 1); setRevealed(false); }}>Từ tiếp theo →</button>
+        <div className="vocab-study-heading">
+          <strong>{title}</strong>
+          <div className="vocab-study-progress"><span>Từ {position + 1}/{order.length}</span>
+            <progress value={position + 1} max={order.length} aria-label="Tiến độ lượt học từ vựng" /></div>
         </div>
-      </section>
-      <aside className="vocab-panel vocab-study-aside">
-        {isLearner ? <>
-          <h2>Bạn đã nhớ từ này?</h2>
-          <p>Chọn mức độ nhớ để lưu tiến độ của bạn.</p>
-          <div className="vocab-decision-actions">
-            <button type="button" className="outline-button" disabled={busy}
-              onClick={() => answer(false)}>Chưa nhớ</button>
-            <button type="button" className="primary-button" disabled={busy}
-              onClick={() => answer(true)}>Đã nhớ</button>
+        <section className="vocab-panel vocab-flashcard-panel">
+          <p className="vocab-flip-hint">Bấm vào thẻ để lật xem nghĩa / ví dụ</p>
+          <button type="button" className={"vocab-flashcard" + (revealed ? " is-revealed" : "")}
+            aria-label={`${word.word}: ${revealed ? "xem mặt trước" : "xem nghĩa và ví dụ"}`}
+            onClick={() => setRevealed(value => !value)}>
+            {!revealed ? <span className="vocab-flashcard-face vocab-flashcard-front">
+              <span className="vocab-card-label">MẶT TRƯỚC</span>
+              <strong>{word.word}</strong>
+              {word.pronunciation && <span className="vocab-flashcard-pronunciation">{word.pronunciation}</span>}
+              {word.partOfSpeech && <span className="vocab-flashcard-part-of-speech">{word.partOfSpeech}</span>}
+            </span> : <span className="vocab-flashcard-face vocab-flashcard-reverse">
+              <span className="vocab-card-label">MẶT SAU · {word.word}</span>
+              <strong className="vocab-flashcard-meaning">{word.meaning}</strong>
+              {word.example && <span className="vocab-flashcard-example"><span>Ví dụ</span>{word.example}</span>}
+              {word.exampleMeaning && <span className="vocab-flashcard-translation"><span>Bản dịch</span>{word.exampleMeaning}</span>}
+            </span>}
+          </button>
+          <div className="vocab-card-actions">
+            {isLearner && <div className="vocab-flashcard-tools">
+              {word.hasAudio && <button type="button" className="outline-button" onClick={() => playAudio()}><FlashcardIcon kind="audio" />Nghe từ</button>}
+              {revealed && word.hasExampleAudio && <button type="button" className="outline-button" onClick={() => playAudio(true)}><FlashcardIcon kind="audio" />Nghe câu ví dụ</button>}
+            </div>}
+            <div className="vocab-flashcard-navigation">
+              <button type="button" className="outline-button" disabled={position === 0}
+                onClick={() => { setPosition(value => value - 1); setRevealed(false); }}><FlashcardIcon kind="previous" />Từ trước</button>
+              <button type="button" className="outline-button" disabled={position + 1 === order.length}
+                onClick={() => { setPosition(value => value + 1); setRevealed(false); }}>Từ tiếp theo<FlashcardIcon kind="next" /></button>
+            </div>
+            {isLearner && <div className="vocab-decision-actions">
+              <button type="button" className="outline-button vocab-memory-forgotten" disabled={busy} aria-pressed={word.trangThai === LEARNING}
+                onClick={() => answer(false)}><FlashcardIcon kind="retry" />Chưa nhớ</button>
+              <button type="button" className="primary-button vocab-memory-remembered" disabled={busy} aria-pressed={word.trangThai === COMPLETED}
+                onClick={() => answer(true)}><FlashcardIcon kind="check" />Đã nhớ</button>
+            </div>}
           </div>
-        </> : <>
-          <h2>Học thử từ vựng</h2>
-          <p>Lật thẻ để xem nghĩa và ví dụ. Dùng Từ trước hoặc Từ tiếp theo để xem tất cả từ.</p>
-          <span className="vocab-aside-note">Học thử không lưu tiến độ.</span>
-        </>}
-      </aside>
-    </div></>}
+          {!isLearner && <p className="vocab-aside-note">Học thử không lưu tiến độ.</p>}
+        </section>
+      </div></div>}
 
     {!loading && stage === "result" && <div className="vocab-result-grid">
       <section className="vocab-panel vocab-result-panel">
@@ -310,4 +332,29 @@ export default function VocabularyPage() {
       </aside>}
     </div>}
   </div></SessionBoundary></SiteLayout>;
+}
+
+function VocabularyTopicCover({ name }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const cover = [
+    { pattern: /office|work|công việc/i, image: "office", theme: "office" },
+    { pattern: /travel|du lịch/i, image: "travel", theme: "travel" },
+    { pattern: /shopping|mua sắm/i, image: "shopping", theme: "shopping" },
+    { pattern: /business|kinh doanh/i, image: "business", theme: "business" },
+  ].find(item => item.pattern.test(name || ""));
+  return <div className="vocabulary-topic-cover" data-theme={cover?.theme}>
+    <img src={cover && !imageFailed ? `/images/vocabulary/${cover.image}.jpg` : "/images/home/vocabulary-card.webp"}
+      alt="" width="600" height="240" loading="lazy" onError={() => setImageFailed(true)} />
+    <h2>{name}</h2>
+  </div>;
+}
+
+function FlashcardIcon({ kind }) {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    {kind === "audio" && <><path d="m11 5-5 4H3v6h3l5 4V5Z" /><path d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" /></>}
+    {kind === "previous" && <path d="M19 12H5m5-5-5 5 5 5" />}
+    {kind === "next" && <path d="M5 12h14m-5-5 5 5-5 5" />}
+    {kind === "retry" && <><path d="M4 9a8 8 0 1 1 0 6" /><path d="M4 4v5h5" /></>}
+    {kind === "check" && <path d="m5 12 4 4L19 6" />}
+  </svg>;
 }

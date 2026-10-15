@@ -5,6 +5,7 @@ import SessionBoundary from "../../components/auth/SessionBoundary";
 import { useAuth } from "../../contexts/AuthState";
 import { apiRequest } from "../../services/api";
 import { buildPracticeQuestions, practiceReducer, practiceResult } from "./vocabularyPractice";
+import { INITIAL_TOPIC_COUNT, topicCatalogView, topicGridStyle, useMobileTopicCatalog } from "./topicCatalog";
 import "../../styles/vocabulary.css";
 import "../../styles/vocabulary-practice.css";
 
@@ -14,12 +15,12 @@ const LOAD_ERROR = "Không thể tải dữ liệu luyện tập.";
 export default function VocabularyPracticePage() {
   const { user, token } = useAuth();
   return <SiteLayout className="vocab-page"><SessionBoundary>
-    <div className="site-container practice-page">
+    <div className="site-container practice-page vocabulary-practice-page">
       <div className="page-heading">
-        <span>Luyện tập / Luyện từ vựng</span>
+        <span><Link to="/practice">Luyện tập</Link> / Luyện từ vựng</span>
         <h1>Luyện từ vựng</h1>
         <p>Kiểm tra khả năng nhớ từ với câu hỏi trắc nghiệm. Kết quả hoàn thành được lưu trong lịch sử luyện tập.</p>
-        <Link className="outline-button" to="/practice">Luyện tập TOEIC theo Part</Link>
+        <Link className="outline-button vocabulary-back" to="/practice"><BackArrow />Quay lại chọn hình thức</Link>
       </div>
       {user && token ? <LearnerPractice key={token} token={token} /> :
         <section className="vocab-panel">
@@ -39,6 +40,9 @@ function LearnerPractice({ token }) {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [topics, setTopics] = useState([]);
+  const [topicQuery, setTopicQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(INITIAL_TOPIC_COUNT);
+  const mobileCatalog = useMobileTopicCatalog();
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
   const [topic, setTopic] = useState(null);
@@ -63,6 +67,7 @@ function LearnerPractice({ token }) {
   }, [token, reload]);
 
   const hasUnsavedAnswers = !!session && !session.finished && session.answers.length > 0;
+  const { filteredTopics, shownTopics, hasMore } = topicCatalogView(topics, topicQuery, visibleCount, mobileCatalog);
   useEffect(() => {
     if (!hasUnsavedAnswers) return;
     const warnBeforeUnload = event => { event.preventDefault(); event.returnValue = ""; };
@@ -179,63 +184,83 @@ function LearnerPractice({ token }) {
       onClick={event => {
         if (session && !session.finished) { event.preventDefault(); leavePractice("/practice/vocabulary/history"); }
       }}>Lịch sử luyện từ</Link></div>
-    {loading && <p role="status">Đang tải dữ liệu luyện tập...</p>}
+    {loading && <p className="vocabulary-message" role="status">Đang tải dữ liệu luyện tập...</p>}
     {error && <div className="vocab-error" role="alert"><p>{error}</p>
       {!topic && <button className="outline-button" type="button" onClick={() => {
         setLoading(true); setError(""); setReload(value => value + 1);
       }}>Thử lại</button>}
     </div>}
 
-    {!loading && !topic && <>
-      <h2>Chọn chủ đề</h2>
-      <div className="vocab-topic-grid">{topics.map(item =>
+    {!loading && !topic && !error && <>
+      <div className="vocabulary-section-heading"><h2>Chọn chủ đề</h2><p>Chọn chủ đề bạn muốn luyện để bắt đầu ôn lại từ vựng.</p></div>
+      {topics.length > INITIAL_TOPIC_COUNT && <div className="vocabulary-topic-tools">
+        <label htmlFor="practice-topic-search">Tìm chủ đề</label>
+        <input id="practice-topic-search" type="search" value={topicQuery}
+          placeholder="Nhập tên chủ đề" onChange={event => {
+            setTopicQuery(event.target.value); setVisibleCount(INITIAL_TOPIC_COUNT);
+          }} />
+        <span>{filteredTopics.length} chủ đề</span>
+      </div>}
+      <div className="vocab-topic-grid" style={topicGridStyle(filteredTopics.length)}>{shownTopics.map(item =>
         <article className="vocab-topic-card" key={item.maChuDe}>
+          <PracticeTopicCover name={item.tenChuDe} />
+          <div className="vocabulary-topic-details">
           <span className="vocab-pill available">{item.status}</span>
-          <h2>{item.tenChuDe}</h2>
-          <p>{item.totalWords} từ · {item.completedWords} từ đã nhớ</p>
+          <p className="vocabulary-topic-count"><strong>{item.totalWords}</strong> từ</p>
+          <p className="vocabulary-topic-remembered"><strong>{item.completedWords}/{item.totalWords}</strong> từ đã nhớ <span>{item.progressPercent}%</span></p>
+          <progress className="vocabulary-progress" value={item.completedWords} max={item.totalWords || 1} aria-label={`Số từ đã nhớ trong chủ đề ${item.tenChuDe}`} />
           <button type="button" className="primary-button" onClick={() => {
             setTopic(item); setMode("all"); setError(""); setNotice("");
           }}>Chọn chủ đề</button>
+          </div>
         </article>)}</div>
-      {!topics.length && !error && <p>Chưa có chủ đề từ vựng đang mở.</p>}
+      {hasMore && <button type="button" className="outline-button vocabulary-show-more"
+        onClick={() => setVisibleCount(count => count + INITIAL_TOPIC_COUNT)}>
+        Xem thêm chủ đề ({filteredTopics.length - visibleCount} còn lại)</button>}
+      {!topics.length && !error && <p className="vocabulary-message">Chưa có chủ đề từ vựng đang mở.</p>}
+      {topics.length > 0 && filteredTopics.length === 0 && <p className="vocabulary-message">Không tìm thấy chủ đề phù hợp.</p>}
     </>}
 
     {topic && <>
-      <button type="button" className="vocab-text-button" disabled={starting} onClick={() => leavePractice()}>← Quay lại chọn chủ đề</button>
+      <button type="button" className="outline-button vocabulary-back" disabled={starting} onClick={() => leavePractice()}><BackArrow />Quay lại chọn chủ đề</button>
       {notice && <p role="status" className="vocab-note">{notice}</p>}
 
-      {!session && <section className="vocab-panel practice-panel">
-        <h2>{topic.tenChuDe}</h2>
+      {!session && <section className="vocab-panel practice-panel vocabulary-selection">
+        <div className="vocabulary-panel-heading"><span className="vocabulary-topic-art"><VocabularyIllustration /></span><div><h2>{topic.tenChuDe}</h2>
         <p>{topic.totalWords} từ trong chủ đề</p>
+        </div></div>
         <fieldset className="practice-modes" disabled={starting}>
           <legend>Chọn bộ từ luyện tập</legend>
           <label><input type="radio" name="practice-mode" value="all" checked={mode === "all"}
-            onChange={() => { setMode("all"); setNotice(""); }} /> Tất cả từ</label>
+            onChange={() => { setMode("all"); setNotice(""); }} /><span><strong>Tất cả từ</strong><small>Luyện toàn bộ từ vựng trong chủ đề.</small></span></label>
           <label><input type="radio" name="practice-mode" value="review" checked={mode === "review"}
-            onChange={() => { setMode("review"); setNotice(""); }} /> Từ cần ôn</label>
+            onChange={() => { setMode("review"); setNotice(""); }} /><span><strong>Từ cần ôn</strong><small>Tập trung vào những từ chưa học hoặc chưa nhớ.</small></span></label>
         </fieldset>
-        <p>Từ cần ôn gồm từ chưa học và từ chưa nhớ. Luyện tập không thay đổi trạng thái đã nhớ của bạn.</p>
-        <button type="button" className="primary-button" disabled={starting} onClick={startPractice}>Bắt đầu luyện</button>
+        <p className="vocabulary-guidance">Từ cần ôn gồm từ chưa học và từ chưa nhớ. Luyện tập không thay đổi trạng thái đã nhớ của bạn.</p>
+        <div className="vocabulary-start-action"><button type="button" className="primary-button" disabled={starting} onClick={startPractice}>Bắt đầu luyện<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 12h14m-5-5 5 5-5 5" /></svg></button></div>
         {starting && <p role="status">Đang tải dữ liệu luyện tập...</p>}
       </section>}
 
-      {session && !session.finished && <section className="vocab-panel practice-panel">
+      {session && !session.finished && <section className="vocab-panel practice-panel vocabulary-quiz">
         <div className="practice-toolbar">
-          <span>{topic.tenChuDe} · Câu {session.position + 1} / {session.questions.length}</span>
-          <button type="button" className="vocab-text-button" onClick={() => leavePractice()}>Thoát lượt luyện</button>
+          <div><strong>{topic.tenChuDe}</strong><span>Câu {session.position + 1} / {session.questions.length}</span></div>
+          <button type="button" className="outline-button vocabulary-back" onClick={() => leavePractice()}><BackArrow />Thoát lượt luyện</button>
         </div>
-        <p>{question.type === "word-to-meaning" ? "Chọn nghĩa tiếng Việt đúng:" : "Chọn từ tiếng Anh đúng:"}</p>
+        <progress className="vocabulary-progress" value={session.answers.length} max={session.questions.length} aria-label="Số câu đã trả lời trong lượt luyện" />
+        <div className="vocabulary-question-heading"><p>{question.type === "word-to-meaning" ? "Chọn nghĩa tiếng Việt đúng:" : "Chọn từ tiếng Anh đúng:"}</p>
         <h2 className="practice-prompt">{question.prompt}</h2>
+        </div>
         {question.options.length < 4 && <p>Chủ đề có ít lựa chọn phù hợp; câu này có {question.options.length} đáp án.</p>}
         <div className="practice-options" aria-label="Các đáp án">
           {question.options.map((option, index) => <button type="button" key={index}
+            aria-pressed={answer?.optionIndex === index}
             className={"practice-option" + (answer && index === question.correctIndex ? " is-correct" :
               answer && index === answer.optionIndex ? " is-wrong" : "")}
             disabled={!!answer} onClick={() => dispatch({ type: "answer", optionIndex: index })}>
-            <strong>{String.fromCharCode(65 + index)}.</strong> {option}
+            <strong>{String.fromCharCode(65 + index)}.</strong><span>{option}</span>
           </button>)}
         </div>
-        {answer && <div className="practice-feedback" role="status">
+        {answer && <div className="practice-feedback" role="status" data-correct={answer.correct}>
           <strong>{answer.correct ? "Đúng" : "Sai"}</strong>
           <p>Đáp án đúng: {question.options[question.correctIndex]}</p>
           <button type="button" className="primary-button" onClick={advance}>
@@ -244,7 +269,7 @@ function LearnerPractice({ token }) {
         </div>}
       </section>}
 
-      {result && <section className="vocab-panel practice-panel">
+      {result && <section className="vocab-panel practice-panel vocabulary-result">
         <h2>Kết quả luyện từ vựng</h2>
         <p className="practice-score">{result.correct}/{result.total} câu đúng · {result.percent}%</p>
         <p>Tổng số câu: {result.total} · Đúng: {result.correct} · Sai: {result.incorrect}</p>
@@ -260,7 +285,7 @@ function LearnerPractice({ token }) {
           {result.wrongWords.length > 0 && <button type="button" className="primary-button"
             onClick={() => begin(result.wrongWords, pool)}>Luyện lại từ sai</button>}
           <button type="button" className="outline-button" onClick={() => { setMode("all"); begin(pool, pool); }}>Luyện lại chủ đề</button>
-          <button type="button" className="vocab-text-button" onClick={() => leavePractice()}>Quay lại chọn chủ đề</button>
+          <button type="button" className="outline-button vocabulary-back" onClick={() => leavePractice()}><BackArrow />Quay lại chọn chủ đề</button>
         </div>
       </section>}
     </>}
@@ -273,4 +298,33 @@ function LearnerPractice({ token }) {
       </div>
     </div></div>}
   </>;
+}
+
+function PracticeTopicCover({ name }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const cover = [
+    { pattern: /office|work|công việc/i, image: "office", theme: "office" },
+    { pattern: /travel|du lịch/i, image: "travel", theme: "travel" },
+    { pattern: /shopping|mua sắm/i, image: "shopping", theme: "shopping" },
+    { pattern: /business|kinh doanh/i, image: "business", theme: "business" },
+  ].find(item => item.pattern.test(name || ""));
+  return <div className="vocabulary-topic-cover" data-theme={cover?.theme}>
+    <img src={cover && !imageFailed ? `/images/vocabulary/${cover.image}.jpg` : "/images/home/vocabulary-card.webp"}
+      alt="" width="600" height="240" loading="lazy" onError={() => setImageFailed(true)} />
+    <h2>{name}</h2>
+  </div>;
+}
+
+function BackArrow() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M19 12H5m5-5-5 5 5 5" /></svg>;
+}
+
+function VocabularyIllustration() {
+  return <svg aria-hidden="true" viewBox="0 0 80 80" fill="none">
+    <rect x="19" y="10" width="43" height="52" rx="8" fill="currentColor" opacity=".12" transform="rotate(10 40 36)" />
+    <rect x="13" y="17" width="43" height="52" rx="8" fill="white" stroke="currentColor" strokeWidth="2" />
+    <path d="M24 30h21M24 39h15M24 48h21M24 57h10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    <circle cx="59" cy="59" r="12" fill="currentColor" />
+    <path d="m54 59 3 3 6-7" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>;
 }
