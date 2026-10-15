@@ -9,7 +9,9 @@ using STO123.Models;
 using STO123.Services.Auth;
 using STO123.Services.Exam;
 using STO123.Services.Knn;
+using STO123.Services.Payment;
 using STO123.Services.Scoring;
+using VNPAY.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,6 +61,32 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddOptions<VNPayOptions>()
+    .Bind(builder.Configuration.GetSection(VNPayOptions.SectionName))
+    .Validate(VNPayOptions.IsValid, "VNPay configuration is invalid or incomplete.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IPaymentGateway, VNPayGateway>();
+builder.Services.AddScoped<PaymentCreationService>();
+builder.Services.AddScoped<VNPayCallbackVerifier>();
+builder.Services.AddScoped<PaymentConfirmationService>();
+
+// The SDK is registered for callback verification in the next phase. Its
+// checkout API cannot accept a caller-supplied vnp_TxnRef, so Phase 1 signs
+// checkout requests explicitly in VNPayGateway.
+if (builder.Configuration.GetValue<bool>("VNPay:CheckoutEnabled"))
+{
+    builder.Services.AddVnpayClient(config =>
+    {
+        config.TmnCode = builder.Configuration["VNPay:TmnCode"]?.Trim() ?? string.Empty;
+        config.HashSecret = builder.Configuration["VNPay:HashSecret"]?.Trim() ?? string.Empty;
+        config.BaseUrl = builder.Configuration["VNPay:PaymentUrl"]?.Trim() ?? VNPayOptions.SandboxPaymentUrl;
+        config.CallbackUrl = builder.Configuration["VNPay:ReturnUrl"]?.Trim() ?? string.Empty;
+        config.Version = "2.1.0";
+        config.OrderType = "other";
+    });
+}
 
 builder.Services.AddScoped<IPasswordHasher<NguoiDung>, PasswordHasher<NguoiDung>>();
 builder.Services.AddScoped<IAuthService, AuthService>();

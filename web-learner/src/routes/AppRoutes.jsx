@@ -23,6 +23,7 @@ import PlacementPage from "../pages/exam/PlacementPage";
 import CoursePage from "../pages/exam/CoursePage";
 import CourseListPage from "../pages/exam/CourseListPage";
 import ToeicStructurePage from "../pages/toeic/ToeicStructurePage";
+import { paymentIdFromSearch } from "../services/paymentFlow";
 
 function VocabularyRoute() {
   const location = useLocation();
@@ -42,6 +43,12 @@ function PracticeRoute() {
     return <Navigate to={`/practice/parts${search}`} replace />;
   }
   return <PracticeChoosePage />;
+}
+
+function LegacyPaymentRoute() {
+  const { search } = useLocation();
+  const paymentId = paymentIdFromSearch(search);
+  return <Navigate to={paymentId ? `/courses?paymentId=${paymentId}` : "/courses"} replace />;
 }
 
 function RouteScroll() {
@@ -76,6 +83,10 @@ export default function AppRoutes() {
     <Route path="/placement" element={<ProtectedRoute><PlacementPage /></ProtectedRoute>} />
     <Route path="/courses" element={<ProtectedRoute><CourseListPage /></ProtectedRoute>} />
     <Route path="/courses/:courseId" element={<ProtectedRoute><CoursePage /></ProtectedRoute>} />
+    <Route path="/packages" element={<Navigate to="/courses" replace />} />
+    <Route path="/packages/:id" element={<Navigate to="/courses" replace />} />
+    <Route path="/payment/result" element={<ProtectedRoute><LegacyPaymentRoute /></ProtectedRoute>} />
+    <Route path="/payment/history" element={<Navigate to="/courses" replace />} />
     <Route path="/exam/:attemptId" element={<ProtectedRoute><ExamPage /></ProtectedRoute>} />
     <Route path="/exam/:attemptId/result" element={<ProtectedRoute><ExamResultPage /></ProtectedRoute>} />
     <Route path="/exam/:attemptId/review" element={<ProtectedRoute><ExamReviewPage /></ProtectedRoute>} />

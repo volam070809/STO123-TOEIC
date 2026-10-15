@@ -15,7 +15,7 @@ public partial class DangKyGoiHoc
 
     public int MaNguoiDung { get; set; }
 
-    public int MaGoiHoc { get; set; }
+    public int? MaGoiHoc { get; set; }
 
     [Column(TypeName = "decimal(18, 2)")]
     public decimal GiaDangKy { get; set; }
@@ -38,6 +38,8 @@ public partial class DangKyGoiHoc
 
     [InverseProperty("MaDangKyNavigation")]
     public virtual ICollection<GiaoDichThanhToan> GiaoDichThanhToan { get; set; } = new List<GiaoDichThanhToan>();
+
+    public virtual ICollection<ChiTietDangKyKhoaHoc> ChiTietDangKyKhoaHoc { get; set; } = new List<ChiTietDangKyKhoaHoc>();
 
     [ForeignKey("MaGoiHoc")]
     [InverseProperty("DangKyGoiHoc")]

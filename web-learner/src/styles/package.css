@@ -1,0 +1,28 @@
+.package-page { padding-block: 2rem 4rem; color: var(--sto-navy); }
+.package-heading { padding: clamp(1.5rem, 4vw, 2.5rem); margin-bottom: 1.5rem; border: 1px solid var(--sto-border); border-radius: var(--sto-radius); background: #fff; box-shadow: var(--sto-shadow); }
+.package-eyebrow { color: #315f92; font-size: .75rem; font-weight: 700; letter-spacing: .13em; }
+.package-heading h1, .package-detail h1 { margin: .65rem 0; font-size: clamp(1.9rem, 3vw, 2.5rem); line-height: 1.2; }
+.package-heading p, .package-detail-main > p { max-width: 65ch; margin: 0; color: var(--sto-muted); line-height: 1.65; }
+.package-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.2rem; }
+.package-card, .package-detail-main, .package-purchase { min-width: 0; padding: 1.5rem; border: 1px solid var(--sto-border); border-radius: var(--sto-radius); background: #fff; box-shadow: var(--sto-shadow); }
+.package-card { display: flex; flex-direction: column; }
+.package-card-top { display: flex; justify-content: space-between; gap: .7rem; align-items: center; }
+.package-badge, .package-active { color: #176549; font-size: .85rem; font-weight: 700; }
+.package-card h2 { margin: 1.25rem 0 .5rem; font-size: 1.4rem; overflow-wrap: anywhere; }
+.package-price { margin: .35rem 0; color: var(--sto-blue); font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; }
+.package-duration, .package-course-count { color: #315f92; font-weight: 700; }
+.package-description { color: var(--sto-muted); line-height: 1.6; }
+.package-course-count { margin-top: auto; }
+.package-action { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-height: 46px; margin-top: 1rem; border: 0; border-radius: 9px; background: var(--sto-blue); color: #fff; font-weight: 700; text-align: center; }
+.package-action:hover { background: var(--sto-blue-hover); color: #fff; text-decoration: none; }
+.package-back { display: inline-block; margin-bottom: 1.2rem; font-weight: 700; }
+.package-detail { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 1.5rem; align-items: start; }
+.package-detail h2 { margin-top: 1.8rem; font-size: 1.25rem; }
+.package-purchase h2 { margin: 0 0 1rem; }
+.package-courses { display: grid; gap: .7rem; padding: 0; list-style: none; }
+.package-courses li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .6rem; padding: .8rem 1rem; border: 1px solid var(--sto-border); border-radius: 9px; }
+.package-note { color: var(--sto-muted); font-size: .88rem; line-height: 1.5; }
+.package-alert { margin-top: 1rem; padding: .9rem 1rem; border: 1px solid #efc6c6; border-radius: 9px; background: #fff8f8; color: #a12d2d; }
+@media (max-width: 990px) { .package-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .package-detail { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .package-page { padding-block: 1.4rem 3rem; } .package-grid { grid-template-columns: 1fr; } .package-card, .package-detail-main, .package-purchase { padding: 1.2rem; } }

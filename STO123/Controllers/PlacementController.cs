@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using STO123.Models;
 using STO123.Services.Exam;
 using STO123.Services.Knn;
+using STO123.Services.Payment;
 
 namespace STO123.Controllers;
 
@@ -12,7 +13,7 @@ namespace STO123.Controllers;
 [ApiController]
 [Route("api/placement")]
 public sealed class PlacementController(ToeicDbContext db, ExamAttemptService attempts,
-    KnnDiagnosticsStore diagnostics) : ControllerBase
+    KnnDiagnosticsStore diagnostics, TimeProvider clock) : ControllerBase
 {
     private int LearnerId => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id :
         throw new ExamProblem("ATTEMPT_FORBIDDEN", "Phiên đăng nhập không hợp lệ.", 403);
@@ -105,19 +106,47 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
     {
         try
         {
-            var open = await db.KhoaHoc.AsNoTracking().Where(c => c.TrangThai == "DANG_MO")
-                .OrderBy(c => c.GiaiDoan).ToListAsync(ct);
+            var now = clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime;
+            var entitledCourseIds = CourseEntitlement.ActiveCourseIds(db, LearnerId, now);
+            var rows = await db.KhoaHoc.AsNoTracking().Where(c => c.TrangThai == "DANG_MO")
+                .OrderBy(c => c.GiaiDoan)
+                .Select(c => new { Course = c, HasAccess = entitledCourseIds.Contains(c.MaKhoaHoc) })
+                .ToListAsync(ct);
+            var enrollmentRows = await db.DangKyGoiHoc.AsNoTracking()
+                .Where(e => e.MaNguoiDung == LearnerId)
+                .Include(e => e.MaGoiHocNavigation).ThenInclude(p => p.MaKhoaHoc)
+                .Include(e => e.ChiTietDangKyKhoaHoc)
+                .Include(e => e.GiaoDichThanhToan).ToListAsync(ct);
+            var enrollments = enrollmentRows.SelectMany(e =>
+                (e.MaGoiHoc.HasValue ? e.MaGoiHocNavigation.MaKhoaHoc.Select(c => c.MaKhoaHoc) :
+                    e.ChiTietDangKyKhoaHoc.Select(c => c.MaKhoaHoc)).Select(courseId => new {
+                CourseId = courseId, e.TrangThai, e.NgayBatDau, e.NgayKetThuc,
+                Pending = e.GiaoDichThanhToan.Any(p => p.TrangThai == "CHO_XU_LY"),
+                Paid = e.GiaoDichThanhToan.Any(p => p.TrangThai == "THANH_CONG"),
+                Failed = e.GiaoDichThanhToan.Any(p => p.TrangThai == "THAT_BAI")
+            })).ToList();
+            var open = rows.Select(row => row.Course).ToList();
             var knn = await CurrentKnn(ct);
             var recommended = CourseRecommendation.RecommendedStages(open, knn?.GiaiDoanDeXuat,
                 knn?.DiemMucTieu);
-            return Ok(open.Select(c => new { courseId = c.MaKhoaHoc, name = c.TenKhoaHoc,
+            return Ok(rows.Select(row => { var c = row.Course;
+                var related = enrollments.Where(e => e.CourseId == c.MaKhoaHoc).ToList();
+                var accessUntil = row.HasAccess ? related.Where(e => e.Paid &&
+                    e.TrangThai == "DANG_SU_DUNG" && e.NgayBatDau <= now && e.NgayKetThuc > now)
+                    .Max(e => e.NgayKetThuc) : related.Where(e => e.Paid).Max(e => e.NgayKetThuc);
+                var accessStatus = row.HasAccess ? "ACTIVE" :
+                    related.Any(e => e.Pending && e.TrangThai == "CHO_THANH_TOAN") ? "PAYMENT_PENDING" :
+                    related.Any(e => e.Paid && e.NgayKetThuc <= now) ? "EXPIRED" :
+                    related.Any(e => e.Failed) ? "PAYMENT_FAILED" : "NOT_PURCHASED";
+                return new { courseId = c.MaKhoaHoc, name = c.TenKhoaHoc,
                 stage = c.GiaiDoan, maxTargetScore = c.DiemMucTieuToiDa, description = c.MoTa,
+                retailPrice = c.GiaBanLe, accessDays = PaymentCreationService.CourseValidDays,
                 coverImageUrl = c.DuongDanAnhDaiDien,
-                accessStatus = "LOCKED", progress = (object?)null,
+                accessStatus, accessExpiresAt = accessUntil, progress = (object?)null,
                 recommended = recommended.Contains(c.GiaiDoan),
                 recommendationOrder = recommended.Contains(c.GiaiDoan) ?
                     Array.IndexOf(recommended.ToArray(), c.GiaiDoan) + 1 : (int?)null
-            }).ToList());
+            }; }).ToList());
         }
         catch (ExamProblem e) { return Problem(e); }
     }
@@ -162,6 +191,11 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
     {
         try
         {
+        var now = clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime;
+        var hasAccess = await CourseEntitlement.ActiveCourseIds(db, LearnerId, now)
+            .AnyAsync(id => id == courseId, ct);
+        if (!hasAccess) return StatusCode(403, new { code = "COURSE_LOCKED",
+            message = "Khóa học đang khóa. Vui lòng mua khóa học để xem nội dung." });
         var course = await db.KhoaHoc.AsNoTracking()
             .Include(c => c.UnitKhoaHoc).ThenInclude(u => u.LessonKhoaHoc)
             .ThenInclude(l => l.BuocLoTrinh)
@@ -183,7 +217,7 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
             stage = course.GiaiDoan, description = course.MoTa,
             coverImageUrl = course.DuongDanAnhDaiDien,
             recommended = recommended.Contains(course.GiaiDoan),
-            accessStatus = "LOCKED", progress = (object?)null,
+            accessStatus = hasAccess ? "ACTIVE" : "LOCKED", progress = (object?)null,
             contentCount = units.Sum(u => u.lessons.Sum(l => l.contents.Count)), units });
         }
         catch (ExamProblem e) { return Problem(e); }

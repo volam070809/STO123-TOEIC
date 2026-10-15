@@ -9,7 +9,7 @@ export default function ProtectedRoute({ children }) {
     <p>{sessionError}</p><button className="primary-button" type="button" onClick={() => loadCurrentUser()}>Thử lại</button>
   </div></div>;
   if (!isAuthenticated) return <Navigate to="/login" replace
-    state={{ returnTo: protectedReturnPath(location.pathname) }} />;
+    state={{ returnTo: protectedReturnPath(location.pathname + location.search) }} />;
   return children;
 }
 

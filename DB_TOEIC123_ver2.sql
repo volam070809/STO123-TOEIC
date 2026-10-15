@@ -1,5 +1,9 @@
--- STO123 - FULL SCHEMA DB_TOEIC123_ver2
--- Dung de tao CSDL moi / luu tren Git. KHONG dung de migrate DB dang co.
+-- STO123 - FULL SCHEMA DB_TOEIC123_ver2 - MUA KHOA HOC TU CHON
+-- Schema tao moi: GiaBanLe tren KhoaHoc; DangKyGoiHoc.MaGoiHoc cho phep NULL;
+-- ChiTietDangKyKhoaHoc luu tung khoa, DonGia tai thoi diem mua.
+-- Chon nhieu khoa = tong gia le, KHONG giam gia combo; moi khoa 30 ngay theo nghiep vu.
+-- Dung de tao CSDL TRONG hoac luu tren Git. KHONG duoc chay tren Azure DB dang co du lieu.
+-- Cac bang GoiHoc / GoiHocKhoaHoc cu van duoc giu lai de phuc vu du lieu lich su.
 
 --CREATE DATABASE DB_TOEIC123_ver2;
 --GO
@@ -70,6 +74,7 @@ CREATE TABLE dbo.KhoaHoc(
     GiaiDoan tinyint not null unique check (GiaiDoan between 1 and 3),
     DiemMucTieuToiDa int not null check (DiemMucTieuToiDa between 10 and 990),
     MoTa nvarchar(512) null,
+    GiaBanLe decimal(18,2) null,
     DuongDanAnhDaiDien varchar(512) null,
     TrangThai varchar(32) not null default 'DANG_MO' check (TrangThai in ('DANG_MO','DA_DONG')),
     MaAdminNoiDung int null foreign key references NguoiDung(MaNguoiDung),
@@ -98,7 +103,8 @@ GO
 CREATE TABLE dbo.DangKyGoiHoc(
     MaDangKy int primary key identity(1,1),
     MaNguoiDung int not null foreign key references NguoiDung(MaNguoiDung),
-    MaGoiHoc int not null foreign key references GoiHoc(MaGoiHoc),
+    -- NULL: dang ky tu chon; NOT NULL: dang ky goi hoc cu.
+    MaGoiHoc int null foreign key references GoiHoc(MaGoiHoc),
     GiaDangKy decimal(18,2) not null check (GiaDangKy >= 0),
     SoNgaySuDung int not null check (SoNgaySuDung > 0),
     NgayDangKy datetime not null default getdate(),
@@ -110,6 +116,20 @@ CREATE TABLE dbo.DangKyGoiHoc(
         or
         (TrangThai in ('DANG_SU_DUNG','HET_HAN') and NgayBatDau is not null and NgayKetThuc is not null and NgayKetThuc > NgayBatDau)
     )
+);
+GO
+
+-- Mot dang ky tu chon co nhieu khoa hoc, gia luu snapshot tai thoi diem mua.
+-- He thong backend can kiem tra: MaGoiHoc NULL thi phai co >=1 chi tiet;
+-- GiaDangKy = SUM(DonGia); SoNgaySuDung = 30 theo quy tac hien tai.
+CREATE TABLE dbo.ChiTietDangKyKhoaHoc (
+    MaDangKy int not null,
+    MaKhoaHoc int not null,
+    DonGia decimal(18,2) not null,
+    constraint PK_ChiTietDangKyKhoaHoc primary key (MaDangKy, MaKhoaHoc),
+    constraint FK_CTDK_DangKy foreign key (MaDangKy) references dbo.DangKyGoiHoc(MaDangKy),
+    constraint FK_CTDK_KhoaHoc foreign key (MaKhoaHoc) references dbo.KhoaHoc(MaKhoaHoc),
+    constraint CK_CTDK_DonGia check (DonGia >= 0)
 );
 GO
 
@@ -543,3 +563,12 @@ GO
 -- 14) DiemMucTieu khong phai feature KNN; doi target khong chay lai KNN.
 -- 15) Ownership, autosave, pause/resume, heartbeat, submit va timeout xu ly backend.
 -- 16) Blob exam media nen dung ten/path immutable hoac versioned.
+-- GHI CHU TICH HOP (khong phai DDL):
+-- 1) GiaBanLe la gia niem yet; can nap gia 3 khoa: 99000, 199000, 299000
+--    sau khi da co cac ban ghi KhoaHoc tuong ung; khong hardcode ID vao schema.
+-- 2) ChiTietDangKyKhoaHoc.DonGia la gia snapshot; DangKyGoiHoc.GiaDangKy la tong.
+-- 3) ChiTietDangKyKhoaHoc phai co it nhat 1 dong neu DangKyGoiHoc.MaGoiHoc IS NULL.
+--    Dieu kien nay va tong gia phai duoc backend bao dam bang transaction.
+-- 4) GiaoDichThanhToan.MaDangKy tiep tuc NOT NULL va tham chieu DangKyGoiHoc.
+-- 5) Thanh toan/IPN va cap quyen hoc phai xu ly ca dang ky goi cu va tu chon.
+-- 6) KHONG chay lai full script nay tren Azure SQL hien tai sau khi da ALTER.

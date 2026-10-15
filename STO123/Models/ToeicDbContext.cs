@@ -25,6 +25,8 @@ public partial class ToeicDbContext : DbContext
 
     public virtual DbSet<ChiTietCauHinhDeThi> ChiTietCauHinhDeThi { get; set; }
 
+    public virtual DbSet<ChiTietDangKyKhoaHoc> ChiTietDangKyKhoaHoc { get; set; }
+
     public virtual DbSet<ChiTietKetQua> ChiTietKetQua { get; set; }
 
     public virtual DbSet<ChiTietLuyenTuVung> ChiTietLuyenTuVung { get; set; }
@@ -87,6 +89,15 @@ public partial class ToeicDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ChiTietDangKyKhoaHoc>(entity =>
+        {
+            entity.ToTable("ChiTietDangKyKhoaHoc");
+            entity.HasKey(e => new { e.MaDangKy, e.MaKhoaHoc });
+            entity.HasOne(e => e.MaDangKyNavigation).WithMany(e => e.ChiTietDangKyKhoaHoc)
+                .HasForeignKey(e => e.MaDangKy).OnDelete(DeleteBehavior.ClientSetNull);
+            entity.HasOne(e => e.MaKhoaHocNavigation).WithMany(e => e.ChiTietDangKyKhoaHoc)
+                .HasForeignKey(e => e.MaKhoaHoc).OnDelete(DeleteBehavior.ClientSetNull);
+        });
         modelBuilder.Entity<BaiGiang>(entity =>
         {
             entity.HasKey(e => e.MaBaiGiang).HasName("PK__BaiGiang__0773C41EC59B1061");

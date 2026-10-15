@@ -51,7 +51,7 @@ export default function PlacementAnalysisView({ analysis, courses = [], current 
       <p className="exam-card-note">Giai đoạn dựa trên kết quả 7 Part của lượt làm này, không được suy ra từ điểm TOEIC tổng.</p></section>
     {stage && coursesLoaded && stageCourse && <section className="placement-stage-destination">
       <p>Khóa học <strong>{stageCourse.name}</strong> thuộc giai đoạn {stage}. Bạn có thể xem đề cương và các bước học thực tế; đề xuất không tự mở quyền truy cập.</p>
-      <Link className="primary-button" to={`/courses/${stageCourse.courseId}`}>Xem lộ trình học đề xuất</Link>
+      <Link className="primary-button" to="/courses">Xem lộ trình học đề xuất</Link>
     </section>}
     {stage && coursesLoaded && !stageCourse &&
       <p className="exam-card-note" role="status">Chưa có khóa học đang mở cho giai đoạn {stage}, nên chưa có trang lộ trình phù hợp để xem.</p>}
@@ -77,7 +77,7 @@ export default function PlacementAnalysisView({ analysis, courses = [], current 
             `Bước tiếp theo theo lộ trình backend đề xuất để hướng tới mục tiêu ${targetScore} điểm.`}</p>
           <p>{course.description || courseStage[course.stage]?.description}</p>
           <p>{course.accessStatus === "LOCKED" ? "Khóa học chưa được mở quyền truy cập." : "Xem quyền truy cập trong chi tiết khóa học."}</p>
-          <Link className="outline-button" to={`/courses/${course.courseId}`}>Xem khóa học</Link>
+          <Link className="outline-button" to="/courses">Xem khóa học</Link>
         </div></article>)}</div></section>}
     {stage && coursesLoaded && stageCourse && displayedCourses.length === 0 &&
       <p className="exam-card-note">Chưa có lộ trình theo điểm mục tiêu đã xác nhận; bạn vẫn có thể xem đề cương giai đoạn {stage} bằng nút bên trên.</p>}
