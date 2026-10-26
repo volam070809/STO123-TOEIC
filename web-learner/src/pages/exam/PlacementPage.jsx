@@ -1,9 +1,12 @@
 ﻿import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
+import { useGuestAuthPrompt } from "../../contexts/GuestAuthPromptState";
+import SessionBoundary from "../../components/auth/SessionBoundary";
 import SiteLayout from "../../layouts/SiteLayout";
 import { placementApi } from "../../services/examApi";
 import PlacementAnalysisView from "./PlacementAnalysisView";
+import { courseEntryReference, courseStage } from "./coursePresentationData";
 import "../../styles/exam.css";
 
 const date = value => value ? new Date(value).toLocaleString("vi-VN") : "—";
@@ -11,6 +14,35 @@ const remaining = value => value == null ? "—" : [Math.floor(value / 3600), Ma
   .map(n => String(n).padStart(2, "0")).join(":");
 
 export default function PlacementPage() {
+  const { isAuthenticated } = useAuth();
+  return <SessionBoundary>{isAuthenticated ? <LearnerPlacementPage /> : <GuestPlacementOverview />}</SessionBoundary>;
+}
+
+function GuestPlacementOverview() {
+  const { requireAuthentication } = useGuestAuthPrompt();
+  return <SiteLayout><div className="site-container exam-home placement-page">
+    <div className="page-heading placement-heading"><span>Lộ trình học</span>
+      <h1>Kiểm tra đầu vào và lộ trình học</h1>
+      <p>7 Part · tối đa 200 câu · 120 phút · Đánh giá năng lực để định hướng giai đoạn học phù hợp</p></div>
+    <div className="exam-navigation"><Link className="outline-button" to="/">← Quay lại</Link></div>
+    <section className="exam-card placement-action-card"><div><span className="placement-eyebrow">Đánh giá năng lực</span>
+      <h2>Bắt đầu kiểm tra đầu vào</h2>
+      <p>Đăng nhập để làm bài, lưu kết quả và nhận phân tích lộ trình cá nhân.</p></div>
+      <button className="primary-button" type="button" aria-haspopup="dialog"
+        onClick={() => requireAuthentication("/placement")}>Bắt đầu kiểm tra đầu vào</button></section>
+    <section aria-labelledby="public-roadmap-title"><h2 id="public-roadmap-title">Lộ trình TOEIC ba giai đoạn</h2>
+      <p className="exam-card-note">Thông tin dưới đây là lộ trình chung, không phải kết quả phân lớp cá nhân.</p>
+      <div className="placement-summary">{[1, 2, 3].map(stage => <div key={stage}>
+        <span className="placement-eyebrow">Giai đoạn {stage}</span>
+        <strong>{courseStage[stage].name}</strong><span>{courseEntryReference(stage)}</span>
+        <small>{courseStage[stage].description}</small>
+      </div>)}</div>
+    </section>
+    <section><Link className="outline-button" to="/courses">Khám phá tất cả khóa học</Link></section>
+  </div></SiteLayout>;
+}
+
+function LearnerPlacementPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
   const [state, setState] = useState(null);

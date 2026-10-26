@@ -8,7 +8,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STO123.Models;
 
-[Index("GiaiDoan", Name = "UQ__KhoaHoc__A88A40395930F860", IsUnique = true)]
 public partial class KhoaHoc
 {
     [Key]

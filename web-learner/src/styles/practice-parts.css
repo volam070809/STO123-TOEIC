@@ -214,7 +214,7 @@
 .practice-session-content, .practice-session-material { min-width: 0; }
 .practice-session-material { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
 .practice-session[data-part="3"] .practice-session-material, .practice-session[data-part="4"] .practice-session-material { grid-template-columns: minmax(0, 44%) minmax(0, 1fr); align-items: start; }
-.practice-session .practice-part-source, .practice-session .practice-part-question { min-width: 0; margin: 0; padding: 1.25rem; border: 1px solid #d9e3ea; border-radius: 12px; background: #fff; overflow-wrap: anywhere; }
+.practice-session .practice-part-source, .practice-session .practice-part-question { min-width: 0; margin: 0; padding: 1.25rem; border: 1px solid #dbe3e8; border-radius: 10px; background: #fff; overflow-wrap: anywhere; }
 .practice-session .practice-part-source { display: grid; gap: 1rem; }
 .practice-session .practice-part-source > :is(p, audio) { margin: 0; }
 .practice-session .practice-part-source audio { display: block; width: 100%; max-width: 100%; min-width: 0; height: 54px; padding: .2rem; border: 1px solid #cbdde5; border-radius: 10px; background: #f5fafc; }
@@ -229,24 +229,30 @@
 .practice-session .practice-part-question h3 { margin: 0 0 .85rem; color: var(--color-heading); font-size: 1.05rem; }
 .practice-session .practice-part-question > p { margin: 0; white-space: pre-wrap; line-height: 1.65; }
 .practice-session .practice-part-options { gap: .5rem; margin-block: 1rem; }
-.practice-session .practice-part-options label { display: flex; align-items: flex-start; gap: .7rem; min-width: 0; padding: .8rem; border: 1px solid #d9e3ea; border-radius: 8px; background: #fff; cursor: pointer; }
+.practice-session .practice-part-options label { display: flex; align-items: flex-start; gap: .7rem; min-width: 0; padding: .78rem .85rem; border: 1px solid #d8e1e6; border-radius: 7px; background: #fff; cursor: pointer; transition: border-color .15s ease, background-color .15s ease; }
 .practice-session .practice-part-options input { flex: none; width: 16px; height: 16px; margin: .2rem 0 0; accent-color: #1b6a87; }
 .practice-session .practice-part-options label > span { min-width: 0; line-height: 1.5; overflow-wrap: anywhere; }
-.practice-session .practice-part-options label:hover:has(input:not(:disabled)), .practice-session .practice-part-options label:has(input:checked) { border-color: #1b6a87; background: #edf7fa; }
+.practice-session .practice-part-options label:hover:has(input:not(:disabled)) { border-color: #9aafb9; background: #fafcfd; }
+.practice-session .practice-part-options label:has(input:checked):not([data-correct="true"]):not([data-incorrect="true"]) { border-color: #779aaa; background: #f2f7f9; }
 .practice-session .practice-part-options label:has(input:disabled) { cursor: default; }
-.practice-session .practice-part-options label:has(input:focus-visible) { outline: 3px solid #1b6a87; outline-offset: 2px; }
-.practice-session .practice-part-options label[data-correct="true"] { border-color: #247a58; background: #e5f4ef; box-shadow: inset 3px 0 #247a58; }
-.practice-session .practice-part-options label[data-incorrect="true"] { border-color: #b34840; background: #fff0ec; box-shadow: inset 3px 0 #b34840; }
-.practice-session .practice-feedback { padding: 1rem; border-left: 4px solid #1b6a87; border-radius: 8px; background: #edf7fa; }
-.practice-session .practice-feedback[data-state="correct"] { border-color: #247a58; background: #e5f4ef; }
-.practice-session .practice-feedback[data-state="incorrect"] { border-color: #b34840; background: #fff0ec; }
-.practice-session .practice-feedback p { margin: 0 0 .8rem; white-space: pre-wrap; line-height: 1.6; }
+.practice-session .practice-part-options label:has(input:focus-visible) { outline: 2px solid #4e8199; outline-offset: 2px; }
+.practice-session .practice-part-options label[data-correct="true"] { border-color: #278453; background: #e8f5ec; }
+.practice-session .practice-part-options label[data-incorrect="true"] { border-color: #d9534f; background: #fdecec; }
+.practice-session .practice-feedback { padding: .9rem 1rem; border: 1px solid #d8e1e6; border-radius: 8px; background: #f8fafb; }
+.practice-session .practice-feedback[data-state="correct"] { border-color: #bad6c8; background: #f3f8f5; }
+.practice-session .practice-feedback[data-state="incorrect"] { border-color: #e4c8c3; background: #fff8f6; }
+.practice-session .practice-feedback p { margin: 0 0 .75rem; white-space: pre-wrap; line-height: 1.55; }
 .practice-session .practice-feedback p:last-child { margin-bottom: 0; }
+.practice-session .practice-feedback-compact > p { color: #304653; }
+.practice-session .practice-feedback-answer { display: flex; align-items: center; gap: .65rem; }
+.practice-session .practice-feedback-answer span { color: #61717b; font-size: .82rem; }
+.practice-session .practice-feedback-answer strong { display: inline-grid; place-items: center; min-width: 1.8rem; min-height: 1.8rem; color: #274f61; background: #eaf1f4; border-radius: 5px; }
+.practice-session .practice-feedback-explanation { display: grid; gap: .2rem; color: #3f505a; }
+.practice-session .practice-feedback-explanation b { color: #263b47; font-size: .82rem; }
 .practice-session .practice-part-transcript { padding: 1rem; background: #f5fafc; border: 1px solid #cbdde5; border-radius: 8px; line-height: 1.65; }
 .practice-session .practice-part-transcript h4 { color: #145876; }
-.practice-session .practice-part-actions { gap: .6rem; }
-.practice-session .practice-part-actions button { min-height: 44px; }
-.practice-session .practice-part-actions .vocab-text-button { padding-inline: .5rem; }
+.practice-session .practice-part-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; margin-top: .85rem; }
+.practice-session .practice-part-actions button { min-height: 44px; margin: 0; }
 .practice-session .practice-check-button { min-height: 44px; padding: .6rem 1rem; border-radius: 8px; background: #145876; font-size: .9rem; }
 .practice-session .practice-check-button:hover:not(:disabled) { background: #1b6a87; }
 .practice-session .practice-check-button:disabled { background: #e7edf0; color: #435766; }

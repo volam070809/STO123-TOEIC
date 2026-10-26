@@ -1,9 +1,9 @@
 const validStage = stage => [1, 2, 3].includes(stage);
 const average = values => Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 100) / 100;
 
-export function courseForKnnStage(courses, stage) {
-  if (!validStage(stage)) return null;
-  return courses.find(course => course.stage === stage && Number.isInteger(course.courseId) && course.courseId > 0) ?? null;
+export function coursesForKnnStage(courses, stage) {
+  if (!validStage(stage)) return [];
+  return courses.filter(course => course.stage === stage && Number.isInteger(course.courseId) && course.courseId > 0);
 }
 
 export const shouldLoadPlacementAnalysis = (result, attemptId) =>

@@ -302,3 +302,24 @@
 @media (prefers-reduced-motion: reduce) {
   .primary-button, .outline-button, .secondary-button, .danger-button { transition: none; }
 }
+
+/* Shared prompt for deliberate guest-only protected actions. */
+.guest-auth-backdrop { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 20px; background: rgb(7 27 90 / 48%); }
+.guest-auth-dialog { position: relative; width: min(100%, 460px); padding: 30px; border: 1px solid var(--sto-border); border-radius: 18px; background: #fff; color: var(--sto-navy); box-shadow: 0 18px 48px rgb(7 27 90 / 20%); }
+.guest-auth-close { position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--sto-muted); }
+.guest-auth-close:hover { border-color: var(--sto-border); background: var(--sto-blue-light); color: var(--sto-navy); }
+.guest-auth-close:focus-visible { outline: 3px solid var(--sto-blue); outline-offset: 2px; }
+.guest-auth-close svg, .guest-auth-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.guest-auth-icon { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 18px; border-radius: 12px; background: var(--sto-blue-light); color: var(--sto-blue); }
+.guest-auth-dialog h2 { margin: 0 44px 10px 0; color: var(--sto-navy); font-size: 24px; line-height: 1.3; }
+.guest-auth-dialog p { margin: 0; color: var(--sto-muted); font-size: 15px; line-height: 1.65; }
+.guest-auth-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.guest-auth-actions :is(.primary-button, .outline-button) { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 9px 20px; border-radius: 10px; font-weight: 600; }
+.guest-auth-actions .primary-button { background: var(--sto-blue); border-color: var(--sto-blue); }
+.guest-auth-actions .primary-button:hover { background: var(--sto-blue-hover); border-color: var(--sto-blue-hover); text-decoration: none; }
+.guest-auth-actions .outline-button { border-color: var(--sto-blue); color: var(--sto-blue); }
+.guest-auth-actions .outline-button:hover { background: var(--sto-blue-light); text-decoration: none; }
+@media (max-width: 480px) {
+  .guest-auth-dialog { padding: 26px 22px 22px; border-radius: 15px; }
+  .guest-auth-actions > a { flex: 1 1 100%; }
+}

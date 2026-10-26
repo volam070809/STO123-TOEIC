@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { courseStage } from "./coursePresentation";
-import { courseForKnnStage } from "./placementAttemptAnalysis";
+import { courseAudienceLabel, courseEntryReference, courseStage, courseTargetLabel } from "./coursePresentationData";
+import { coursesForKnnStage } from "./placementAttemptAnalysis";
 
 const levels = { NEEDS_IMPROVEMENT: "Cần cải thiện", DEVELOPING: "Đang phát triển", GOOD: "Tốt" };
 
@@ -15,7 +15,7 @@ export default function PlacementAnalysisView({ analysis, courses = [], current 
   const recommended = current && targetScore != null ? courses.filter(course => course.recommended) : [];
   const stageCourses = targetScore == null ? courses.filter(course => course.stage === stage) : [];
   const displayedCourses = recommended.length ? recommended : stageCourses;
-  const stageCourse = courseForKnnStage(courses, stage);
+  const matchingStageCourses = coursesForKnnStage(courses, stage);
 
   return <div className="placement-analysis-view">
     {showAttemptHeader && <section id="placement-analysis" className="exam-score"><h2>Kết quả kiểm tra đầu vào</h2>
@@ -49,11 +49,11 @@ export default function PlacementAnalysisView({ analysis, courses = [], current 
       <p>{stage ? `Năng lực hiện tại phù hợp với ${courseStage[stage]?.name}. ${courseStage[stage]?.description}` :
         "Kết quả bài làm đã được lưu; chưa có đề xuất giai đoạn cho lượt này."}</p>
       <p className="exam-card-note">Giai đoạn dựa trên kết quả 7 Part của lượt làm này, không được suy ra từ điểm TOEIC tổng.</p></section>
-    {stage && coursesLoaded && stageCourse && <section className="placement-stage-destination">
-      <p>Khóa học <strong>{stageCourse.name}</strong> thuộc giai đoạn {stage}. Bạn có thể xem đề cương và các bước học thực tế; đề xuất không tự mở quyền truy cập.</p>
-      <Link className="primary-button" to="/courses">Xem lộ trình học đề xuất</Link>
+    {stage && coursesLoaded && matchingStageCourses.length > 0 && <section className="placement-stage-destination">
+      <p>Có <strong>{matchingStageCourses.length} khóa học</strong> đang mở thuộc giai đoạn {stage}. Bạn có thể so sánh và tự chọn khóa phù hợp; đề xuất không tự mở quyền truy cập.</p>
+      <Link className="primary-button" to="/courses">Xem các khóa học phù hợp</Link>
     </section>}
-    {stage && coursesLoaded && !stageCourse &&
+    {stage && coursesLoaded && matchingStageCourses.length === 0 &&
       <p className="exam-card-note" role="status">Chưa có khóa học đang mở cho giai đoạn {stage}, nên chưa có trang lộ trình phù hợp để xem.</p>}
     {stage && current && onTargetSubmit && <section><h2>Mục tiêu TOEIC của bạn</h2>
       <p>Chọn số điểm bạn muốn hướng tới để hệ thống đề xuất khóa học phù hợp.</p>
@@ -69,17 +69,19 @@ export default function PlacementAnalysisView({ analysis, courses = [], current 
         `Các khóa học giai đoạn ${stage} đang mở; xác nhận điểm mục tiêu để nhận lộ trình đề xuất.`}</p>
       <div className="learning-path">{displayedCourses.map((course, index) => <article className="learning-path-step" key={course.courseId}>
         <span className="learning-path-number" aria-hidden="true">{index + 1}</span>
-        <div className="learning-path-content"><div className="learning-path-labels"><span className="small-badge">Giai đoạn {course.stage}</span>
+        <div className="learning-path-content"><div className="learning-path-labels"><span className="small-badge">{courseAudienceLabel(course.stage)}</span>
           {course.stage === stage && <span className="learning-path-indicator">Phù hợp để bắt đầu</span>}
           {current && course.recommendationOrder && <span className="learning-path-indicator">Bước {course.recommendationOrder} đề xuất</span>}</div>
           <h3>{course.name}</h3>
+          <p className="learning-path-course-score"><span>{courseEntryReference(course.stage)}</span>
+            <strong>{courseTargetLabel(course.maxTargetScore)}</strong></p>
           <p>{course.stage === stage ? "Giai đoạn khóa học khớp với giai đoạn KNN của lượt làm này." :
             `Bước tiếp theo theo lộ trình backend đề xuất để hướng tới mục tiêu ${targetScore} điểm.`}</p>
           <p>{course.description || courseStage[course.stage]?.description}</p>
           <p>{course.accessStatus === "LOCKED" ? "Khóa học chưa được mở quyền truy cập." : "Xem quyền truy cập trong chi tiết khóa học."}</p>
-          <Link className="outline-button" to="/courses">Xem khóa học</Link>
+          <Link className="outline-button" to={`/courses/${course.courseId}`}>Xem khóa học này</Link>
         </div></article>)}</div></section>}
-    {stage && coursesLoaded && stageCourse && displayedCourses.length === 0 &&
+    {stage && coursesLoaded && matchingStageCourses.length > 0 && displayedCourses.length === 0 &&
       <p className="exam-card-note">Chưa có lộ trình theo điểm mục tiêu đã xác nhận; bạn vẫn có thể xem đề cương giai đoạn {stage} bằng nút bên trên.</p>}
   </div>;
 }

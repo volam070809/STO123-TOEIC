@@ -5,6 +5,7 @@ import { authError } from "../../services/authErrors";
 import { clearGoogleSignInHandler, renderGoogleSignIn } from "../../services/googleIdentity";
 import { AlertMessage } from "./AuthUI";
 import { protectedReturnPath } from "../../routes/protectedReturnPath";
+import { loginDestination } from "../../routes/loginDestination";
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
 
@@ -23,8 +24,8 @@ export default function GoogleSignIn({ returnTo }) {
     setBusy(true);
     setError("");
     try {
-      await loginWithGoogle(idToken);
-      navigate(protectedReturnPath(returnTo) ?? "/", { replace: true });
+      const session = await loginWithGoogle(idToken);
+      navigate(loginDestination(session.user?.vaiTro, protectedReturnPath(returnTo)), { replace: true });
     } catch (failure) {
       if (failure.status === 409) setError("Email này đã có tài khoản STO123. Vui lòng đăng nhập bằng phương thức ban đầu.");
       else if (failure.status === 401) setError("Phiên đăng nhập Google không hợp lệ. Vui lòng thử lại.");

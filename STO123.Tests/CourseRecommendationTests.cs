@@ -31,4 +31,18 @@ public class CourseRecommendationTests
         Assert.Equal((byte)2, CourseRecommendation.TargetStage(450));
         Assert.Equal((byte)3, CourseRecommendation.TargetStage(700));
     }
+
+    [Fact]
+    public void Multiple_courses_in_one_stage_keep_one_stage_recommendation()
+    {
+        KhoaHoc[] courses =
+        [
+            new() { MaKhoaHoc = 21, GiaiDoan = 2, TrangThai = "DANG_MO" },
+            new() { MaKhoaHoc = 22, GiaiDoan = 2, TrangThai = "DANG_MO" },
+            new() { MaKhoaHoc = 31, GiaiDoan = 3, TrangThai = "DANG_MO" }
+        ];
+
+        Assert.Equal(new byte[] { 2, 3 },
+            CourseRecommendation.RecommendedStages(courses, 2, 850));
+    }
 }

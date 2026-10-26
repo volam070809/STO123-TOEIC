@@ -71,7 +71,7 @@ GO
 CREATE TABLE dbo.KhoaHoc(
     MaKhoaHoc int primary key identity(1,1),
     TenKhoaHoc nvarchar(128) not null,
-    GiaiDoan tinyint not null unique check (GiaiDoan between 1 and 3),
+    GiaiDoan tinyint not null check (GiaiDoan between 1 and 3),
     DiemMucTieuToiDa int not null check (DiemMucTieuToiDa between 10 and 990),
     MoTa nvarchar(512) null,
     GiaBanLe decimal(18,2) null,

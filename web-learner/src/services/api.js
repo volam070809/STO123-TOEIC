@@ -1,15 +1,19 @@
+import { clearSharedReadCache } from "./sharedRequest";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export async function apiRequest(endpoint, { method = "GET", body = null, token = null, timeoutMs = 30_000, cache } = {}) {
   const headers = { Accept: "application/json" };
-  if (body !== null) headers["Content-Type"] = "application/json";
+  const multipart = typeof FormData !== "undefined" && body instanceof FormData;
+  if (body !== null && !multipart) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = "Bearer " + token;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(API_BASE_URL + endpoint, {
-      method, headers, body: body !== null ? JSON.stringify(body) : undefined, signal: controller.signal, cache,
+      method, headers, body: body !== null ? (multipart ? body : JSON.stringify(body)) : undefined,
+      signal: controller.signal, cache,
     });
     let data = null;
     if (response.headers.get("content-type")?.includes("json")) {
@@ -29,6 +33,7 @@ export async function apiRequest(endpoint, { method = "GET", body = null, token 
       }
       throw error;
     }
+    if (method !== "GET" && endpoint.startsWith("/api/admin/")) clearSharedReadCache();
     return data;
   } catch (error) {
     if (error.status || error.message === "Invalid server response.") throw error;

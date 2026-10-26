@@ -233,7 +233,8 @@ export default function PracticePartsPage() {
       <div className="practice-session-layout"><div className="practice-session-content"><div className="practice-session-material">
       {activeGroup && <PracticeGroup key={activeGroup.groupId} group={activeGroup} part={attempt.part} token={token}
         revealedContext={questions.filter(q => q.groupId === activeGroup.groupId)
-          .map(q => feedback[q.questionOccurrenceId]?.reveal?.context).find(Boolean)} />}
+          .map(q => feedback[q.questionOccurrenceId]?.viewed ? feedback[q.questionOccurrenceId]?.reveal?.context : null)
+          .find(Boolean)} />}
       {activeQuestion && <PracticeQuestion key={activeQuestion.questionOccurrenceId} question={activeQuestion}
         transcriptContext={activeGroup?.context}
         value={feedback[activeQuestion.questionOccurrenceId]?.selectedOption} result={feedback[activeQuestion.questionOccurrenceId]}
@@ -298,10 +299,13 @@ export function PracticeGroup({ group, part, token, revealedContext }) {
 }
 
 export function PracticeQuestion({ question: q, transcriptContext, value, result, onSelect, onCheck, onSeeAnswer, onRedo, onNext, pending = false, review = false }) {
-  const revealed = result?.reveal;
+  const answerVisible = review || !!result?.viewed;
+  const revealed = answerVisible ? result?.reveal : null;
   const lettersOnly = q.part <= 2;
   const isChecked = !!result?.checked;
   const visibleTranscript = review ? q : revealed;
+  const correctOption = review ? q.correctOption : result?.correctOption;
+  const selectedOption = review ? q.selectedOption : result?.selectedOption;
   const choices = [["A", revealed?.phuongAnA ?? q.phuongAnA], ["B", revealed?.phuongAnB ?? q.phuongAnB],
     ["C", revealed?.phuongAnC ?? q.phuongAnC], ["D", revealed?.phuongAnD ?? q.phuongAnD]]
     .filter(([letter, text]) => lettersOnly ? q.part !== 2 || letter !== "D" : !!text);
@@ -309,8 +313,9 @@ export function PracticeQuestion({ question: q, transcriptContext, value, result
     <h3>Câu {q.thuTu}</h3>
     {q.part > 2 && (revealed?.noiDung ?? q.noiDung) && <p>{revealed?.noiDung ?? q.noiDung}</p>}
     <div className="practice-part-options">{choices.map(([letter, text]) => <label key={letter}
-      data-correct={(isChecked || result?.viewed) && result.correctOption === letter ? "true" : undefined}
-      data-incorrect={isChecked && result.selectedOption === letter && !result.isCorrect ? "true" : undefined}>
+      data-correct={(answerVisible && correctOption === letter) ||
+        (!review && isChecked && result.isCorrect && selectedOption === letter) ? "true" : undefined}
+      data-incorrect={isChecked && !result.isCorrect && selectedOption === letter ? "true" : undefined}>
       <input type="radio" name={`q-${q.questionOccurrenceId}`} checked={(review ? q.selectedOption : value) === letter} disabled={review || isChecked || pending}
         onChange={() => onSelect?.(letter)} /> <span><b>{letter}.</b> {!lettersOnly && text}</span>
     </label>)}</div>
@@ -324,20 +329,21 @@ export function PracticeQuestion({ question: q, transcriptContext, value, result
     </div>}
     {review ? <div className="practice-feedback"><p>Đã chọn: {q.selectedOption || "Chưa trả lời"} · Đáp án đúng: {q.correctOption}</p>
       {q.explanation && <p>Giải thích: {q.explanation}</p>}</div> : <>
-      {(result?.viewed || isChecked) &&
-      <div className="practice-feedback" data-state={isChecked ? result.isCorrect ? "correct" : "incorrect" : "viewed"}>
-        <p>{isChecked ? <><b>{result.isCorrect ? "Đúng" : "Sai"}</b> · Đã chọn: {result.selectedOption}</> : "Đã xem đáp án"} · Đáp án đúng: {result.correctOption}</p>
-        {result.explanation && <p>Giải thích: {result.explanation}</p>}
-        <div className="practice-part-actions"><button type="button" className="outline-button" disabled={pending} onClick={onRedo}>Làm lại câu này</button>
-          <button type="button" className="vocab-text-button" disabled={pending} onClick={onSeeAnswer}>Xem đáp án</button>
-          {onNext && <button type="button" className="primary-button" disabled={pending} onClick={onNext}>Câu tiếp →</button>}</div>
+      {isChecked && !answerVisible && <div className="practice-feedback practice-feedback-compact"
+        data-state={result.isCorrect ? "correct" : "incorrect"} role="status">
+        <p><b>{result.isCorrect ? "Bạn trả lời đúng." : "Bạn trả lời chưa đúng."}</b></p>
       </div>}
-      {!isChecked && !result?.viewed &&
-      <div className="practice-part-actions">
-        <button type="button" className="vocab-text-button" disabled={pending} onClick={onSeeAnswer}>Xem đáp án</button>
-        <button type="button" className="practice-check-button" disabled={!value || pending} onClick={onCheck}>Kiểm tra câu này</button>
+      {answerVisible && <div className="practice-feedback" data-state={isChecked ? result.isCorrect ? "correct" : "incorrect" : "viewed"}>
+        {isChecked && <p><b>{result.isCorrect ? "Bạn trả lời đúng." : "Bạn trả lời chưa đúng."}</b></p>}
+        <p className="practice-feedback-answer"><span>Đáp án đúng</span><strong>{correctOption}</strong></p>
+        {result?.explanation && <p className="practice-feedback-explanation"><b>Giải thích</b><span>{result.explanation}</span></p>}
       </div>}
-      {!isChecked && result?.viewed && <button type="button" className="practice-check-button" disabled={!value || pending} onClick={onCheck}>Kiểm tra câu này</button>}</>}
+      <div className="practice-part-actions" data-state={answerVisible ? "viewed" : isChecked ? "checked" : "ready"}>
+        {!answerVisible && <button type="button" className="outline-button" disabled={pending} onClick={onSeeAnswer}>Xem đáp án</button>}
+        {(isChecked || answerVisible) && <button type="button" className="outline-button" disabled={pending} onClick={onRedo}>Làm lại câu này</button>}
+        {!isChecked && !answerVisible && <button type="button" className="practice-check-button" disabled={!value || pending} onClick={onCheck}>Kiểm tra câu này</button>}
+        {(isChecked || answerVisible) && onNext && <button type="button" className="primary-button" disabled={pending} onClick={onNext}>Câu tiếp →</button>}
+      </div></>}
   </article>;
 }
 

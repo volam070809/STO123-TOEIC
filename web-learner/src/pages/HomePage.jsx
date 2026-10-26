@@ -6,6 +6,38 @@ import SiteLayout from "../layouts/SiteLayout";
 import { examApi, placementApi } from "../services/examApi";
 import "../styles/home.css";
 
+const homeFeatures = [
+  { key: "placement", title: "Kiểm tra đầu vào", route: "/placement", image: "/images/home/placement-card.webp",
+    guestImage: "/images/home/study-notes.webp", description: "Xác định trình độ hiện tại và định hướng lộ trình học.", action: "Xem lộ trình học", primary: true },
+  { key: "mock", title: "Thi thử TOEIC", route: "/mock-test", image: "/images/home/mock-card.webp",
+    description: "Làm quen cấu trúc và thời gian của một bài thi TOEIC.", action: "Mở thi thử", primary: true },
+  { key: "practice", title: "Luyện tập", route: "/practice", image: "/images/home/practice-card.webp",
+    description: "Luyện TOEIC theo Part và củng cố kiến thức theo từng câu.", action: "Bắt đầu luyện" },
+  { key: "vocabulary", title: "Học từ vựng", route: "/vocabulary", image: "/images/home/vocabulary-card.webp",
+    guestImage: "/images/home/vocabulary-books.webp", description: "Khám phá danh sách và chủ đề từ vựng.", action: "Mở từ vựng" },
+  { key: "courses", title: "Khóa học", route: "/courses", image: "/images/home/courses-card.webp",
+    description: "Xem nội dung và lộ trình học hiện có.", action: "Xem khóa học" },
+  { key: "structure", title: "Cấu trúc đề thi TOEIC", route: "/toeic/structure", image: "/images/home/exam-sheet.webp",
+    description: "Tìm hiểu 7 Part của bài thi Listening & Reading.", action: "Xem cấu trúc" },
+];
+
+function HomeFeatureGrid({ learner = false, placement, mock }) {
+  return <div className="home-access-grid home-feature-grid">{homeFeatures.map(feature => {
+    let description = feature.description;
+    if (learner && feature.key === "placement" && placement?.completedCount)
+      description = `${placement.completedCount} lần đã hoàn thành`;
+    if (learner && feature.key === "mock") description = mock?.some(exam => exam.state === "COMPLETED")
+      ? `${mock.filter(exam => exam.state === "COMPLETED").length} đề đã hoàn thành` : "Chọn một đề thi thử để bắt đầu.";
+    if (learner && feature.key === "practice")
+      description = "Luyện từ vựng, luyện TOEIC theo Part và xem lại các lượt luyện đã lưu.";
+    return <article className="access-card home-learner-card" key={feature.key}>
+      <div className="home-access-photo"><img src={!learner && feature.guestImage ? feature.guestImage : feature.image} alt="" loading="lazy" /></div>
+      <div className="home-learner-card-body"><h3>{feature.title}</h3><p>{description}</p>
+        <Link className={feature.primary ? "primary-button" : "outline-button"} to={feature.route}>{feature.action}</Link></div>
+    </article>;
+  })}</div>;
+}
+
 function LearnerHome({ user }) {
   const { token } = useAuth();
   const [mock, setMock] = useState(null);
@@ -36,29 +68,14 @@ function LearnerHome({ user }) {
         <p>Từ kết quả kiểm tra đầu vào gần nhất. Xem khóa học phù hợp với mục tiêu của bạn.</p></div>
       <Link className="outline-button" to="/placement">Xem lộ trình</Link></section>}
     <div className="home-section-heading"><h2 className="section-title">Học và luyện tập</h2><p>Chọn hoạt động phù hợp để tiếp tục học hôm nay.</p></div>
-    <div className="home-access-grid">
-      <article className="access-card home-learner-card"><div className="home-access-photo"><img src="/images/home/placement-card.webp" alt="" loading="lazy" /></div><div className="home-learner-card-body"><h3>Kiểm tra đầu vào</h3>
-        <p>{placement?.completedCount ? `${placement.completedCount} lần đã hoàn thành` : "Xác định trình độ hiện tại và lộ trình học."}</p>
-        <Link className="primary-button" to="/placement">Xem lộ trình học</Link></div></article>
-      <article className="access-card home-learner-card"><div className="home-access-photo"><img src="/images/home/mock-card.webp" alt="" loading="lazy" /></div><div className="home-learner-card-body"><h3>Thi thử TOEIC</h3>
-        <p>{mock?.some(exam => exam.state === "COMPLETED") ?
-          `${mock.filter(exam => exam.state === "COMPLETED").length} đề đã hoàn thành` : "Chọn một đề thi thử để bắt đầu."}</p>
-        <Link className="primary-button" to="/mock-test">Mở thi thử</Link></div></article>
-      <article className="access-card home-learner-card"><div className="home-access-photo"><img src="/images/home/practice-card.webp" alt="" loading="lazy" /></div><div className="home-learner-card-body"><h3>Luyện tập</h3>
-        <p>Luyện từ vựng, luyện TOEIC theo Part và xem lại các lượt luyện đã lưu.</p>
-        <Link className="outline-button" to="/practice">Bắt đầu luyện</Link></div></article>
-      <article className="access-card home-learner-card"><div className="home-access-photo"><img src="/images/home/vocabulary-card.webp" alt="" loading="lazy" /></div><div className="home-learner-card-body"><h3>Học từ vựng</h3>
-        <p>Khám phá danh sách và chủ đề từ vựng.</p>
-        <Link className="outline-button" to="/vocabulary">Mở từ vựng</Link></div></article>
-      <article className="access-card home-learner-card"><div className="home-access-photo"><img src="/images/home/courses-card.webp" alt="" loading="lazy" /></div><div className="home-learner-card-body"><h3>Khóa học</h3>
-        <p>Xem nội dung và lộ trình học hiện có.</p>
-        <Link className="outline-button" to="/courses">Xem khóa học</Link></div></article>
-    </div>
+    <HomeFeatureGrid learner placement={placement} mock={mock}/>
   </div>;
 }
 
 function GuestHome() {
   return <div className="site-container home-content home-guest">
+    <div className="page-heading"><span>STO123 / Tổng quan</span><h1>Học TOEIC cùng STO123</h1>
+      <p>Khám phá lộ trình, nội dung học và các hình thức luyện tập hiện có.</p></div>
     <section className="home-hero home-guest-hero"><div className="home-hero-content"><span className="small-badge">HỌC TOEIC HIỆU QUẢ HƠN MỖI NGÀY</span>
       <h1>Chinh phục TOEIC<br />theo cách của bạn</h1>
       <p>Bạn được học thử một danh sách từ vựng và xem cách hệ thống luyện TOEIC hoạt động.</p>
@@ -67,16 +84,12 @@ function GuestHome() {
       <div className="home-benefits"><span><HomeIcon kind="book" />Học theo chủ đề</span><span><HomeIcon kind="practice" />Luyện tập đa dạng</span><span><HomeIcon kind="path" />Theo dõi tiến độ</span></div>
       </div><div className="home-hero-photo"><img src="/images/home/hero-study.webp" alt="" width="1200" height="800" fetchPriority="high" /><span className="home-photo-badge">HỌC HÔM NAY · VỮNG TƯƠNG LAI</span><p>Good English<br />Brighter opportunities</p></div>
     </section>
-    <div className="home-section-heading"><h2 className="section-title">Bắt đầu từ một bài học nhỏ</h2><p>Khám phá nội dung học thử và những lợi ích khi có tài khoản STO123.</p></div>
-    <div className="home-access-grid">
-      <article className="access-card home-photo-card"><div className="home-card-photo"><img src="/images/home/vocabulary-books.webp" alt="" width="700" height="467" loading="lazy" /></div><span className="home-feature-icon green"><HomeIcon kind="book" /></span><h3>1 danh sách từ vựng</h3>
-        <p>Học thử Office Essentials gồm 10 từ.</p><Link className="primary-button" to="/vocabulary">Mở danh sách</Link></article>
-      <article className="access-card home-photo-card"><div className="home-card-photo"><img src="/images/home/exam-sheet.webp" alt="" width="700" height="467" loading="lazy" /></div><span className="home-feature-icon orange"><HomeIcon kind="exam" /></span><h3>Xem cấu trúc TOEIC</h3>
-        <p>Tìm hiểu 7 Part của bài thi Listening &amp; Reading.</p><Link className="outline-button" to="/toeic/structure">Xem cấu trúc</Link></article>
-      <article className="access-card home-photo-card"><div className="home-card-photo"><img src="/images/home/study-notes.webp" alt="" width="700" height="394" loading="lazy" /></div><span className="home-feature-icon purple"><HomeIcon kind="path" /></span><h3>Lưu tiến độ cá nhân</h3>
-        <p>Đăng nhập để lưu kết quả và lộ trình.</p><Link className="outline-button" to="/login">Đăng nhập</Link></article>
-    </div>
-    <p className="home-note">Khách có thể xem nội dung mẫu; tài khoản giúp mở toàn bộ chủ đề và lưu tiến độ học.</p>
+    <section className="home-progress-card"><div><span className="small-badge">LỘ TRÌNH HỌC TOEIC</span>
+      <h2>Xây dựng hành trình học phù hợp</h2><p>Đăng nhập để kiểm tra đầu vào, nhận giai đoạn đề xuất và lưu tiến độ học của bạn.</p></div>
+      <Link className="outline-button" to="/login">Đăng nhập để bắt đầu</Link></section>
+    <div className="home-section-heading"><h2 className="section-title">Học và luyện tập</h2><p>Khám phá các hoạt động học TOEIC hiện có trên STO123.</p></div>
+    <HomeFeatureGrid/>
+    <p className="home-note">Bạn có thể xem nội dung công khai; đăng nhập để sử dụng các chức năng dành cho học viên.</p>
   </div>;
 }
 
@@ -95,3 +108,5 @@ function HomeIcon({ kind }) {
     {kind === "arrow" && <path d="M4 12h16m-6-6 6 6-6 6" />}
   </svg>;
 }
+
+export { GuestHome, HomeFeatureGrid, LearnerHome };

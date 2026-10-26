@@ -4,6 +4,7 @@ import { AuthContext } from "./AuthState";
 import { disableGoogleAutoSelect } from "../services/googleIdentity";
 import { clearAvatarCache, loadAvatarOnce } from "../services/avatarCache";
 import { applyProfileUpdate } from "../services/profileData";
+import { clearSharedReadCache } from "../services/sharedRequest";
 
 const ACCOUNT_LOAD_ERROR = "Không thể tải tài khoản. Vui lòng thử lại.";
 
@@ -20,6 +21,7 @@ export function AuthProvider({ children }) {
 
   function clearSession() {
     generationRef.current += 1;
+    clearSharedReadCache();
     clearAvatarCache();
     setAvatarAsset({ key: null, url: null, error: false });
     tokenRef.current = null;
@@ -53,6 +55,7 @@ export function AuthProvider({ children }) {
 
   async function completeLogin(result, generation) {
     if (generation !== generationRef.current) throw new Error("Đăng nhập đã bị hủy.");
+    clearSharedReadCache();
     tokenRef.current = result.token;
     sessionStorage.setItem("accessToken", result.token);
     if (result.expiresAtUtc) sessionStorage.setItem("expiresAtUtc", result.expiresAtUtc);
@@ -61,8 +64,10 @@ export function AuthProvider({ children }) {
     setUser(null);
     setLoading(true);
     setSessionError("");
+    let authenticatedUser;
     try {
       const currentUser = await authApi.getMe(result.token);
+      authenticatedUser = currentUser;
       if (generation === generationRef.current && tokenRef.current === result.token) setUser(currentUser);
     } catch (error) {
       if (generation === generationRef.current && tokenRef.current === result.token) {
@@ -73,7 +78,7 @@ export function AuthProvider({ children }) {
     } finally {
       if (generation === generationRef.current) setLoading(false);
     }
-    return result;
+    return { ...result, user: authenticatedUser };
   }
 
   async function login(email, password) {
@@ -99,6 +104,7 @@ export function AuthProvider({ children }) {
     if (!current) throw new Error("Phiên đăng nhập đã kết thúc.");
     const pending = authApi.renew(current).then(result => {
       if (tokenRef.current !== current) return;
+      clearSharedReadCache();
       tokenRef.current = result.token;
       sessionStorage.setItem("accessToken", result.token);
       sessionStorage.setItem("expiresAtUtc", result.expiresAtUtc);

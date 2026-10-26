@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import SiteLayout from "../../layouts/SiteLayout";
 import { useAuth } from "../../contexts/AuthState";
 import SessionBoundary from "../../components/auth/SessionBoundary";
 import { apiRequest, API_BASE_URL } from "../../services/api";
 import { INITIAL_TOPIC_COUNT, topicCatalogView, topicGridStyle, useMobileTopicCatalog } from "../practice/topicCatalog";
+import { useGuestAuthPrompt } from "../../contexts/GuestAuthPromptState";
+import { publicVocabularyApi } from "../../services/publicVocabularyApi";
+import { guestPreviewHasMore, vocabularyReturnTo, vocabularyTopicFromSearch } from "./guestVocabularyPreview";
 import "../../styles/vocabulary.css";
 
 const ROOT = "/api/tu-vung";
@@ -13,7 +16,11 @@ const LEARNING = "DANG_HOC";
 
 export default function VocabularyPage() {
   const { user, token } = useAuth();
+  const { requireAuthentication } = useGuestAuthPrompt();
+  const { search } = useLocation();
+  const navigate = useNavigate();
   const isLearner = !!user;
+  const requestedTopicId = vocabularyTopicFromSearch(search);
   const [topics, setTopics] = useState([]);
   const [topicQuery, setTopicQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(INITIAL_TOPIC_COUNT);
@@ -40,30 +47,35 @@ export default function VocabularyPage() {
     setVisibleCount(INITIAL_TOPIC_COUNT);
     setTopic(null);
     setWords([]);
-    const endpoint = isLearner ? ROOT + "/topics" : ROOT + "/demo";
-    apiRequest(endpoint, { token: isLearner ? token : null })
-      .then(data => {
-        if (!active) return;
-        if (isLearner) setTopics(data);
-        else {
-          setTopic({ tenChuDe: data.tenChuDe, totalWords: data.words.length });
-          setWords(data.words);
-        }
-      })
+    const load = async () => {
+      const data = isLearner ? await apiRequest(ROOT + "/topics", { token }) : await publicVocabularyApi.topics();
+      if (!active) return;
+      setTopics(data);
+      const requested = requestedTopicId && data.find(item => item.maChuDe === requestedTopicId);
+      if (!requested) return;
+      const detail = isLearner ? await apiRequest(ROOT + "/topics/" + requested.maChuDe, { token }) :
+        await publicVocabularyApi.preview(requested.maChuDe);
+      if (!active) return;
+      setTopic(detail.topic);
+      setWords(detail.words);
+      setStage("list");
+    };
+    load()
       .catch(() => { if (active) setError("Không thể tải dữ liệu từ vựng."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [user, token, isLearner]);
+  }, [user, token, isLearner, requestedTopicId]);
 
   async function openTopic(item) {
     setError("");
-    if (!isLearner) { setStage("list"); return; }
     setLoading(true);
     try {
-      const data = await apiRequest(ROOT + "/topics/" + item.maChuDe, { token });
+      const data = isLearner ? await apiRequest(ROOT + "/topics/" + item.maChuDe, { token }) :
+        await publicVocabularyApi.preview(item.maChuDe);
       setTopic(data.topic);
       setWords(data.words);
       setStage("list");
+      navigate(vocabularyReturnTo(item.maChuDe));
     } catch {
       setError("Không thể tải dữ liệu từ vựng.");
     } finally {
@@ -132,13 +144,15 @@ export default function VocabularyPage() {
   }
 
   async function playAudio(example = false) {
-    if (!isLearner || !word || !token) return;
+    if (!word || (isLearner && !token) || (!isLearner && !topic?.maChuDe)) return;
     setError("");
     try {
-      const response = await fetch(API_BASE_URL + ROOT + "/" + word.maTuVung +
-        (example ? "/audio-vi-du" : "/audio"), {
+      const endpoint = isLearner ? ROOT + "/" + word.maTuVung +
+        (example ? "/audio-vi-du" : "/audio") :
+        publicVocabularyApi.audioEndpoint(topic.maChuDe, word.maTuVung, example);
+      const response = await fetch(API_BASE_URL + endpoint, isLearner ? {
         headers: { Authorization: "Bearer " + token }
-      });
+      } : {});
       if (!response.ok) throw new Error();
       const url = URL.createObjectURL(await response.blob());
       if (audioRef.current) {
@@ -164,8 +178,10 @@ export default function VocabularyPage() {
   const doneInSession = Object.values(answers).filter(Boolean).length;
   const missedInSession = Object.values(answers).filter(value => !value).length;
   const title = topic?.tenChuDe || "Office Essentials";
-  const catalogTopics = isLearner ? topics : [topic].filter(Boolean);
+  const catalogTopics = topics;
   const { filteredTopics, shownTopics, hasMore } = topicCatalogView(catalogTopics, topicQuery, visibleCount, mobileCatalog);
+  const previewHasMore = !isLearner && guestPreviewHasMore(topic, words);
+  const authReturnTo = vocabularyReturnTo(topic?.maChuDe);
 
   return <SiteLayout className="vocab-page"><SessionBoundary><div className={"site-container" + (stage === "topics" ? " vocabulary-topics-page" : "")}>
     <div className="page-heading">
@@ -174,7 +190,7 @@ export default function VocabularyPage() {
         stage === "list" ? title : stage === "cards" ? "Học từ vựng" : "Kết quả học"}</h1>
       <p>{isLearner
         ? "Học theo chủ đề, nghe phát âm và lưu tiến độ của bạn."
-        : "Học thử toàn bộ 10 từ Office Essentials. Kết quả chỉ có trong phiên này."}</p>
+        : "Khám phá các chủ đề và học thử tối đa 10 từ trong mỗi chủ đề."}</p>
     </div>
 
     {loading && <p role="status">Đang tải từ vựng...</p>}
@@ -182,18 +198,22 @@ export default function VocabularyPage() {
 
     {!loading && stage === "topics" && <>
       {!isLearner && <div className="vocab-banner is-topics">
-        <strong>Office Essentials: 10 từ học thử</strong>
-        <span>Đăng ký tài khoản để học thêm nhiều chủ đề, nghe phát âm và lưu tiến độ học.</span>
+        <strong>Học thử 10 từ trong mỗi chủ đề</strong>
+        <span>Bạn có thể đổi chủ đề tự do; đăng nhập để học toàn bộ từ và lưu tiến độ.</span>
       </div>}
-      <div className="vocabulary-topics-heading"><h2>Chọn chủ đề để học</h2><p>Học bằng thẻ ghi nhớ và theo dõi số từ đã nhớ trong từng chủ đề.</p></div>
-      {isLearner && topics.length > INITIAL_TOPIC_COUNT && <div className="vocabulary-topic-tools">
-        <label htmlFor="learning-topic-search">Tìm chủ đề</label>
-        <input id="learning-topic-search" type="search" value={topicQuery}
-          placeholder="Nhập tên chủ đề" onChange={event => {
-            setTopicQuery(event.target.value); setVisibleCount(INITIAL_TOPIC_COUNT);
-          }} />
-        <span>{filteredTopics.length} chủ đề</span>
-      </div>}
+      <div className="vocabulary-catalog-header">
+        <div className="vocabulary-topics-heading"><h2>Chọn chủ đề để học</h2><p>Học bằng thẻ ghi nhớ và theo dõi số từ đã nhớ trong từng chủ đề.</p></div>
+        <div className="vocabulary-topic-tools">
+          <label htmlFor="learning-topic-search">Tìm chủ đề</label>
+          <div className="vocabulary-topic-search">
+            <input id="learning-topic-search" type="search" value={topicQuery}
+              placeholder="Nhập tên chủ đề" onChange={event => {
+                setTopicQuery(event.target.value); setVisibleCount(INITIAL_TOPIC_COUNT);
+              }} />
+            <span aria-live="polite">{filteredTopics.length} chủ đề</span>
+          </div>
+        </div>
+      </div>
       <div className="vocab-topic-grid" style={topicGridStyle(filteredTopics.length)}>
         {shownTopics.map(item => {
           const remembered = Math.min(Math.max(item.completedWords || 0, 0), item.totalWords || 0);
@@ -201,11 +221,17 @@ export default function VocabularyPage() {
           return <article className="vocab-topic-card" key={item.maChuDe || "demo"}>
             <VocabularyTopicCover name={item.tenChuDe} />
             <div className="vocabulary-topic-details">
-            <span className="vocab-pill available">{isLearner ? item.status : "HỌC THỬ"}</span>
-            <p className="vocabulary-topic-count">{item.totalWords} từ</p>
+            <div className="vocabulary-topic-meta">
+              <span className="vocab-pill available">{isLearner ? item.status : "HỌC THỬ"}</span>
+              <p className="vocabulary-topic-count"><strong>{item.totalWords}</strong> từ</p>
+            </div>
             {isLearner && <>
-              <p className="vocabulary-topic-remembered">{remembered}/{item.totalWords} từ đã nhớ · {percent}%</p>
-              <progress value={remembered} max={item.totalWords || 1} aria-label={`Tiến độ ${item.tenChuDe}: ${percent}%`} />
+              <div className="vocabulary-topic-progress-copy">
+                <span>Đã nhớ <strong>{remembered}/{item.totalWords}</strong> từ</span>
+                <strong>{percent}%</strong>
+              </div>
+              <progress className="vocabulary-topic-progress" value={remembered} max={item.totalWords || 1}
+                aria-label={`Tiến độ ${item.tenChuDe}: ${percent}%`} />
             </>}
             <button type="button" className="primary-button" onClick={() => openTopic(item)}>
               {isLearner ? remembered > 0 && remembered < item.totalWords
@@ -215,17 +241,19 @@ export default function VocabularyPage() {
             </div>
           </article>})}
       </div>
-      {isLearner && hasMore && <button type="button" className="outline-button vocabulary-show-more"
+      {hasMore && <button type="button" className="outline-button vocabulary-show-more"
         onClick={() => setVisibleCount(count => count + INITIAL_TOPIC_COUNT)}>
         Xem thêm chủ đề ({filteredTopics.length - visibleCount} còn lại)</button>}
-      {isLearner && !topics.length && !error && <p>Chưa có chủ đề từ vựng đang mở.</p>}
-      {isLearner && topics.length > 0 && filteredTopics.length === 0 && <p>Không tìm thấy chủ đề phù hợp.</p>}
-      {!isLearner && <p className="vocab-note">Mở khóa thêm chủ đề bằng cách <Link to="/login">đăng nhập</Link> hoặc <Link to="/register">đăng ký</Link>.</p>}
+      {!topics.length && !error && <p>Chưa có chủ đề từ vựng đang mở.</p>}
+      {topics.length > 0 && filteredTopics.length === 0 && <p>Không tìm thấy chủ đề phù hợp.</p>}
+      {!isLearner && <p className="vocab-note">Đăng nhập để học toàn bộ từ và lưu tiến độ của bạn.</p>}
     </>}
 
     {!loading && stage === "list" && <>
       <div className="vocab-list-back">
-        <button type="button" className="vocab-text-button" onClick={() => setStage("topics")}>← Quay lại chủ đề</button>
+        <button type="button" className="vocab-text-button" onClick={() => {
+          setStage("topics"); navigate("/vocabulary");
+        }}>← Quay lại chủ đề</button>
       </div>
       <div className="vocab-banner">
         <strong>{title}</strong>
@@ -259,9 +287,9 @@ export default function VocabularyPage() {
           </div>
         </section>
         {!isLearner && <aside className="vocab-panel vocab-unlock">
-          <h2>Mở khóa thêm chủ đề</h2>
-          <p>Đăng ký tài khoản để học thêm nhiều chủ đề, nghe phát âm và lưu tiến độ học.</p>
-          <Link className="primary-button" to="/register">Đăng ký miễn phí</Link>
+          <h2>Học đầy đủ và lưu tiến độ</h2>
+          <p>Đăng ký tài khoản để học toàn bộ từ trong chủ đề và lưu kết quả học.</p>
+          <Link className="primary-button" to="/register" state={{ returnTo: authReturnTo }}>Đăng ký miễn phí</Link>
         </aside>}
       </div>
     </>}
@@ -292,15 +320,19 @@ export default function VocabularyPage() {
             </span>}
           </button>
           <div className="vocab-card-actions">
-            {isLearner && <div className="vocab-flashcard-tools">
+            {(word.hasAudio || (revealed && word.hasExampleAudio)) && <div className="vocab-flashcard-tools">
               {word.hasAudio && <button type="button" className="outline-button" onClick={() => playAudio()}><FlashcardIcon kind="audio" />Nghe từ</button>}
               {revealed && word.hasExampleAudio && <button type="button" className="outline-button" onClick={() => playAudio(true)}><FlashcardIcon kind="audio" />Nghe câu ví dụ</button>}
             </div>}
             <div className="vocab-flashcard-navigation">
               <button type="button" className="outline-button" disabled={position === 0}
                 onClick={() => { setPosition(value => value - 1); setRevealed(false); }}><FlashcardIcon kind="previous" />Từ trước</button>
-              <button type="button" className="outline-button" disabled={position + 1 === order.length}
-                onClick={() => { setPosition(value => value + 1); setRevealed(false); }}>Từ tiếp theo<FlashcardIcon kind="next" /></button>
+              <button type="button" className="outline-button"
+                disabled={position + 1 === order.length && !previewHasMore}
+                onClick={() => {
+                  if (position + 1 < order.length) { setPosition(value => value + 1); setRevealed(false); }
+                  else if (previewHasMore) requireAuthentication(authReturnTo);
+                }}>Từ tiếp theo<FlashcardIcon kind="next" /></button>
             </div>
             {isLearner && <div className="vocab-decision-actions">
               <button type="button" className="outline-button vocab-memory-forgotten" disabled={busy} aria-pressed={word.trangThai === LEARNING}
@@ -323,11 +355,11 @@ export default function VocabularyPage() {
           onClick={returnToList}>Về danh sách</button>
       </section>
       {!isLearner && <aside className="vocab-panel vocab-unlock">
-        <h2>Mở khóa thêm chủ đề</h2>
-        <p>Đăng ký tài khoản để học thêm nhiều chủ đề, nghe phát âm và lưu tiến độ học.</p>
+        <h2>Học đầy đủ và lưu tiến độ</h2>
+        <p>Đăng ký tài khoản để học toàn bộ từ trong chủ đề và lưu tiến độ học.</p>
         <div className="vocab-unlock-actions">
-          <Link className="primary-button" to="/register">Đăng ký miễn phí</Link>
-          <Link className="outline-button" to="/login">Đăng nhập</Link>
+          <Link className="primary-button" to="/register" state={{ returnTo: authReturnTo }}>Đăng ký miễn phí</Link>
+          <Link className="outline-button" to="/login" state={{ returnTo: authReturnTo }}>Đăng nhập</Link>
         </div>
       </aside>}
     </div>}
@@ -337,10 +369,10 @@ export default function VocabularyPage() {
 function VocabularyTopicCover({ name }) {
   const [imageFailed, setImageFailed] = useState(false);
   const cover = [
-    { pattern: /office|work|công việc/i, image: "office", theme: "office" },
+    { pattern: /office|work|công việc|recruitment|human resources|tuyển dụng|nhân sự/i, image: "office", theme: "office" },
     { pattern: /travel|du lịch/i, image: "travel", theme: "travel" },
-    { pattern: /shopping|mua sắm/i, image: "shopping", theme: "shopping" },
-    { pattern: /business|kinh doanh/i, image: "business", theme: "business" },
+    { pattern: /shopping|retail|mua sắm|bán lẻ/i, image: "shopping", theme: "shopping" },
+    { pattern: /business|kinh doanh|banking|finance|marketing|advertising|ngân hàng|tài chính|tiếp thị|quảng cáo/i, image: "business", theme: "business" },
   ].find(item => item.pattern.test(name || ""));
   return <div className="vocabulary-topic-cover" data-theme={cover?.theme}>
     <img src={cover && !imageFailed ? `/images/vocabulary/${cover.image}.jpg` : "/images/home/vocabulary-card.webp"}

@@ -6,7 +6,11 @@ import { placementApi } from "../../services/examApi";
 import { paymentApi } from "../../services/paymentApi";
 import { checkoutErrorMessage, paymentIdFromSearch, validatedCheckoutUrl } from "../../services/paymentFlow";
 import { usePaymentStatus } from "../../hooks/usePaymentStatus";
-import { CourseCover, courseStage } from "./coursePresentation";
+import { CourseCover } from "./coursePresentation";
+import { courseAudienceLabel, courseEntryReference, courseStage, courseTargetLabel } from "./coursePresentationData";
+import { publicCourseApi } from "../../services/publicCourseApi";
+import { useGuestAuthPrompt } from "../../contexts/GuestAuthPromptState";
+import { loadCourseCatalog, requestGuestCoursePurchase } from "./coursePublicAccess";
 import "../../styles/course.css";
 
 const money = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" });
@@ -19,6 +23,8 @@ const paymentLabels = { CHO_XU_LY: "Đang chờ xác nhận", THANH_CONG: "Thàn
 
 export default function CourseListPage() {
   const { token } = useAuth();
+  const { requireAuthentication } = useGuestAuthPrompt();
+  const isGuest = !token;
   const { search } = useLocation();
   const paymentId = paymentIdFromSearch(search);
   const { view: paymentView, refresh: refreshPayment } = usePaymentStatus(paymentId, token);
@@ -31,9 +37,14 @@ export default function CourseListPage() {
   const [checkout, setCheckout] = useState({ busy: false, message: "" });
   const busyRef = useRef(false);
   useEffect(() => {
-    if (!token) return;
     let live = true;
-    Promise.all([placementApi.courses(token), placementApi.summary(token), paymentApi.history(token)])
+    const request = loadCourseCatalog(token, {
+      loadLearnerCourses: placementApi.courses,
+      loadPlacement: placementApi.summary,
+      loadHistory: paymentApi.history,
+      loadPublicCourses: publicCourseApi.list,
+    });
+    request
       .then(([courses, placement, history]) => {
         if (live) setView({ token, courses, placement, history, error: "" });
       }).catch(() => {
@@ -92,14 +103,15 @@ export default function CourseListPage() {
   }[paymentView.kind] || "Đang kiểm tra thanh toán…";
   return <SiteLayout><main className="site-container course-page">
     <header className="course-page-heading"><div><h1>Khóa học TOEIC</h1>
-      <p>Chọn một hoặc nhiều khóa học, xem giá chính xác và theo dõi quyền học tại đây.</p></div></header>
-    {paymentId && <div className="course-notice" role="status"><strong>Thanh toán #{paymentId}</strong>
+      <p>{isGuest ? "Khám phá chương trình, giai đoạn và mức giá của các khóa học đang mở." :
+        "Chọn một hoặc nhiều khóa học, xem giá chính xác và theo dõi quyền học tại đây."}</p></div></header>
+    {token && paymentId && <div className="course-notice" role="status"><strong>Thanh toán #{paymentId}</strong>
       <span>{paymentMessage}</span><button type="button" onClick={() => { refreshPayment(); setRevision(v => v + 1); }}>Cập nhật</button></div>}
     {search && !paymentId && <p className="exam-error" role="alert">Mã giao dịch trên liên kết không hợp lệ.</p>}
     {error && <p className="exam-error" role="alert">{error} <button type="button" onClick={() => setRevision(v => v + 1)}>Thử lại</button></p>}
     {!courses && !error && <p role="status">Đang tải khóa học…</p>}
     {courses && <>
-      <section className="course-summary"><div><span className="course-kicker">ĐÁNH GIÁ ĐẦU VÀO</span>
+      {!isGuest && <section className="course-summary"><div><span className="course-kicker">ĐÁNH GIÁ ĐẦU VÀO</span>
         <h2>{placement?.currentStage ? `Giai đoạn khởi đầu ${placement.currentStage}` : "Chưa có kết quả KNN"}</h2>
         <p>{placement?.currentStage ? `Kết quả phân lớp từ bài đầu vào gần nhất. ${placement.targetScore ?
           `Mục tiêu TOEIC của bạn: ${placement.targetScore}.` : "Bạn chưa chọn điểm mục tiêu."}` :
@@ -108,38 +120,46 @@ export default function CourseListPage() {
       </div><div><span className="course-kicker">LỘ TRÌNH CỦA BẠN</span>
         <div className="course-roadmap">{[1, 2, 3].map(stage =>
           <div className={recommended.some(course => course.stage === stage) ? "is-recommended" : ""} key={stage}>
-            <strong>{stage}. {courseStage[stage].name}</strong><small>{courseStage[stage].range}</small>
+            <strong>{stage}. {courseStage[stage].name}</strong><small>{courseEntryReference(stage)}</small>
           </div>)}</div>
         <p>{recommended.length ? `Theo giai đoạn KNN và mục tiêu đã chọn, bắt đầu từ giai đoạn ${recommended[0].stage} rồi học đến giai đoạn ${recommended.at(-1).stage}.` :
           "Xác nhận kết quả đầu vào và điểm mục tiêu để đánh dấu các giai đoạn đề xuất."}</p>
-      </div></section>
-      {recommended.length > 0 && <section className="course-section"><h2>Khóa học đề xuất</h2>
+      </div></section>}
+      {!isGuest && recommended.length > 0 && <section className="course-section"><h2>Khóa học đề xuất</h2>
         <p>Thứ tự dựa trên giai đoạn KNN và điểm mục tiêu. Bạn vẫn có thể chọn bất kỳ khóa học đang mở.</p>
         <div className="course-recommend-list">{recommended.map(course => <span key={course.courseId}>
           {course.recommendationOrder}. {course.name}</span>)}</div></section>}
-      <section className="course-section"><h2>Chọn khóa học</h2>
-        <p>Mỗi khóa có thời hạn truy cập sau khi thanh toán được xác nhận. Tổng tiền bằng giá của các khóa đã chọn.</p>
+      <section className="course-section"><h2>{isGuest ? "Danh sách khóa học" : "Chọn khóa học"}</h2>
+        <p>{isGuest ? "Xem thông tin tổng quan; đăng nhập khi bạn muốn mua hoặc truy cập nội dung học." :
+          "Mỗi khóa có thời hạn truy cập sau khi thanh toán được xác nhận. Tổng tiền bằng giá của các khóa đã chọn."}</p>
         {courses.length === 0 && <p>Chưa có khóa học đang mở.</p>}
         <div className="course-grid">{courses.map(course => {
           const purchasable = !["ACTIVE", "PAYMENT_PENDING"].includes(course.accessStatus) &&
             Number.isInteger(course.retailPrice) && course.retailPrice > 0;
           return <article className={`course-card ${course.recommended ? "is-recommended" : ""}`} key={course.courseId}>
             <CourseCover course={course} /><div className="course-card-body">
-              <div className="course-badges"><span className="course-stage-badge">Giai đoạn {course.stage}</span>
+              <div className="course-badges"><span className="course-stage-badge">{courseAudienceLabel(course.stage)}</span>
                 {course.recommended && <span className="course-recommend-badge">Đề xuất {course.recommendationOrder}</span>}</div>
-              <h3>{course.name}</h3><p className="course-score-range">{courseStage[course.stage]?.range}</p>
+              <h3>{course.name}</h3><div className="course-score-summary">
+                <p>{courseEntryReference(course.stage)}</p>
+                <strong>{courseTargetLabel(course.maxTargetScore)}</strong>
+              </div>
               <p className="course-description">{course.description || "Thông tin khóa học đang được cập nhật."}</p>
-              <div className="course-card-bottom"><p className="course-access">{accessLabels[course.accessStatus]}
+              <div className="course-card-bottom"><p className="course-access">{isGuest ? "Thông tin khóa học" : accessLabels[course.accessStatus]}
                 {course.accessStatus === "ACTIVE" && course.accessExpiresAt ? ` · Đến ${date(course.accessExpiresAt)}` : ""}</p>
                 <div className="course-offer"><span>{course.retailPrice > 0 ? money.format(course.retailPrice) :
                   "Chưa có giá bán"} · {course.accessDays} ngày</span>
-                  {purchasable && <label className="course-select"><input type="checkbox"
+                  {!isGuest && purchasable && <label className="course-select"><input type="checkbox"
                     checked={selected.includes(course.courseId)} disabled={checkout.busy}
                     onChange={() => toggle(course.courseId)} /> Chọn khóa học</label>}</div>
-                {course.accessStatus === "ACTIVE" && <Link className="primary-button course-cta" to={`/courses/${course.courseId}`}>Vào học</Link>}
+                {isGuest ? <div className="course-card-actions">
+                  <Link className="outline-button course-cta course-info-cta" to={`/courses/${course.courseId}`}>Xem thông tin</Link>
+                  {purchasable && <button type="button" className="primary-button course-cta"
+                    onClick={() => requestGuestCoursePurchase(requireAuthentication)}>Mua khóa học</button>}
+                </div> : course.accessStatus === "ACTIVE" && <Link className="primary-button course-cta" to={`/courses/${course.courseId}`}>Vào học</Link>}
               </div></div></article>;
         })}</div></section>
-      <section className="course-section course-quotation" aria-live="polite"><h2>Báo giá khóa học</h2>
+      {!isGuest && <section className="course-section course-quotation" aria-live="polite"><h2>Báo giá khóa học</h2>
         {!selected.length && <p>Chọn ít nhất một khóa học để xem báo giá từ hệ thống.</p>}
         {selected.length > 0 && !quoted.data && !quoted.error && <p>Đang tính giá…</p>}
         {quoted.error && <p className="exam-error" role="alert">{quoted.error}</p>}
@@ -151,19 +171,19 @@ export default function CourseListPage() {
           {checkout.message && <p className="exam-error" role="alert">{checkout.message}</p>}
           <button type="button" className="primary-button course-cta" disabled={checkout.busy} onClick={purchase}>
             {checkout.busy ? "Đang xử lý…" : "Xác nhận và tiếp tục đến VNPay"}</button></>}
-      </section>
-      <section className="course-section"><h2>Khóa học đã mua</h2>
+      </section>}
+      {!isGuest && <section className="course-section"><h2>Khóa học đã mua</h2>
         {owned.length ? <div className="course-owned">{owned.map(course => <div key={course.courseId}>
           <strong>{course.name}</strong><span>{accessLabels[course.accessStatus]}
             {course.accessExpiresAt ? ` · Đến ${date(course.accessExpiresAt)}` : ""}</span>
           {course.accessStatus === "ACTIVE" && <Link to={`/courses/${course.courseId}`}>Vào học</Link>}
         </div>)}</div> : <p>Chưa có khóa học đã thanh toán.</p>}
-      </section>
-      <section className="course-section"><details><summary>Lịch sử thanh toán ({history?.length ?? 0})</summary>
+      </section>}
+      {!isGuest && <section className="course-section"><details><summary>Lịch sử thanh toán ({history?.length ?? 0})</summary>
         {history?.length ? <div className="course-history">{history.map(item => <div key={item.maGiaoDich}>
           <strong>#{item.maGiaoDich} · {item.tenGoiHoc}</strong><span>{money.format(item.soTien)}</span>
           <span>{paymentLabels[item.trangThai] || item.trangThai}</span><time>{date(item.ngayTao)}</time>
-        </div>)}</div> : <p>Chưa có giao dịch.</p>}</details></section>
+        </div>)}</div> : <p>Chưa có giao dịch.</p>}</details></section>}
     </>}
   </main></SiteLayout>;
 }

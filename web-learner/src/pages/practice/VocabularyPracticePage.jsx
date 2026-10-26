@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import SiteLayout from "../../layouts/SiteLayout";
 import SessionBoundary from "../../components/auth/SessionBoundary";
 import { useAuth } from "../../contexts/AuthState";
+import { useGuestAuthPrompt } from "../../contexts/GuestAuthPromptState";
 import { apiRequest } from "../../services/api";
 import { buildPracticeQuestions, practiceReducer, practiceResult } from "./vocabularyPractice";
 import { INITIAL_TOPIC_COUNT, topicCatalogView, topicGridStyle, useMobileTopicCatalog } from "./topicCatalog";
@@ -14,6 +15,7 @@ const LOAD_ERROR = "Không thể tải dữ liệu luyện tập.";
 
 export default function VocabularyPracticePage() {
   const { user, token } = useAuth();
+  const { requireAuthentication } = useGuestAuthPrompt();
   return <SiteLayout className="vocab-page"><SessionBoundary>
     <div className="site-container practice-page vocabulary-practice-page">
       <div className="page-heading">
@@ -27,8 +29,8 @@ export default function VocabularyPracticePage() {
           <h2>Đăng nhập để luyện từ vựng</h2>
           <p>Chọn chủ đề và luyện những từ bạn muốn ôn sau khi đăng nhập.</p>
           <div className="practice-actions">
-            <Link className="primary-button" to="/login">Đăng nhập</Link>
-            <Link className="outline-button" to="/register">Đăng ký</Link>
+            <button className="primary-button" type="button" aria-haspopup="dialog"
+              onClick={() => requireAuthentication("/practice/vocabulary")}>Bắt đầu luyện</button>
             <Link className="vocab-text-button" to="/vocabulary">Học thử Office Essentials</Link>
           </div>
         </section>}

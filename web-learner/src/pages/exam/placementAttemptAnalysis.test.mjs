@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { courseForKnnStage, historicalPlacementAnalysis, placementAnalysisForAttempt, shouldLoadPlacementAnalysis, waitForPlacementAnalysis } from "./placementAttemptAnalysis.js";
+import { coursesForKnnStage, historicalPlacementAnalysis, placementAnalysisForAttempt, shouldLoadPlacementAnalysis, waitForPlacementAnalysis } from "./placementAttemptAnalysis.js";
 
 const latest = (attemptId, stage, classification = "AVAILABLE") =>
   ({ result: { attemptId }, classification, stage, targetScore: null });
@@ -74,26 +74,35 @@ test("MOCK and a mismatched route do not start placement analysis", () => {
   assert.equal(shouldLoadPlacementAnalysis({ source: "PLACEMENT", attemptId: 42 }, "42"), true);
 });
 
-test("each saved KNN stage opens its matching real course, including a locked course", () => {
+test("each saved KNN stage exposes its matching real course, including a locked course", () => {
   const courses = [
     { courseId: 11, stage: 1, accessStatus: "LOCKED", recommended: false },
     { courseId: 22, stage: 2, accessStatus: "LOCKED", recommended: true },
     { courseId: 33, stage: 3, accessStatus: "LOCKED", recommended: true },
   ];
   for (const [stage, courseId] of [[1, 11], [2, 22], [3, 33]]) {
-    assert.equal(courseForKnnStage(courses, stage)?.courseId, courseId);
+    assert.deepEqual(coursesForKnnStage(courses, stage).map(course => course.courseId), [courseId]);
   }
 });
 
 test("an old attempt selects its own stage even when the latest course recommendation differs", () => {
   const courses = [{ courseId: 11, stage: 1, recommended: false },
     { courseId: 33, stage: 3, recommended: true }];
-  assert.equal(courseForKnnStage(courses, 1)?.courseId, 11);
+  assert.deepEqual(coursesForKnnStage(courses, 1).map(course => course.courseId), [11]);
 });
 
-test("missing KNN or missing stage course cannot create a roadmap destination", () => {
+test("multiple courses in one KNN stage remain separate choices", () => {
+  const courses = [
+    { courseId: 21, stage: 2, accessStatus: "LOCKED" },
+    { courseId: 22, stage: 2, accessStatus: "ACTIVE" },
+    { courseId: 31, stage: 3, accessStatus: "LOCKED" },
+  ];
+  assert.deepEqual(coursesForKnnStage(courses, 2).map(course => course.courseId), [21, 22]);
+});
+
+test("missing KNN or missing stage course cannot create roadmap choices", () => {
   const courses = [{ courseId: 22, stage: 2, contentCount: 0 }];
-  assert.equal(courseForKnnStage(courses, null), null);
-  assert.equal(courseForKnnStage(courses, 1), null);
-  assert.equal(courseForKnnStage(courses, 2)?.courseId, 22);
+  assert.deepEqual(coursesForKnnStage(courses, null), []);
+  assert.deepEqual(coursesForKnnStage(courses, 1), []);
+  assert.deepEqual(coursesForKnnStage(courses, 2).map(course => course.courseId), [22]);
 });

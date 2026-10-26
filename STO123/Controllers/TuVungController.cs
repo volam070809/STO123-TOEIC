@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using STO123.Models;
+using STO123.Services.Vocabulary;
 
 namespace STO123.Controllers;
 
@@ -13,12 +14,6 @@ public class TuVungController : ControllerBase
 {
     private const string Learning = "DANG_HOC";
     private const string Completed = "DA_THUOC";
-    private static readonly string[] TrialWords =
-    [
-        "appointment", "meeting", "schedule", "manager", "department",
-        "employee", "deadline", "document", "conference", "colleague"
-    ];
-
     private readonly ToeicDbContext db;
     private readonly BlobContainerClient container;
 
@@ -34,21 +29,16 @@ public class TuVungController : ControllerBase
     [HttpGet("demo")]
     public async Task<IActionResult> GetDemo(CancellationToken ct)
     {
-        var topicId = await db.ChuDe.AsNoTracking()
+        var topic = await db.ChuDe.AsNoTracking()
             .Where(x => x.TenChuDe == "Office Essentials" && x.TrangThai == "DANG_MO")
-            .Select(x => (int?)x.MaChuDe).FirstOrDefaultAsync(ct);
-        var query = db.TuVung.AsNoTracking().Where(x => TrialWords.Contains(x.TuVung1));
-        if (topicId.HasValue)
-            query = query.Where(x => x.TuVungChuDe.Any(link => link.MaChuDe == topicId.Value));
-        var words = await query.Select(x => new WordDto(x.MaTuVung, x.TuVung1, x.PhienAm, x.LoaiTu,
-            x.Nghia, x.ViDu, x.DichViDu, null,
-            false, false)).ToListAsync(ct);
-        if (words.Count != TrialWords.Length ||
-            words.Select(x => x.Word).Distinct(StringComparer.OrdinalIgnoreCase).Count() != TrialWords.Length)
-            return StatusCode(503, new { message = "Office Essentials trial is not fully configured." });
-        return Ok(new { tenChuDe = "Office Essentials",
-            words = TrialWords.Select(name => words.Single(x =>
-                string.Equals(x.Word, name, StringComparison.OrdinalIgnoreCase))) });
+            .Select(x => new { x.MaChuDe, x.TenChuDe }).SingleOrDefaultAsync(ct);
+        if (topic is null) return NotFound(new { message = "Office Essentials trial is not configured." });
+        var words = await PublicVocabularyQueries.PreviewLinks(db, topic.MaChuDe)
+            .Select(link => new WordDto(link.MaTuVung, link.MaTuVungNavigation.TuVung1,
+                link.MaTuVungNavigation.PhienAm, link.MaTuVungNavigation.LoaiTu,
+                link.MaTuVungNavigation.Nghia, link.MaTuVungNavigation.ViDu,
+                link.MaTuVungNavigation.DichViDu, null, false, false)).ToListAsync(ct);
+        return Ok(new { tenChuDe = topic.TenChuDe, words });
     }
 
     [Authorize]

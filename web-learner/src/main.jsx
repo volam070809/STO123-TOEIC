@@ -2,6 +2,7 @@
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import "./styles/auth.css";
+import "./styles/admin.css";
 import App from "./App.jsx";
 import { AuthProvider } from "./contexts/AuthContext.jsx";
 

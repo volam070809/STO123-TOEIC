@@ -214,7 +214,7 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
             }).ToList()
         }).ToList();
         return Ok(new { courseId = course.MaKhoaHoc, name = course.TenKhoaHoc,
-            stage = course.GiaiDoan, description = course.MoTa,
+            stage = course.GiaiDoan, maxTargetScore = course.DiemMucTieuToiDa, description = course.MoTa,
             coverImageUrl = course.DuongDanAnhDaiDien,
             recommended = recommended.Contains(course.GiaiDoan),
             accessStatus = hasAccess ? "ACTIVE" : "LOCKED", progress = (object?)null,

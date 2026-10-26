@@ -93,20 +93,99 @@ test("Next is disabled until Check or See Answer", () => {
     /disabled=""[^>]*>Câu tiếp/);
 });
 
-test("See Answer still permits selection; Check locks only that question", () => {
+test("See Answer hides Check; Check locks only that question", () => {
   const viewed = render(PracticeQuestion, { question: question(5), value: "B",
     result: { selectedOption: "B", viewed: true, correctOption: "A", explanation: "Why" },
     onNext: () => {} });
-  assert.match(viewed, /Đã xem đáp án/);
-  assert.match(viewed, /Kiểm tra câu này/);
-  assert.match(viewed, /Giải thích: Why/);
+  assert.match(viewed, /Đáp án đúng/);
+  assert.doesNotMatch(viewed, /Kiểm tra câu này/);
+  assert.match(viewed, /Giải thích/);
+  assert.match(viewed, /Why/);
   assert.match(viewed, /Làm lại câu này/);
   assert.match(viewed, /Câu tiếp →/);
   assert.doesNotMatch(viewed, /checked=""[^>]*disabled=""/);
   const completed = render(PracticeQuestion, { question: question(5), value: "B",
-    result: { selectedOption: "B", checked: true, isCorrect: false, correctOption: "A" } });
+    result: { selectedOption: "B", checked: true, isCorrect: false, correctOption: "A" },
+    onNext: () => {} });
+  assert.match(completed, /Bạn trả lời chưa đúng/);
+  assert.match(completed, /Xem đáp án/);
+  assert.match(completed, /Câu tiếp →/);
+  assert.doesNotMatch(completed, /Đáp án đúng/);
   assert.match(completed, /Làm lại câu này/);
   assert.doesNotMatch(completed, /Kiểm tra câu này/);
+});
+
+test("each question state renders exactly one consistent action row", () => {
+  const baseProps = { question: question(5), onNext: () => {} };
+  const initialEmpty = render(PracticeQuestion, baseProps);
+  assert.equal((initialEmpty.match(/class="practice-part-actions"/g) || []).length, 1);
+  assert.match(initialEmpty, /Xem đáp án/);
+  assert.match(initialEmpty, /practice-check-button" disabled/);
+  assert.doesNotMatch(initialEmpty, /Làm lại câu này|Câu tiếp →/);
+
+  const initialSelected = render(PracticeQuestion, { ...baseProps, value: "B",
+    result: { checked: false, selectedOption: "B" } });
+  assert.equal((initialSelected.match(/class="practice-part-actions"/g) || []).length, 1);
+  assert.match(initialSelected, /Xem đáp án/);
+  assert.doesNotMatch(initialSelected, /practice-check-button" disabled/);
+
+  const checked = render(PracticeQuestion, { ...baseProps, value: "B",
+    result: { checked: true, selectedOption: "B", isCorrect: false, correctOption: "A" } });
+  assert.equal((checked.match(/class="practice-part-actions"/g) || []).length, 1);
+  assert.match(checked, /Xem đáp án/);
+  assert.match(checked, /Làm lại câu này/);
+  assert.match(checked, /Câu tiếp →/);
+  assert.doesNotMatch(checked, /Kiểm tra câu này/);
+
+  const viewed = render(PracticeQuestion, { ...baseProps, value: "B",
+    result: { viewed: true, selectedOption: "B", correctOption: "A", explanation: "Why" } });
+  assert.equal((viewed.match(/class="practice-part-actions"/g) || []).length, 1);
+  assert.match(viewed, /Làm lại câu này/);
+  assert.match(viewed, /Câu tiếp →/);
+  assert.doesNotMatch(viewed, /Xem đáp án|Kiểm tra câu này/);
+
+  const retried = render(PracticeQuestion, { ...baseProps,
+    result: { checked: false, selectedOption: null } });
+  assert.equal((retried.match(/class="practice-part-actions"/g) || []).length, 1);
+  assert.match(retried, /Xem đáp án/);
+  assert.match(retried, /practice-check-button" disabled/);
+  assert.doesNotMatch(retried, /Làm lại câu này|Câu tiếp →/);
+});
+
+test("Check reports only correctness until View answer reveals answer and explanation", () => {
+  const source = { ...question(1), noiDung: "Hidden spoken question", phuongAnA: "Hidden choice A" };
+  const base = { ...question(1), noiDung: null, phuongAnA: null, phuongAnB: null,
+    phuongAnC: null, phuongAnD: null };
+  const checkedResult = { selectedOption: "B", checked: true, isCorrect: false,
+    correctOption: "A", explanation: "Hidden explanation", reveal: source };
+
+  const checkedHtml = render(PracticeQuestion, { question: base, value: "B", result: checkedResult,
+    onNext: () => {} });
+  assert.match(checkedHtml, /Bạn trả lời chưa đúng/);
+  assert.match(checkedHtml, /Xem đáp án/);
+  assert.match(checkedHtml, /Câu tiếp →/);
+  assert.equal((checkedHtml.match(/data-incorrect="true"/g) || []).length, 1);
+  assert.doesNotMatch(checkedHtml, /Đáp án đúng|Hidden explanation|Hidden spoken question|data-correct/);
+
+  const revealedHtml = render(PracticeQuestion, { question: base, value: "B",
+    result: { ...checkedResult, viewed: true } });
+  assert.match(revealedHtml, /Đáp án đúng/);
+  assert.match(revealedHtml, /Hidden explanation/);
+  assert.match(revealedHtml, /Hidden spoken question/);
+  assert.equal((revealedHtml.match(/data-correct="true"/g) || []).length, 1);
+  assert.equal((revealedHtml.match(/data-incorrect="true"/g) || []).length, 1);
+});
+
+test("A correct checked answer turns green without revealing explanation or transcript", () => {
+  const source = { ...question(1), noiDung: "Hidden correct transcript" };
+  const base = { ...question(1), noiDung: null };
+  const checkedHtml = render(PracticeQuestion, { question: base, value: "A",
+    result: { selectedOption: "A", checked: true, isCorrect: true,
+      correctOption: "A", explanation: "Hidden correct explanation", reveal: source } });
+
+  assert.match(checkedHtml, /Bạn trả lời đúng/);
+  assert.equal((checkedHtml.match(/data-correct="true"/g) || []).length, 1);
+  assert.doesNotMatch(checkedHtml, /data-incorrect|Đáp án đúng|Hidden correct explanation|Hidden correct transcript/);
 });
 
 for (const part of [1, 2, 3, 4, 5, 6, 7]) {

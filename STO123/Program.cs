@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using STO123.Models;
+using STO123.Middleware;
+using STO123.Services.Admin;
 using STO123.Services.Auth;
 using STO123.Services.Exam;
 using STO123.Services.Knn;
@@ -58,9 +60,41 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
             RoleClaimType = System.Security.Claims.ClaimTypes.Role
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var idValue = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var role = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+                if (!int.TryParse(idValue, out var userId) || string.IsNullOrWhiteSpace(role))
+                {
+                    context.Fail("Invalid account claims.");
+                    return;
+                }
+
+                try
+                {
+                    var access = context.HttpContext.RequestServices.GetRequiredService<ActiveAccountAccess>();
+                    var valid = await access.IsActiveAsync(userId, role, context.HttpContext.RequestAborted);
+                    if (!valid) context.Fail("Account is not active.");
+                }
+                catch (OperationCanceledException) when (context.HttpContext.RequestAborted.IsCancellationRequested)
+                {
+                    // The browser ended this request (for example after a client timeout). Do not let an
+                    // expected request cancellation escape the JWT event as a user-unhandled exception.
+                    context.NoResult();
+                }
+            }
+        };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AdminAuthorization.ManagementPolicy,
+        policy => policy.RequireRole(AdminAuthorization.ManagementRole));
+    options.AddPolicy(AdminAuthorization.CourseReadPolicy,
+        policy => policy.RequireRole(AdminAuthorization.ManagementRole, AdminAuthorization.ContentRole));
+});
 
 builder.Services.AddOptions<VNPayOptions>()
     .Bind(builder.Configuration.GetSection(VNPayOptions.SectionName))
@@ -93,8 +127,10 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
 builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<ActiveAccountAccess>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddSingleton<AvatarStorage>();
+builder.Services.AddSingleton<CourseImageStorage>();
 builder.Services.AddScoped<ExamGenerationService>();
 builder.Services.AddScoped<PersistedExamTemplate>();
 builder.Services.AddScoped<PersistedExamSnapshotWriter>();
@@ -134,6 +170,7 @@ app.UseHttpsRedirection();
 
 app.UseCors(frontendCorsPolicy);
 
+app.UseMiddleware<RequestCancellationMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 
