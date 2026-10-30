@@ -5,7 +5,7 @@ import { loginDestination, preservePendingAuthReturnTo, requiresEmailVerificatio
 
 test("normal login sends management admin to Dashboard", () => {
   assert.equal(loginDestination("ADMIN_QUAN_LY", null), "/admin");
-  assert.equal(loginDestination("ADMIN_NOI_DUNG", null), "/admin/courses");
+  assert.equal(loginDestination("ADMIN_NOI_DUNG", null), "/admin/content");
   assert.equal(loginDestination("HOC_VIEN", null), "/");
 });
 

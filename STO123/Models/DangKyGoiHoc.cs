@@ -37,9 +37,10 @@ public partial class DangKyGoiHoc
     public string TrangThai { get; set; }
 
     [InverseProperty("MaDangKyNavigation")]
-    public virtual ICollection<GiaoDichThanhToan> GiaoDichThanhToan { get; set; } = new List<GiaoDichThanhToan>();
-
     public virtual ICollection<ChiTietDangKyKhoaHoc> ChiTietDangKyKhoaHoc { get; set; } = new List<ChiTietDangKyKhoaHoc>();
+
+    [InverseProperty("MaDangKyNavigation")]
+    public virtual ICollection<GiaoDichThanhToan> GiaoDichThanhToan { get; set; } = new List<GiaoDichThanhToan>();
 
     [ForeignKey("MaGoiHoc")]
     [InverseProperty("DangKyGoiHoc")]
@@ -48,4 +49,7 @@ public partial class DangKyGoiHoc
     [ForeignKey("MaNguoiDung")]
     [InverseProperty("DangKyGoiHoc")]
     public virtual NguoiDung MaNguoiDungNavigation { get; set; }
+
+    [InverseProperty("MaDangKyNavigation")]
+    public virtual ICollection<TienDoBuocLoTrinh> TienDoBuocLoTrinh { get; set; } = new List<TienDoBuocLoTrinh>();
 }

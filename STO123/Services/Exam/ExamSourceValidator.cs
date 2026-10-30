@@ -65,6 +65,7 @@ public static class ExamSourceValidator
                 continue;
             }
             orderedParts.Add(part);
+            if (question.LoaiCauHoi != "DE_THI") Add("SOURCE_BANK_INVALID", $"Câu {id} không thuộc ngân hàng đề thi.");
             if (!ValidQuestion(question, part)) Add("QUESTION_INVALID", $"Câu {id} chưa xuất bản hoặc đáp án không hợp lệ.");
             if (part == 5)
             {
@@ -79,7 +80,7 @@ public static class ExamSourceValidator
             if (!seenGroups.Add(member.MaNguLieu)) continue;
             var group = byResource[member.MaNguLieu];
             if (!ValidGroup(part, group) || group.Any(m => !questions.TryGetValue(m.MaCauHoi, out var q) ||
-                !partNumbers.TryGetValue(q.MaPart, out var number) || number != part || !ValidQuestion(q, part)))
+                !partNumbers.TryGetValue(q.MaPart, out var number) || number != part || q.LoaiCauHoi != "DE_THI" || !ValidQuestion(q, part)))
                 Add("GROUP_INVALID", $"Nhóm {member.MaNguLieu} thiếu câu, sai Part hoặc sai thứ tự.");
             var expected = group.OrderBy(m => m.ThuTu).Select(m => m.MaCauHoi).ToArray();
             if (!links.Skip(i).Take(expected.Length).Select(l => l.MaCauHoi).SequenceEqual(expected))

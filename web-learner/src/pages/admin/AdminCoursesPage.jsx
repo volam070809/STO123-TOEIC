@@ -69,18 +69,13 @@ export default function AdminCoursesPage() {
       {loading ? <CourseLoading /> : current.error ? <AdminMessage title="Không tải được dữ liệu" detail={current.error}
         action={<button className="admin-button" type="button" onClick={() => setRevision(value => value + 1)}>Thử lại</button>} /> :
         result?.items?.length ? <>
-          <div className="admin-table-wrap"><table className="admin-table admin-course-table">
-            <thead><tr><th>Khóa học</th><th>Giai đoạn</th><th>Giá bán lẻ</th><th>Trạng thái</th><th>Cấu trúc</th><th>Liên kết</th><th><span className="sr-only">Chi tiết</span></th></tr></thead>
-            <tbody>{result.items.map(course => <tr key={course.courseId}>
-              <td><strong className="admin-cell-main">{course.name}</strong><small>ID #{course.courseId} · Tạo {formatDate(course.createdAt)}{course.contentAdminName ? ` · ${course.contentAdminName}` : ""}</small></td>
-              <td><strong className="admin-metric">{course.stage}</strong><small>Mục tiêu đến {course.maxTargetScore}</small></td>
-              <td><strong className="admin-cell-main">{course.retailPrice == null ? "Chưa đặt giá" : formatMoney(course.retailPrice)}</strong></td>
-              <td><span className={`admin-status is-${statusTone(course.status)}`}>{statusLabel(course.status)}</span></td>
-              <td><strong className="admin-cell-main">{course.unitCount} unit · {course.lessonCount} bài</strong><small>{course.stepCount} bước lộ trình</small></td>
-              <td><strong className="admin-cell-main">{course.packageCount} gói học</strong><small>{course.directEnrollmentCount} đăng ký trực tiếp</small></td>
-              <td><Link className="admin-row-link" to={`/admin/courses/${course.courseId}`}>Xem <span aria-hidden="true">→</span></Link></td>
-            </tr>)}</tbody>
-          </table></div>
+          <div className="admin-course-gallery">{result.items.map(course => <article className="admin-course-tile" key={course.courseId}>
+            <div className="admin-course-tile-top"><span className="admin-course-stage">G{course.stage}</span><span className={`admin-status is-${statusTone(course.status)}`}>{statusLabel(course.status)}</span></div>
+            <div><small>KHÓA HỌC #{course.courseId} · {formatDate(course.createdAt)}</small><h2>{course.name}</h2><p>{course.contentAdminName ? `Phụ trách nội dung: ${course.contentAdminName}` : "Chưa gán người phụ trách nội dung"}</p></div>
+            <dl><div><dt>Đơn vị</dt><dd>{course.unitCount}</dd></div><div><dt>Bài học</dt><dd>{course.lessonCount}</dd></div><div><dt>Hoạt động</dt><dd>{course.stepCount}</dd></div></dl>
+            <p className="admin-course-tile-meta">Giai đoạn {course.stage} · Mục tiêu {course.maxTargetScore} · {course.retailPrice == null ? "Chưa đặt giá" : formatMoney(course.retailPrice)}</p>
+            <div className="admin-course-tile-actions"><Link to={`/admin/courses/${course.courseId}`}>Tổng quan</Link><Link className="admin-button" to={`/admin/courses/${course.courseId}/content`}>Mở Studio →</Link></div>
+          </article>)}</div>
           <CoursePagination {...result} onPage={next => updateParams({ page: next === 1 ? "" : next })} />
         </> : <AdminMessage title="Không tìm thấy khóa học"
           detail={search || status || stage ? "Hãy thử từ khóa hoặc bộ lọc khác." : "Chưa có khóa học trong hệ thống."}

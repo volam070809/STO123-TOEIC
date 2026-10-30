@@ -27,10 +27,11 @@ public partial class TaiNguyenBaiGiang
 
     [Required]
     [StringLength(512)]
-    [Unicode(false)]
     public string DuongDanTep { get; set; }
 
     public int ThuTu { get; set; }
+
+    public bool IsArchived { get; set; }
 
     [ForeignKey("MaBaiGiang")]
     [InverseProperty("TaiNguyenBaiGiang")]

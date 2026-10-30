@@ -163,7 +163,7 @@ public sealed class AdminLearnersController(ToeicDbContext db) : ControllerBase
             .SingleOrDefaultAsync(ct);
 
         var progress = await db.TienDoBuocLoTrinh.AsNoTracking()
-            .Where(step => step.MaNguoiDung == learnerId)
+            .Where(step => step.MaDangKyNavigation.MaNguoiDung == learnerId)
             .Select(step => new { step.TrangThai, step.TyLeHoanThanh, step.CapNhatLuc })
             .ToListAsync(ct);
         var percentages = progress.Where(step => step.TyLeHoanThanh.HasValue)

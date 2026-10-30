@@ -11,7 +11,7 @@ namespace STO123.Controllers;
 [Authorize(Roles = "HOC_VIEN")]
 [ApiController]
 [Route("api/mock-tests")]
-public sealed class MockTestsController(ToeicDbContext db, ExamAttemptService attempts) : ControllerBase
+public sealed class MockTestsController(ToeicDbContext db, ExamAttemptService attempts, IConfiguration configuration) : ControllerBase
 {
     private int LearnerId => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id :
         throw new ExamProblem("ATTEMPT_FORBIDDEN", "Phiên đăng nhập không hợp lệ.", 403);
@@ -20,9 +20,8 @@ public sealed class MockTestsController(ToeicDbContext db, ExamAttemptService at
     public async Task<IActionResult> List(CancellationToken ct)
     {
         var learnerId = LearnerId;
-        var rows = await db.DeThi.AsNoTracking()
-            .Where(x => x.LoaiDe == "DE_THI" && x.TrangThai == "OPEN" &&
-                x.ThoiGianLamBai == ExamCore.DurationMinutes)
+        var placementId = configuration.GetValue<int>("Placement:DefaultExamId");
+        var rows = await MockExamEligibility.Visible(db.DeThi.AsNoTracking(), placementId)
             .Select(x => new {
                 ExamId = x.MaDeThi, ExamName = x.TenDe, Duration = x.ThoiGianLamBai,
                 Completed = x.KetQuaLamBai.Any(a => a.MaHocVien == learnerId &&

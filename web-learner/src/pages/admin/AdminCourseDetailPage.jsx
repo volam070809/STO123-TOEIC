@@ -83,6 +83,8 @@ export default function AdminCourseDetailPage() {
       {course.description && <p className="admin-course-description">{course.description}</p>}
     </section>
 
+    <nav className="admin-course-workflow" aria-label="Quy trình quản lý khóa học"><div><span>01</span><strong>Tổng quan</strong><small>Thông tin và trạng thái</small></div><Link to={`/admin/courses/${courseId}/content`}><span>02</span><strong>Biên soạn Studio →</strong><small>Unit, Lesson, hoạt động và tài nguyên</small></Link><Link to={`/courses/${courseId}`}><span>03</span><strong>Xem trang khóa học →</strong><small>Kiểm tra hành trình học viên</small></Link></nav>
+
     <div className="admin-stat-grid"><Stat label="Đơn vị" value={course.units.length} note="unit trong khóa học" />
       <Stat label="Bài học" value={lessonCount} note="lesson đã cấu hình" />
       <Stat label="Bước lộ trình" value={stepCount} note="nội dung học tập" />
@@ -90,6 +92,7 @@ export default function AdminCourseDetailPage() {
 
     <section className="admin-panel admin-detail-section">
       <div className="admin-section-heading"><div><h2>Cấu trúc khóa học</h2><p>Unit, bài học và số bước lộ trình hiện có</p></div></div>
+      <Link className="admin-button" to={`/admin/courses/${courseId}/content`}>Biên soạn lộ trình</Link>
       {course.units.length ? <div className="admin-course-outline">{course.units.map(unit => <article key={unit.unitId} className="admin-course-unit">
         <div><span>UNIT {unit.order}</span><h3>{unit.name}</h3>{unit.description && <p>{unit.description}</p>}</div>
         {unit.lessons.length ? <ol>{unit.lessons.map(lesson => <li key={lesson.lessonId}>

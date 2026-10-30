@@ -18,7 +18,7 @@ public sealed class PersistedExamTemplate(ToeicDbContext db, RandomStartProfiler
             SELECT MaDeThi, LoaiDe, TrangThai, ThoiGianLamBai FROM dbo.DeThi WHERE MaDeThi = @exam;
             SELECT l.MaCauHoi, l.ThuTu, q.MaPart, p.SoPart, q.NoiDung, q.PhuongAnA,
                    q.PhuongAnB, q.PhuongAnC, q.PhuongAnD, q.PhuongAnDung, q.GiaiThich,
-                   q.DoKho, q.TrangThai
+                   q.DoKho, q.TrangThai, q.LoaiCauHoi
             FROM dbo.CauHoiDeThi l JOIN dbo.CauHoi q ON q.MaCauHoi = l.MaCauHoi
             JOIN dbo.PartTOEIC p ON p.MaPart = q.MaPart
             WHERE l.MaDeThi = @exam ORDER BY l.ThuTu;
@@ -70,7 +70,7 @@ public sealed class PersistedExamTemplate(ToeicDbContext db, RandomStartProfiler
                     PhuongAnA = reader.GetString(5), PhuongAnB = reader.GetString(6),
                     PhuongAnC = reader.GetString(7), PhuongAnD = Optional(reader, 8),
                     PhuongAnDung = reader.GetString(9), GiaiThich = Optional(reader, 10),
-                    DoKho = reader.GetByte(11), TrangThai = reader.GetString(12)
+                    DoKho = reader.GetByte(11), TrangThai = reader.GetString(12), LoaiCauHoi = reader.GetString(13)
                 });
                 partNumbers[partId] = reader.GetInt32(3);
             }
@@ -104,7 +104,7 @@ public sealed class PersistedExamTemplate(ToeicDbContext db, RandomStartProfiler
             {
                 var q = questions[link.MaCauHoi];
                 var part = partNumbers[q.MaPart];
-                if (!ExamSourceValidator.ValidQuestion(q, part)) throw Invalid();
+                if (q.LoaiCauHoi != "DE_THI" || !ExamSourceValidator.ValidQuestion(q, part)) throw Invalid();
                 if (part == 5)
                 {
                     if (membersByQuestion.ContainsKey(q.MaCauHoi)) throw Invalid();
@@ -116,7 +116,8 @@ public sealed class PersistedExamTemplate(ToeicDbContext db, RandomStartProfiler
                 if (units.Any(x => x.Resource?.MaNguLieu == resource.MaNguLieu)) continue;
                 var group = membersByResource[resource.MaNguLieu];
                 if (group.Any(x => !selectedIds.Contains(x.MaCauHoi)) ||
-                    group.Any(x => partNumbers.GetValueOrDefault(questions[x.MaCauHoi].MaPart) != part) ||
+                    group.Any(x => partNumbers.GetValueOrDefault(questions[x.MaCauHoi].MaPart) != part ||
+                        questions[x.MaCauHoi].LoaiCauHoi != "DE_THI") ||
                     !ExamSourceValidator.ValidGroup(part, group) || !ExamSourceValidator.ValidMedia(resource, part)) throw Invalid();
                 var docs = docsByResource.GetValueOrDefault(resource.MaNguLieu, []);
                 if (!ExamSourceValidator.ValidDocuments(part, docs)) throw Invalid();

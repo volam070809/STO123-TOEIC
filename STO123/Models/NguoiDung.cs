@@ -47,6 +47,9 @@ public partial class NguoiDung
     [Column(TypeName = "datetime")]
     public DateTime? LanDangNhapCuoi { get; set; }
 
+    [InverseProperty("MaAdminNavigation")]
+    public virtual ICollection<AdminContentIdempotency> AdminContentIdempotency { get; set; } = new List<AdminContentIdempotency>();
+
     [InverseProperty("MaAdminNoiDungNavigation")]
     public virtual ICollection<BaiGiang> BaiGiang { get; set; } = new List<BaiGiang>();
 

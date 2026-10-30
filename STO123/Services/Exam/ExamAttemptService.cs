@@ -26,6 +26,8 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
     }
     private async Task<int> StartPersistedMockAsync(int learnerId, int examId, CancellationToken ct)
     {
+        if (examId == configuration.GetValue<int>("Placement:DefaultExamId"))
+            throw new ExamProblem("EXAM_NOT_OPEN", "Đề thi này không dành cho Mock.", 409);
         using var startProfile = profile.Begin(environment.IsDevelopment());
         var total = Stopwatch.StartNew();
         using var decisionPhase = profile.Phase("startDecision");

@@ -8,10 +8,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace STO123.Models;
 
-[Keyless]
 [Index("MaDangKy", "MaBuoc", Name = "UQ_TienDoBuocLoTrinh_MaDangKy_MaBuoc", IsUnique = true)]
 public partial class TienDoBuocLoTrinh
 {
+    [Key]
     public int MaTienDoBLT { get; set; }
 
     public int MaNguoiDung { get; set; }
@@ -33,11 +33,14 @@ public partial class TienDoBuocLoTrinh
     public int MaDangKy { get; set; }
 
     [ForeignKey("MaBuoc")]
+    [InverseProperty("TienDoBuocLoTrinh")]
     public virtual BuocLoTrinh MaBuocNavigation { get; set; }
 
     [ForeignKey("MaDangKy")]
+    [InverseProperty("TienDoBuocLoTrinh")]
     public virtual DangKyGoiHoc MaDangKyNavigation { get; set; }
 
     [ForeignKey("MaKetQua")]
+    [InverseProperty("TienDoBuocLoTrinh")]
     public virtual KetQuaLamBai MaKetQuaNavigation { get; set; }
 }

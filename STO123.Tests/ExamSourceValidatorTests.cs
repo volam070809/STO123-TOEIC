@@ -47,7 +47,7 @@ public class ExamSourceValidatorTests
                 {
                     var id = ++nextQuestion;
                     fixture.Questions.Add(id, new CauHoi { MaCauHoi = id, MaPart = part,
-                        TrangThai = ExamCore.Published, PhuongAnA = "A", PhuongAnB = "B",
+                        TrangThai = ExamCore.Published, LoaiCauHoi = "DE_THI", PhuongAnA = "A", PhuongAnB = "B",
                         PhuongAnC = "C", PhuongAnD = part == 2 ? null : "D", PhuongAnDung = "A" });
                     fixture.Links.Add(new CauHoiDeThi { MaCauHoi = id, ThuTu = id });
                     if (part != 5) fixture.Members.Add(new NhomCauHoi { MaCauHoi = id,
@@ -63,6 +63,14 @@ public class ExamSourceValidatorTests
     {
         var fixture = CompleteExam();
         Assert.True(fixture.Validate().Valid);
+    }
+
+    [Fact]
+    public void Practice_question_cannot_enter_fixed_exam()
+    {
+        var fixture = CompleteExam();
+        fixture.Questions[1].LoaiCauHoi = "LUYEN_TAP";
+        Assert.Contains(fixture.Validate().Issues, x => x.Code == "SOURCE_BANK_INVALID");
     }
 
     [Fact]

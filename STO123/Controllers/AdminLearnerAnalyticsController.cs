@@ -59,7 +59,7 @@ public sealed class AdminLearnerAnalyticsController(ToeicDbContext db, TimeProvi
                 attempt.NgayNopBai ?? attempt.NgayBatDau, attempt.MaLanLuyen))
             .ToListAsync(ct);
         var courseActivity = await db.TienDoBuocLoTrinh.AsNoTracking()
-            .Where(progress => progress.MaNguoiDung == learnerId)
+            .Where(progress => progress.MaDangKyNavigation.MaNguoiDung == learnerId)
             .OrderByDescending(progress => progress.CapNhatLuc).Take(8)
             .Select(progress => new AdminLearnerActivityDto(
                 "COURSE", "Tiến độ khóa học", progress.TrangThai,

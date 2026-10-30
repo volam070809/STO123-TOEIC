@@ -25,6 +25,8 @@ public partial class UnitKhoaHoc
 
     public int ThuTu { get; set; }
 
+    public bool IsArchived { get; set; }
+
     [InverseProperty("MaUnitNavigation")]
     public virtual ICollection<LessonKhoaHoc> LessonKhoaHoc { get; set; } = new List<LessonKhoaHoc>();
 

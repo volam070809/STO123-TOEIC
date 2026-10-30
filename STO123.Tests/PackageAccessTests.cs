@@ -12,6 +12,19 @@ namespace STO123.Tests;
 
 public sealed class PackageAccessTests
 {
+    [Theory]
+    [InlineData(1, 3, 33.33)]
+    [InlineData(2, 7, 28.57)]
+    [InlineData(4, 11, 36.36)]
+    [InlineData(5, 8, 62.50)]
+    [InlineData(9, 11, 81.82)]
+    [InlineData(10, 10, 100)]
+    [InlineData(0, 0, 0)]
+    public void Course_progress_uses_total_units_not_average_of_children(int done, int total, double expected)
+    {
+        Assert.Equal((decimal)expected, PlacementController.CourseProgressPercent(done, total));
+    }
+
     private static readonly DateTimeOffset Now = new(2026, 10, 15, 3, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -217,12 +230,15 @@ public sealed class PackageAccessTests
                     DiemMucTieu INTEGER NULL, PhienBanMoHinh TEXT NOT NULL,
                     NgayPhanLop TEXT NOT NULL);
                 CREATE TABLE UnitKhoaHoc (MaUnit INTEGER PRIMARY KEY, MaKhoaHoc INTEGER NOT NULL,
-                    TenUnit TEXT NOT NULL, MoTa TEXT NULL, ThuTu INTEGER NOT NULL);
+                    TenUnit TEXT NOT NULL, MoTa TEXT NULL, ThuTu INTEGER NOT NULL, IsArchived INTEGER NOT NULL DEFAULT 0);
                 CREATE TABLE LessonKhoaHoc (MaLesson INTEGER PRIMARY KEY, MaUnit INTEGER NOT NULL,
-                    TenLesson TEXT NOT NULL, MoTa TEXT NULL, ThuTu INTEGER NOT NULL);
+                    TenLesson TEXT NOT NULL, MoTa TEXT NULL, ThuTu INTEGER NOT NULL, IsArchived INTEGER NOT NULL DEFAULT 0);
                 CREATE TABLE BuocLoTrinh (MaBuoc INTEGER PRIMARY KEY, MaLesson INTEGER NOT NULL,
                     TieuDe TEXT NOT NULL, ThuTu INTEGER NOT NULL, MaBaiGiang INTEGER NULL,
-                    MaDeThi INTEGER NULL, MaChuDe INTEGER NULL);
+                    MaDeThi INTEGER NULL, MaChuDe INTEGER NULL, MaBaiTap INTEGER NULL, IsArchived INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE TienDoBuocLoTrinh (MaTienDoBLT INTEGER PRIMARY KEY, MaNguoiDung INTEGER NOT NULL,
+                    MaDangKy INTEGER NOT NULL, MaBuoc INTEGER NOT NULL, TrangThai TEXT NOT NULL,
+                    TyLeHoanThanh INTEGER NULL, MaKetQua INTEGER NULL, CapNhatLuc TEXT NOT NULL);
                 """);
             db.GoiHoc.AddRange(
                 new GoiHoc { MaGoiHoc = 1, TenGoiHoc = "Gói A", Gia = 120_000m,

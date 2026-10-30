@@ -15,6 +15,8 @@ namespace STO123.Controllers;
 public sealed class PlacementController(ToeicDbContext db, ExamAttemptService attempts,
     KnnDiagnosticsStore diagnostics, TimeProvider clock) : ControllerBase
 {
+    public static decimal CourseProgressPercent(int completedUnits, int totalUnits) => totalUnits <= 0 ? 0 :
+        Math.Round(100m * completedUnits / totalUnits, 2, MidpointRounding.AwayFromZero);
     private int LearnerId => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id :
         throw new ExamProblem("ATTEMPT_FORBIDDEN", "Phiên đăng nhập không hợp lệ.", 403);
 
@@ -204,12 +206,77 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
         var knn = await CurrentKnn(ct);
         var recommended = CourseRecommendation.RecommendedStages([course], knn?.GiaiDoanDeXuat,
             knn?.DiemMucTieu);
-        var units = course.UnitKhoaHoc.OrderBy(u => u.ThuTu).Select(u => new {
-            name = u.TenUnit, description = u.MoTa,
-            lessons = u.LessonKhoaHoc.OrderBy(l => l.ThuTu).Select(l => new {
-                name = l.TenLesson, description = l.MoTa,
-                contents = l.BuocLoTrinh.OrderBy(b => b.ThuTu).Select(b => new {
-                    title = b.TieuDe, locked = true
+        var progressRows = await db.TienDoBuocLoTrinh.AsNoTracking()
+            .Where(p => p.MaDangKyNavigation.MaNguoiDung == LearnerId && p.MaBuocNavigation.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc == courseId)
+            .Select(p => new { p.MaBuoc, p.TrangThai }).ToListAsync(ct);
+        var completed = progressRows.Where(p => p.TrangThai == "HOAN_THANH").Select(p => p.MaBuoc).ToHashSet();
+        var started = progressRows.Where(p => p.TrangThai == "DANG_LAM").Select(p => p.MaBuoc).ToHashSet();
+        var exerciseSteps = course.UnitKhoaHoc.Where(u => !u.IsArchived)
+            .SelectMany(u => u.LessonKhoaHoc.Where(l => !l.IsArchived))
+            .SelectMany(l => l.BuocLoTrinh.Where(s => !s.IsArchived)).Where(s => s.MaBaiTap != null).ToList();
+        var stepIds = exerciseSteps.Select(s => s.MaBuoc).ToArray();
+        var exerciseIds = exerciseSteps.Select(s => s.MaBaiTap!.Value).Distinct().ToArray();
+        var enrollmentIds = await db.DangKyGoiHoc.AsNoTracking().Where(e => e.MaNguoiDung == LearnerId)
+            .Select(e => e.MaDangKy).ToArrayAsync(ct);
+        var attempts = stepIds.Length == 0 ? new List<LuotBaiTapKhoaHoc>() : await db.LuotBaiTapKhoaHoc.AsNoTracking()
+            .Where(a => enrollmentIds.Contains(a.MaDangKy) && stepIds.Contains(a.MaBuoc)).ToListAsync(ct);
+        var attemptIds = attempts.Select(a => a.MaLuot).ToArray();
+        var checkedRows = attemptIds.Length == 0 ? new List<LanKiemTraBaiTapKhoaHoc>() : await db.LanKiemTraBaiTapKhoaHoc.AsNoTracking()
+            .Where(c => attemptIds.Contains(c.MaLuot)).ToListAsync(ct);
+        var versions = exerciseIds.Length == 0 ? new List<PhienBanBaiTapKhoaHoc>() : await db.PhienBanBaiTapKhoaHoc.AsNoTracking()
+            .Where(v => exerciseIds.Contains(v.MaBaiTap) && v.TrangThai == "XUAT_BAN")
+            .ToListAsync(ct);
+        var versionIds = versions.Select(v => v.MaPhienBan).Concat(attempts.Select(a => a.MaPhienBan)).Distinct().ToArray();
+        var questionCounts = versionIds.Length == 0 ? new Dictionary<int, int>() : await db.CauHoiBaiTapKhoaHoc.AsNoTracking()
+            .Where(q => versionIds.Contains(q.MaPhienBan)).GroupBy(q => q.MaPhienBan)
+            .Select(g => new { VersionId = g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.VersionId, x => x.Count, ct);
+        (int done, int total) Units(BuocLoTrinh step)
+        {
+            if (step.MaDeThi is not null) return (0, 0);
+            if (step.MaBaiTap is not { } exerciseId) return (completed.Contains(step.MaBuoc) ? 1 : 0, 1);
+            var published = versions.Where(v => v.MaBaiTap == exerciseId).OrderByDescending(v => v.SoPhienBan).FirstOrDefault();
+            var versionId = published?.MaPhienBan ?? 0;
+            var total = questionCounts.GetValueOrDefault(versionId);
+            var currentAttemptIds = attempts.Where(a => a.MaBuoc == step.MaBuoc && a.MaPhienBan == versionId)
+                .Select(a => a.MaLuot).ToHashSet();
+            var done = checkedRows.Where(c => currentAttemptIds.Contains(c.MaLuot))
+                .Select(c => c.MaCauHoi).Distinct().Count();
+            return (Math.Min(done, total), total);
+        }
+        string Status(BuocLoTrinh step)
+        {
+            var units = Units(step);
+            if (step.MaBaiTap is not null)
+            {
+                var currentVersion = versions.Where(v => v.MaBaiTap == step.MaBaiTap)
+                    .OrderByDescending(v => v.SoPhienBan).FirstOrDefault()?.MaPhienBan;
+                return units.total > 0 && units.done == units.total ? "HOAN_THANH" :
+                    units.done > 0 || attempts.Any(a => a.MaBuoc == step.MaBuoc &&
+                        a.MaPhienBan == currentVersion && a.TrangThai == "DANG_LAM") ? "DANG_LAM" : "CHUA_LAM";
+            }
+            return completed.Contains(step.MaBuoc) ? "HOAN_THANH" :
+                started.Contains(step.MaBuoc) ? "DANG_LAM" : "CHUA_LAM";
+        }
+        static decimal Percent(int done, int total) => CourseProgressPercent(done, total);
+        var units = course.UnitKhoaHoc.Where(u => !u.IsArchived).OrderBy(u => u.ThuTu).Select(u => new {
+            id = u.MaUnit, name = u.TenUnit, description = u.MoTa,
+            completedUnits = u.LessonKhoaHoc.Where(l => !l.IsArchived).Sum(l => l.BuocLoTrinh.Where(b => !b.IsArchived).Sum(b => Units(b).done)),
+            totalUnits = u.LessonKhoaHoc.Where(l => !l.IsArchived).Sum(l => l.BuocLoTrinh.Where(b => !b.IsArchived).Sum(b => Units(b).total)),
+            progress = Percent(u.LessonKhoaHoc.Where(l => !l.IsArchived).Sum(l => l.BuocLoTrinh.Where(b => !b.IsArchived).Sum(b => Units(b).done)),
+                u.LessonKhoaHoc.Where(l => !l.IsArchived).Sum(l => l.BuocLoTrinh.Where(b => !b.IsArchived).Sum(b => Units(b).total))),
+            lessons = u.LessonKhoaHoc.Where(l => !l.IsArchived).OrderBy(l => l.ThuTu).Select(l => new {
+                id = l.MaLesson, name = l.TenLesson, description = l.MoTa,
+                completedUnits = l.BuocLoTrinh.Where(b => !b.IsArchived).Sum(b => Units(b).done),
+                totalUnits = l.BuocLoTrinh.Where(b => !b.IsArchived).Sum(b => Units(b).total),
+                progress = Percent(l.BuocLoTrinh.Where(b => !b.IsArchived).Sum(b => Units(b).done), l.BuocLoTrinh.Where(b => !b.IsArchived).Sum(b => Units(b).total)),
+                contents = l.BuocLoTrinh.Where(b => !b.IsArchived).OrderBy(b => b.ThuTu).Select(b => new {
+                    id = b.MaBuoc, title = b.TieuDe,
+                    completedUnits = Units(b).done, totalUnits = Units(b).total,
+                    progress = Percent(Units(b).done, Units(b).total),
+                    progressStatus = Status(b),
+                    type = b.MaBaiGiang != null ? "LECTURE" : b.MaChuDe != null ? "VOCABULARY" : b.MaBaiTap != null ? "EXERCISE" : "EXAM",
+                    locked = b.MaDeThi != null || b.MaBaiTap != null &&
+                        !db.PhienBanBaiTapKhoaHoc.Any(v => v.MaBaiTap == b.MaBaiTap && v.TrangThai == "XUAT_BAN")
                 }).ToList()
             }).ToList()
         }).ToList();
@@ -217,7 +284,11 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
             stage = course.GiaiDoan, maxTargetScore = course.DiemMucTieuToiDa, description = course.MoTa,
             coverImageUrl = course.DuongDanAnhDaiDien,
             recommended = recommended.Contains(course.GiaiDoan),
-            accessStatus = hasAccess ? "ACTIVE" : "LOCKED", progress = (object?)null,
+            accessStatus = hasAccess ? "ACTIVE" : "LOCKED",
+            completedUnits = units.Sum(u => u.lessons.Sum(l => l.completedUnits)),
+            totalUnits = units.Sum(u => u.lessons.Sum(l => l.totalUnits)),
+            progress = Percent(units.Sum(u => u.lessons.Sum(l => l.completedUnits)),
+                units.Sum(u => u.lessons.Sum(l => l.totalUnits))),
             contentCount = units.Sum(u => u.lessons.Sum(l => l.contents.Count)), units });
         }
         catch (ExamProblem e) { return Problem(e); }

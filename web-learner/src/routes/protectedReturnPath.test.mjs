@@ -24,6 +24,8 @@ test("vocabulary topic survives authentication without accepting preview bypass 
 test("course links survive login without accepting external redirects", () => {
   assert.equal(protectedReturnPath("/courses"), "/courses");
   assert.equal(protectedReturnPath("/courses/3"), "/courses/3");
+  assert.equal(protectedReturnPath("/courses/3/steps/12"), "/courses/3/steps/12");
+  assert.equal(protectedReturnPath("/courses/3/steps/0"), null);
   assert.equal(protectedReturnPath("https://attacker.example/courses/3"), null);
   assert.equal(protectedReturnPath("//attacker.example/courses/3"), null);
   assert.equal(protectedReturnPath("/courses/3?next=evil"), null);
@@ -38,6 +40,12 @@ test("course links survive login without accepting external redirects", () => {
 
 test("admin links survive login but external and unknown admin links do not", () => {
   assert.equal(protectedReturnPath("/admin"), "/admin");
+  assert.equal(protectedReturnPath("/admin/content"), "/admin/content");
+  assert.equal(protectedReturnPath("/admin/content/lectures"), null);
+  assert.equal(protectedReturnPath("/admin/content/lectures/new"), null);
+  assert.equal(protectedReturnPath("/admin/content/lectures/7"), null);
+  assert.equal(protectedReturnPath("/admin/courses/3/content"), "/admin/courses/3/content");
+  assert.equal(protectedReturnPath("/admin/content/lectures/0"), null);
   assert.equal(protectedReturnPath("/admin/learners"), "/admin/learners");
   assert.equal(protectedReturnPath("/admin/learners/42"), "/admin/learners/42");
   assert.equal(protectedReturnPath("/admin/learners/new"), "/admin/learners/new");

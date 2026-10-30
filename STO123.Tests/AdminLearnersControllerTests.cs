@@ -123,8 +123,9 @@ public sealed class AdminLearnersControllerTests
             CREATE TABLE ChiTietLuyenTuVung (
                 MaLanLuyen INTEGER NOT NULL, MaChuDe INTEGER NOT NULL, MaTuVung INTEGER NOT NULL, LaDung INTEGER NULL,
                 PRIMARY KEY (MaLanLuyen, MaTuVung));
+            CREATE TABLE DangKyGoiHoc (MaDangKy INTEGER PRIMARY KEY, MaNguoiDung INTEGER NOT NULL);
             CREATE TABLE TienDoBuocLoTrinh (
-                MaTienDoBLT INTEGER NOT NULL, MaNguoiDung INTEGER NOT NULL, TrangThai TEXT NOT NULL,
+                MaTienDoBLT INTEGER NOT NULL, MaNguoiDung INTEGER NOT NULL, MaDangKy INTEGER NOT NULL, TrangThai TEXT NOT NULL,
                 CapNhatLuc TEXT NOT NULL);
             INSERT INTO NguoiDung VALUES
                 (1, 'Learner Empty', 'empty@example.test', NULL, 'HOC_VIEN', 'HOAT_DONG', '2026-01-01', NULL);

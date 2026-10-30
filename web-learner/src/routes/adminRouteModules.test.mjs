@@ -7,6 +7,9 @@ test("admin navigation preloads only the module matching the destination", () =>
   assert.equal(routeKey("/admin"), "dashboard");
   assert.equal(routeKey("/admin/learners/42"), "learnerDetail");
   assert.equal(routeKey("/admin/courses/7/edit"), "courseEdit");
+  assert.equal(routeKey("/admin/content"), "contentDashboard");
+  assert.equal(routeKey("/admin/courses/7/content"), "curriculum");
+  assert.equal(routeKey("/admin/content/lectures/5"), null);
   assert.equal(routeKey("/admin/reports?type=payments"), "reports");
   assert.equal(routeKey("/courses"), null);
 });

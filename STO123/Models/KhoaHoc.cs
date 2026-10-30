@@ -21,9 +21,6 @@ public partial class KhoaHoc
 
     public int DiemMucTieuToiDa { get; set; }
 
-    [Column(TypeName = "decimal(18, 2)")]
-    public decimal? GiaBanLe { get; set; }
-
     [StringLength(512)]
     public string MoTa { get; set; }
 
@@ -41,14 +38,18 @@ public partial class KhoaHoc
     [Unicode(false)]
     public string DuongDanAnhDaiDien { get; set; }
 
+    [Column(TypeName = "decimal(18, 2)")]
+    public decimal? GiaBanLe { get; set; }
+
+    [InverseProperty("MaKhoaHocNavigation")]
+    public virtual ICollection<ChiTietDangKyKhoaHoc> ChiTietDangKyKhoaHoc { get; set; } = new List<ChiTietDangKyKhoaHoc>();
+
     [ForeignKey("MaAdminNoiDung")]
     [InverseProperty("KhoaHoc")]
     public virtual NguoiDung MaAdminNoiDungNavigation { get; set; }
 
     [InverseProperty("MaKhoaHocNavigation")]
     public virtual ICollection<UnitKhoaHoc> UnitKhoaHoc { get; set; } = new List<UnitKhoaHoc>();
-
-    public virtual ICollection<ChiTietDangKyKhoaHoc> ChiTietDangKyKhoaHoc { get; set; } = new List<ChiTietDangKyKhoaHoc>();
 
     [ForeignKey("MaKhoaHoc")]
     [InverseProperty("MaKhoaHoc")]

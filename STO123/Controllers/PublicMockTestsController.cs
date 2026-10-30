@@ -10,14 +10,13 @@ namespace STO123.Controllers;
 [AllowAnonymous]
 [ApiController]
 [Route("api/public/mock-tests")]
-public sealed class PublicMockTestsController(ToeicDbContext db) : ControllerBase
+public sealed class PublicMockTestsController(ToeicDbContext db, IConfiguration configuration) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<PublicMockTestDto>>> List(CancellationToken ct)
     {
-        var exams = await db.DeThi.AsNoTracking()
-            .Where(exam => exam.LoaiDe == "DE_THI" && exam.TrangThai == "OPEN" &&
-                exam.ThoiGianLamBai == ExamCore.DurationMinutes)
+        var placementId = configuration.GetValue<int>("Placement:DefaultExamId");
+        var exams = await MockExamEligibility.Visible(db.DeThi.AsNoTracking(), placementId)
             .OrderBy(exam => exam.MaDeThi)
             .Select(exam => new
             {

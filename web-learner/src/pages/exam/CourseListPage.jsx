@@ -111,6 +111,7 @@ export default function CourseListPage() {
     {error && <p className="exam-error" role="alert">{error} <button type="button" onClick={() => setRevision(v => v + 1)}>Thử lại</button></p>}
     {!courses && !error && <p role="status">Đang tải khóa học…</p>}
     {courses && <>
+      {!isGuest && owned.some(course => course.accessStatus === "ACTIVE") && <section className="course-learning-launch" aria-label="Khóa học đang học"><div><span>KHÔNG GIAN HỌC TẬP</span><h2>Tiếp tục hành trình của bạn</h2><p>Vào khóa học đang có quyền truy cập để xem Unit, bài học và tiến độ được lưu từ lần học gần nhất.</p></div><div className="course-learning-launch-list">{owned.filter(course => course.accessStatus === "ACTIVE").map(course => <Link key={course.courseId} to={`/courses/${course.courseId}`}><strong>{course.name}</strong><span>Tiếp tục học →</span></Link>)}</div></section>}
       {!isGuest && <section className="course-summary"><div><span className="course-kicker">ĐÁNH GIÁ ĐẦU VÀO</span>
         <h2>{placement?.currentStage ? `Giai đoạn khởi đầu ${placement.currentStage}` : "Chưa có kết quả KNN"}</h2>
         <p>{placement?.currentStage ? `Kết quả phân lớp từ bài đầu vào gần nhất. ${placement.targetScore ?

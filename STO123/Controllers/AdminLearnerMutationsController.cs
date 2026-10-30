@@ -165,7 +165,7 @@ public sealed partial class AdminLearnerMutationsController(
             blockers.Add("Đăng ký gói hoặc khóa học");
         if (await db.KetQuaLamBai.AsNoTracking().AnyAsync(item => item.MaHocVien == learnerId, ct))
             blockers.Add("Kết quả thi và bài luyện");
-        if (await db.TienDoBuocLoTrinh.AsNoTracking().AnyAsync(item => item.MaNguoiDung == learnerId, ct))
+        if (await db.TienDoBuocLoTrinh.AsNoTracking().AnyAsync(item => item.MaDangKyNavigation.MaNguoiDung == learnerId, ct))
             blockers.Add("Tiến độ lộ trình");
         if (await db.TienDoTuVung.AsNoTracking().AnyAsync(item => item.MaNguoiDung == learnerId, ct))
             blockers.Add("Tiến độ từ vựng");

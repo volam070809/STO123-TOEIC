@@ -25,6 +25,8 @@ public partial class LessonKhoaHoc
 
     public int ThuTu { get; set; }
 
+    public bool IsArchived { get; set; }
+
     [InverseProperty("MaLessonNavigation")]
     public virtual ICollection<BuocLoTrinh> BuocLoTrinh { get; set; } = new List<BuocLoTrinh>();
 

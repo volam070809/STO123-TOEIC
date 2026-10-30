@@ -22,11 +22,15 @@ public partial class BuocLoTrinh
 
     public int ThuTu { get; set; }
 
+    public bool IsArchived { get; set; }
+
     public int? MaBaiGiang { get; set; }
 
     public int? MaDeThi { get; set; }
 
     public int? MaChuDe { get; set; }
+
+    public int? MaBaiTap { get; set; }
 
     [ForeignKey("MaBaiGiang")]
     [InverseProperty("BuocLoTrinh")]
@@ -43,4 +47,58 @@ public partial class BuocLoTrinh
     [ForeignKey("MaLesson")]
     [InverseProperty("BuocLoTrinh")]
     public virtual LessonKhoaHoc MaLessonNavigation { get; set; }
+
+    [InverseProperty("MaBuocNavigation")]
+    public virtual ICollection<TienDoBuocLoTrinh> TienDoBuocLoTrinh { get; set; } = new List<TienDoBuocLoTrinh>();
+}
+
+#nullable enable
+public partial class ToeicDbContext
+{
+    public DbSet<BaiTapKhoaHoc> BaiTapKhoaHoc => Set<BaiTapKhoaHoc>();
+    public DbSet<PhienBanBaiTapKhoaHoc> PhienBanBaiTapKhoaHoc => Set<PhienBanBaiTapKhoaHoc>();
+    public DbSet<CauHoiBaiTapKhoaHoc> CauHoiBaiTapKhoaHoc => Set<CauHoiBaiTapKhoaHoc>();
+    public DbSet<LuotBaiTapKhoaHoc> LuotBaiTapKhoaHoc => Set<LuotBaiTapKhoaHoc>();
+    public DbSet<LanKiemTraBaiTapKhoaHoc> LanKiemTraBaiTapKhoaHoc => Set<LanKiemTraBaiTapKhoaHoc>();
+    partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<BaiTapKhoaHoc>().ToTable("BaiTapKhoaHoc").HasKey(x => x.MaBaiTap);
+        modelBuilder.Entity<PhienBanBaiTapKhoaHoc>().ToTable("PhienBanBaiTapKhoaHoc").HasKey(x => x.MaPhienBan);
+        modelBuilder.Entity<PhienBanBaiTapKhoaHoc>().Property(x => x.TaoLuc).HasDefaultValueSql("SYSUTCDATETIME()");
+        modelBuilder.Entity<CauHoiBaiTapKhoaHoc>().ToTable("CauHoiBaiTapKhoaHoc").HasKey(x => x.MaCauHoi);
+        modelBuilder.Entity<LuotBaiTapKhoaHoc>().ToTable("LuotBaiTapKhoaHoc").HasKey(x => x.MaLuot);
+        modelBuilder.Entity<LuotBaiTapKhoaHoc>().Property(x => x.BatDauLuc).HasDefaultValueSql("SYSUTCDATETIME()");
+        modelBuilder.Entity<LanKiemTraBaiTapKhoaHoc>().ToTable("LanKiemTraBaiTapKhoaHoc").HasKey(x => x.MaLan);
+        modelBuilder.Entity<LanKiemTraBaiTapKhoaHoc>().Property(x => x.KiemTraLuc).HasDefaultValueSql("SYSUTCDATETIME()");
+    }
+}
+
+public sealed class BaiTapKhoaHoc { public int MaBaiTap { get; set; } public string TieuDe { get; set; } = ""; }
+public sealed class PhienBanBaiTapKhoaHoc
+{
+    public int MaPhienBan { get; set; } public int MaBaiTap { get; set; } public int SoPhienBan { get; set; }
+    public string TrangThai { get; set; } = "NHAP"; public DateTime TaoLuc { get; set; }
+}
+public sealed class CauHoiBaiTapKhoaHoc
+{
+    public int MaCauHoi { get; set; } public int MaBaiTap { get; set; } public int MaPhienBan { get; set; }
+    public int ThuTu { get; set; } public string NoiDung { get; set; } = ""; public string? NguLieu { get; set; }
+    public string PhuongAnA { get; set; } = ""; public string PhuongAnB { get; set; } = "";
+    public string PhuongAnC { get; set; } = ""; public string PhuongAnD { get; set; } = "";
+    public string PhuongAnDung { get; set; } = "A"; public string? GiaiThich { get; set; }
+}
+public sealed class LuotBaiTapKhoaHoc
+{
+    public long MaLuot { get; set; } public int MaDangKy { get; set; } public int MaBuoc { get; set; }
+    public int MaBaiTap { get; set; } public int MaPhienBan { get; set; } public int LanLam { get; set; }
+    public string TrangThai { get; set; } = "DANG_LAM"; public DateTime BatDauLuc { get; set; }
+    public DateTime? HoanThanhLuc { get; set; }
+}
+public sealed class LanKiemTraBaiTapKhoaHoc
+{
+    public long MaLan { get; set; } public long MaLuot { get; set; } public int MaBaiTap { get; set; }
+    public int MaPhienBan { get; set; } public int MaCauHoi { get; set; } public int LanKiemTra { get; set; }
+    public Guid KhoaYeuCau { get; set; } public string PhuongAnChon { get; set; } = "";
+    public string PhuongAnDungLucKiemTra { get; set; } = ""; public bool Dung { get; set; }
+    public string? GiaiThichLucKiemTra { get; set; } public DateTime KiemTraLuc { get; set; }
 }

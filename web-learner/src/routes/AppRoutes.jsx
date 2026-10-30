@@ -50,6 +50,9 @@ const AdminPaymentsPage = lazy(adminRouteModules.payments);
 const AdminPaymentDetailPage = lazy(adminRouteModules.paymentDetail);
 const AdminDashboardPage = lazy(adminRouteModules.dashboard);
 const AdminReportsPage = lazy(adminRouteModules.reports);
+const AdminContentDashboardPage = lazy(adminRouteModules.contentDashboard);
+const AdminCurriculumPage = lazy(adminRouteModules.curriculum);
+const CourseStepPage = lazy(() => import("../pages/exam/CourseStepPage"));
 
 const MANAGEMENT_ROLES = ["ADMIN_QUAN_LY"];
 
@@ -126,6 +129,7 @@ export default function AppRoutes() {
     <Route path="/placement" element={<PlacementPage />} />
     <Route path="/courses" element={<CourseListPage />} />
     <Route path="/courses/:courseId" element={<CoursePage />} />
+    <Route path="/courses/:courseId/steps/:stepId" element={<ProtectedRoute><CourseStepPage /></ProtectedRoute>} />
     <Route path="/packages" element={<Navigate to="/courses" replace />} />
     <Route path="/packages/:id" element={<Navigate to="/courses" replace />} />
     <Route path="/payment/result" element={<ProtectedRoute><LegacyPaymentRoute /></ProtectedRoute>} />
@@ -151,6 +155,8 @@ export default function AppRoutes() {
       <Route path="courses/new" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminCourseCreatePage /></AdminRoute>} />
       <Route path="courses/:courseId/edit" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminCourseEditPage /></AdminRoute>} />
       <Route path="courses/:courseId" element={<AdminCourseDetailPage />} />
+      <Route path="courses/:courseId/content" element={<AdminCurriculumPage />} />
+      <Route path="content" element={<AdminContentDashboardPage />} />
       <Route path="packages" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackagesPage /></AdminRoute>} />
       <Route path="packages/new" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackageCreatePage /></AdminRoute>} />
       <Route path="packages/:packageId/edit" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackageEditPage /></AdminRoute>} />

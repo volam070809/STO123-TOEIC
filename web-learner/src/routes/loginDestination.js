@@ -3,7 +3,7 @@ import { protectedReturnPath } from "./protectedReturnPath.js";
 export function loginDestination(role, explicitReturnTo) {
   if (explicitReturnTo) return explicitReturnTo;
   if (role === "ADMIN_QUAN_LY") return "/admin";
-  if (role === "ADMIN_NOI_DUNG") return "/admin/courses";
+  if (role === "ADMIN_NOI_DUNG") return "/admin/content";
   return "/";
 }
 

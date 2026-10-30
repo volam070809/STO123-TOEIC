@@ -131,6 +131,12 @@ builder.Services.AddScoped<ActiveAccountAccess>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddSingleton<AvatarStorage>();
 builder.Services.AddSingleton<CourseImageStorage>();
+builder.Services.AddSingleton<LectureResourceStorage>();
+builder.Services.AddSingleton<LectureMediaTicket>();
+builder.Services.AddHostedService<AdminContentPendingCleanupService>();
+builder.Services.AddScoped<CourseBlobSynchronizer>();
+builder.Services.AddScoped<CourseBlobSyncFilter>();
+builder.Services.AddHostedService<CourseBlobSyncRecovery>();
 builder.Services.AddScoped<ExamGenerationService>();
 builder.Services.AddScoped<PersistedExamTemplate>();
 builder.Services.AddScoped<PersistedExamSnapshotWriter>();
@@ -150,14 +156,16 @@ builder.Services.AddDbContext<ToeicDbContext>((services, options) =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("ToeicDb"))
         .AddInterceptors(services.GetRequiredService<RandomStartCommandInterceptor>()));
 
-var blobAccountName = builder.Configuration["AzureBlob:AccountName"]
-    ?? throw new InvalidOperationException(
-        "AzureBlob:AccountName is missing.");
-
-builder.Services.AddSingleton(
-    new BlobServiceClient(
-        new Uri($"https://{blobAccountName}.blob.core.windows.net"),
-        new DefaultAzureCredential()));
+var blobConnection = builder.Configuration["AzureBlob:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(blobConnection))
+    builder.Services.AddSingleton(new BlobServiceClient(blobConnection));
+else
+{
+    var blobAccountName = builder.Configuration["AzureBlob:AccountName"]
+        ?? throw new InvalidOperationException("AzureBlob:AccountName is missing.");
+    builder.Services.AddSingleton(new BlobServiceClient(
+        new Uri($"https://{blobAccountName}.blob.core.windows.net"), new DefaultAzureCredential()));
+}
 
 var app = builder.Build();
 

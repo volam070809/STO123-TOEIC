@@ -19,6 +19,10 @@
    "T4TemplatePath": null,
    "Tables": [
       {
+         "Name": "[dbo].[AdminContentIdempotency]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[BaiGiang]",
          "ObjectType": 0
       },
@@ -40,6 +44,10 @@
       },
       {
          "Name": "[dbo].[ChiTietCauHinhDeThi]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[ChiTietDangKyKhoaHoc]",
          "ObjectType": 0
       },
       {

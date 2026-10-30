@@ -42,7 +42,8 @@ public sealed class ExamGenerationService(ToeicDbContext db, IConfiguration conf
             links = await db.CauHoiDeThi.AsNoTracking().Where(x => x.MaDeThi == fixedExamId)
                 .OrderBy(x => x.ThuTu).ToListAsync(ct);
         }
-        var questionQuery = db.CauHoi.AsNoTracking().Where(q => q.TrangThai == ExamCore.Published);
+        var questionQuery = db.CauHoi.AsNoTracking().Where(q =>
+            q.TrangThai == ExamCore.Published && q.LoaiCauHoi == "DE_THI");
         if (selectedPart.HasValue)
         {
             var partId = parts.Single(p => p.Value == selectedPart.Value).Key;
@@ -149,7 +150,7 @@ public sealed class ExamGenerationService(ToeicDbContext db, IConfiguration conf
                     Dictionary<int, CauHoi> complete;
                     using (profile.Phase("selectedQuestions"))
                         complete = await db.CauHoi.AsNoTracking()
-                            .Where(q => ids.Contains(q.MaCauHoi) && q.TrangThai == ExamCore.Published)
+                            .Where(q => ids.Contains(q.MaCauHoi) && q.TrangThai == ExamCore.Published && q.LoaiCauHoi == "DE_THI")
                             .ToDictionaryAsync(q => q.MaCauHoi, ct);
                     if (complete.Count != 200 || selected.Any(unit => unit.Questions.Any(q =>
                         !complete.TryGetValue(q.MaCauHoi, out var full) || full.MaPart != q.MaPart ||

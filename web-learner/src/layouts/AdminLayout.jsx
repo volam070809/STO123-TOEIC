@@ -12,21 +12,26 @@ const managementItems = [
   ["/admin/reports", "Báo cáo", "reports"],
 ];
 
+const contentItems = [
+  ["/admin/content", "Tổng quan nội dung", "overview", true],
+  ["/admin/courses", "Khóa học & lộ trình", "courses"],
+];
+
 export default function AdminLayout() {
   const { token, user, logout } = useAuth();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const initials = user?.hoTen?.split(/\s+/).filter(Boolean).slice(-2).map(part => part[0]).join("").toUpperCase() || "AD";
   const items = user?.vaiTro === "ADMIN_QUAN_LY"
-    ? [managementItems[0], managementItems[1], ["/admin/courses", "Khóa học", "courses"], ...managementItems.slice(2)]
-    : [["/admin/courses", "Khóa học", "courses"]];
+    ? [managementItems[0], ...contentItems, ...managementItems.slice(1)]
+    : contentItems;
   const currentTitle = items.find(([path, , , end]) => end ? location.pathname === path : location.pathname.startsWith(path))?.[1] || "Quản trị";
   const warm = path => { Promise.all([preloadAdminRoute(path), prefetchAdminData(path, token)]).catch(() => {}); };
   const preload = path => ({ onPointerEnter: () => warm(path), onFocus: () => warm(path), onPointerDown: () => warm(path) });
 
   return <div className="admin-shell">
     <aside className={"admin-sidebar " + (menuOpen ? "is-open" : "")}>
-      <Link className="admin-brand" to={user?.vaiTro === "ADMIN_QUAN_LY" ? "/admin" : "/admin/courses"} onClick={() => setMenuOpen(false)}>
+      <Link className="admin-brand" to={user?.vaiTro === "ADMIN_QUAN_LY" ? "/admin" : "/admin/content"} onClick={() => setMenuOpen(false)}>
         <span className="admin-brand-mark">STO</span><span><strong>STO123</strong><small>Quản trị</small></span>
       </Link>
       <nav className="admin-nav" aria-label="Điều hướng quản trị">
@@ -60,6 +65,7 @@ function AdminNavIcon({ name }) {
     overview: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
     learners: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>,
     courses: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></>,
+    lectures: <><path d="M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"/></>,
     packages: <><path d="m21 8-9 5-9-5 9-5 9 5z"/><path d="m3 8 9 5 9-5M3 12l9 5 9-5M3 16l9 5 9-5"/></>,
     enrollments: <><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></>,
     payments: <><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h3"/></>,

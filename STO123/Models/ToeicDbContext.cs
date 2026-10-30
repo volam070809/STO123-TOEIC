@@ -13,6 +13,8 @@ public partial class ToeicDbContext : DbContext
     {
     }
 
+    public virtual DbSet<AdminContentIdempotency> AdminContentIdempotency { get; set; }
+
     public virtual DbSet<BaiGiang> BaiGiang { get; set; }
 
     public virtual DbSet<BuocLoTrinh> BuocLoTrinh { get; set; }
@@ -89,15 +91,17 @@ public partial class ToeicDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<ChiTietDangKyKhoaHoc>(entity =>
+        modelBuilder.Entity<AdminContentIdempotency>(entity =>
         {
-            entity.ToTable("ChiTietDangKyKhoaHoc");
-            entity.HasKey(e => new { e.MaDangKy, e.MaKhoaHoc });
-            entity.HasOne(e => e.MaDangKyNavigation).WithMany(e => e.ChiTietDangKyKhoaHoc)
-                .HasForeignKey(e => e.MaDangKy).OnDelete(DeleteBehavior.ClientSetNull);
-            entity.HasOne(e => e.MaKhoaHocNavigation).WithMany(e => e.ChiTietDangKyKhoaHoc)
-                .HasForeignKey(e => e.MaKhoaHoc).OnDelete(DeleteBehavior.ClientSetNull);
+            entity.Property(e => e.CapNhatLucUtc).HasDefaultValueSql("(sysutcdatetime())", "DF_AdminContentIdempotency_CapNhatLucUtc");
+            entity.Property(e => e.DauVanTay).IsFixedLength();
+            entity.Property(e => e.TaoLucUtc).HasDefaultValueSql("(sysutcdatetime())", "DF_AdminContentIdempotency_TaoLucUtc");
+
+            entity.HasOne(d => d.MaAdminNavigation).WithMany(p => p.AdminContentIdempotency)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_AdminContentIdempotency_Admin");
         });
+
         modelBuilder.Entity<BaiGiang>(entity =>
         {
             entity.HasKey(e => e.MaBaiGiang).HasName("PK__BaiGiang__0773C41EC59B1061");
@@ -197,6 +201,17 @@ public partial class ToeicDbContext : DbContext
                 .HasConstraintName("FK__ChiTietCa__MaSin__4D5F7D71");
         });
 
+        modelBuilder.Entity<ChiTietDangKyKhoaHoc>(entity =>
+        {
+            entity.HasOne(d => d.MaDangKyNavigation).WithMany(p => p.ChiTietDangKyKhoaHoc)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CTDK_DangKy");
+
+            entity.HasOne(d => d.MaKhoaHocNavigation).WithMany(p => p.ChiTietDangKyKhoaHoc)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CTDK_KhoaHoc");
+        });
+
         modelBuilder.Entity<ChiTietKetQua>(entity =>
         {
             entity.HasKey(e => e.MaCauHoiLuotLam).HasName("PK__ChiTietK__216D68F11C2E1FEF");
@@ -244,9 +259,7 @@ public partial class ToeicDbContext : DbContext
             entity.Property(e => e.NgayDangKy).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.TrangThai).HasDefaultValue("CHO_THANH_TOAN");
 
-            entity.HasOne(d => d.MaGoiHocNavigation).WithMany(p => p.DangKyGoiHoc)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__DangKyGoi__MaGoi__1BC821DD");
+            entity.HasOne(d => d.MaGoiHocNavigation).WithMany(p => p.DangKyGoiHoc).HasConstraintName("FK__DangKyGoi__MaGoi__1BC821DD");
 
             entity.HasOne(d => d.MaNguoiDungNavigation).WithMany(p => p.DangKyGoiHoc)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -461,18 +474,17 @@ public partial class ToeicDbContext : DbContext
         modelBuilder.Entity<TienDoBuocLoTrinh>(entity =>
         {
             entity.Property(e => e.CapNhatLuc).HasDefaultValueSql("(getdate())");
-            entity.Property(e => e.MaTienDoBLT).ValueGeneratedOnAdd();
             entity.Property(e => e.TrangThai).HasDefaultValue("CHUA_LAM");
 
-            entity.HasOne(d => d.MaBuocNavigation).WithMany()
+            entity.HasOne(d => d.MaBuocNavigation).WithMany(p => p.TienDoBuocLoTrinh)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__TienDoBuo__MaBuo__2EA5EC27");
 
-            entity.HasOne(d => d.MaDangKyNavigation).WithMany()
+            entity.HasOne(d => d.MaDangKyNavigation).WithMany(p => p.TienDoBuocLoTrinh)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_TienDoBuocLoTrinh_DangKyGoiHoc");
 
-            entity.HasOne(d => d.MaKetQuaNavigation).WithMany().HasConstraintName("FK__TienDoBuo__MaKet__32767D0B");
+            entity.HasOne(d => d.MaKetQuaNavigation).WithMany(p => p.TienDoBuocLoTrinh).HasConstraintName("FK__TienDoBuo__MaKet__32767D0B");
         });
 
         modelBuilder.Entity<TienDoTuVung>(entity =>

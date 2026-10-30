@@ -382,11 +382,64 @@ GO
 CREATE TABLE dbo.TaiNguyenBaiGiang(
     MaTaiNguyen int primary key identity(1,1),
     MaBaiGiang int not null foreign key references BaiGiang(MaBaiGiang),
-    LoaiTaiNguyen varchar(32) not null check (LoaiTaiNguyen in ('VIDEO','AUDIO','PDF','WORD','POWERPOINT','HINH_ANH')),
+    LoaiTaiNguyen varchar(32) not null constraint CK_TaiNguyenBaiGiang_LoaiTaiNguyen_Excel check (LoaiTaiNguyen in ('VIDEO','AUDIO','PDF','WORD','POWERPOINT','HINH_ANH','EXCEL')),
     TenTaiNguyen nvarchar(128) not null,
-    DuongDanTep varchar(512) not null,
+    DuongDanTep nvarchar(512) not null,
+    IsArchived bit not null constraint DF_TaiNguyenBaiGiang_IsArchived default (0),
     ThuTu int not null check (ThuTu > 0),
     constraint UQ_TaiNguyenBaiGiang_ThuTu unique (MaBaiGiang, ThuTu)
+);
+GO
+
+CREATE TABLE dbo.AdminContentIdempotency (
+    MaYeuCau bigint IDENTITY(1,1) NOT NULL
+        CONSTRAINT PK_AdminContentIdempotency PRIMARY KEY,
+    MaAdmin int NOT NULL
+        CONSTRAINT FK_AdminContentIdempotency_Admin REFERENCES dbo.NguoiDung(MaNguoiDung),
+    ThaoTac varchar(32) NOT NULL
+        CONSTRAINT CK_AdminContentIdempotency_ThaoTac CHECK (ThaoTac IN (
+            'CREATE_UNIT', 'CREATE_LESSON', 'CREATE_STEP', 'CREATE_LECTURE',
+            'CREATE_LECTURE_CATEGORY', 'CREATE_LECTURE_RESOURCE')),
+    KhoaYeuCau varchar(128) NOT NULL,
+    DauVanTay binary(32) NOT NULL,
+    TrangThai varchar(16) NOT NULL
+        CONSTRAINT CK_AdminContentIdempotency_TrangThai CHECK (TrangThai IN ('PENDING', 'COMPLETED')),
+    MaPhanHoi smallint NULL,
+    NoiDungPhanHoi nvarchar(max) NULL,
+    DuongDanBlob nvarchar(512) NULL,
+    LeaseToken uniqueidentifier NULL,
+    LeaseUntilUtc datetime2(3) NULL,
+    TaoLucUtc datetime2(3) NOT NULL
+        CONSTRAINT DF_AdminContentIdempotency_TaoLucUtc DEFAULT SYSUTCDATETIME(),
+    CapNhatLucUtc datetime2(3) NOT NULL
+        CONSTRAINT DF_AdminContentIdempotency_CapNhatLucUtc DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT UQ_AdminContentIdempotency_Key UNIQUE (MaAdmin, ThaoTac, KhoaYeuCau),
+    CONSTRAINT CK_AdminContentIdempotency_Response CHECK (
+        (TrangThai = 'PENDING' AND MaPhanHoi IS NULL AND NoiDungPhanHoi IS NULL)
+        OR (TrangThai = 'COMPLETED' AND MaPhanHoi IN (200, 201) AND NoiDungPhanHoi IS NOT NULL)),
+    CONSTRAINT CK_AdminContentIdempotency_BlobPath CHECK (
+        DuongDanBlob IS NULL OR DuongDanBlob LIKE N'lecture-resources/%')
+);
+GO
+
+CREATE INDEX IX_AdminContentIdempotency_Reconcile
+    ON dbo.AdminContentIdempotency (TrangThai, LeaseUntilUtc, CapNhatLucUtc)
+    INCLUDE (ThaoTac, DuongDanBlob);
+GO
+
+CREATE TABLE dbo.CourseBlobSyncJournal(
+    MaKhoaHoc int NOT NULL,
+    MaTaiNguyen int NOT NULL,
+    DuongDanNguon nvarchar(512) NULL,
+    DuongDanDich nvarchar(512) NULL,
+    TheHe bigint NOT NULL DEFAULT 0,
+    SoThaoTacDangChay int NOT NULL DEFAULT 0,
+    LeaseUntilUtc datetime2(3) NULL,
+    CapNhatLucUtc datetime2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT PK_CourseBlobSyncJournal PRIMARY KEY (MaKhoaHoc, MaTaiNguyen),
+    CONSTRAINT CK_CourseBlobSyncJournal_Paths CHECK (
+        (MaTaiNguyen = 0 AND DuongDanNguon IS NULL AND DuongDanDich IS NULL)
+        OR (MaTaiNguyen > 0 AND DuongDanNguon IS NOT NULL AND DuongDanDich IS NOT NULL))
 );
 GO
 
@@ -423,6 +476,7 @@ CREATE TABLE dbo.UnitKhoaHoc(
     MaKhoaHoc int not null foreign key references KhoaHoc(MaKhoaHoc),
     TenUnit nvarchar(128) not null,
     MoTa nvarchar(512) null,
+    IsArchived bit not null constraint DF_UnitKhoaHoc_IsArchived default (0),
     ThuTu int not null check (ThuTu > 0),
     constraint UQ_UnitKhoaHoc_ThuTu unique (MaKhoaHoc, ThuTu)
 );
@@ -433,31 +487,102 @@ CREATE TABLE dbo.LessonKhoaHoc(
     MaUnit int not null foreign key references UnitKhoaHoc(MaUnit),
     TenLesson nvarchar(128) not null,
     MoTa nvarchar(512) null,
+    IsArchived bit not null constraint DF_LessonKhoaHoc_IsArchived default (0),
     ThuTu int not null check (ThuTu > 0),
     constraint UQ_LessonKhoaHoc_ThuTu unique (MaUnit, ThuTu)
 );
 GO
 
+CREATE TABLE dbo.BaiTapKhoaHoc(
+    MaBaiTap int identity(1,1) primary key,
+    TieuDe nvarchar(128) not null
+);
+GO
+CREATE TABLE dbo.PhienBanBaiTapKhoaHoc(
+    MaPhienBan int identity(1,1) primary key,
+    MaBaiTap int not null foreign key references dbo.BaiTapKhoaHoc(MaBaiTap),
+    SoPhienBan int not null check (SoPhienBan > 0),
+    TrangThai varchar(16) not null default 'NHAP' check (TrangThai in ('NHAP','XUAT_BAN','NGUNG')),
+    TaoLuc datetime2 not null default sysutcdatetime(),
+    constraint UQ_PhienBan_So unique (MaBaiTap, SoPhienBan),
+    constraint UQ_PhienBan_Ownership unique (MaBaiTap, MaPhienBan)
+);
+GO
+CREATE UNIQUE INDEX UX_PhienBan_DangDung ON dbo.PhienBanBaiTapKhoaHoc(MaBaiTap) WHERE TrangThai = 'XUAT_BAN';
+GO
 CREATE TABLE dbo.BuocLoTrinh(
     MaBuoc int primary key identity(1,1),
     MaLesson int not null foreign key references LessonKhoaHoc(MaLesson),
     TieuDe nvarchar(128) not null,
+    IsArchived bit not null constraint DF_BuocLoTrinh_IsArchived default (0),
     ThuTu int not null check (ThuTu > 0),
     MaBaiGiang int null foreign key references BaiGiang(MaBaiGiang),
     MaDeThi int null foreign key references DeThi(MaDeThi),
     MaChuDe int null foreign key references ChuDe(MaChuDe),
+    MaBaiTap int null,
+    constraint FK_Buoc_BaiTap foreign key (MaBaiTap) references dbo.BaiTapKhoaHoc(MaBaiTap),
     constraint UQ_BuocLoTrinh_ThuTu unique (MaLesson, ThuTu),
+    constraint UQ_Buoc_BaiTap unique (MaBuoc, MaBaiTap),
     constraint CK_BuocLoTrinh_MotHoatDong check (
         (case when MaBaiGiang is null then 0 else 1 end)
         + (case when MaDeThi is null then 0 else 1 end)
-        + (case when MaChuDe is null then 0 else 1 end) = 1
+        + (case when MaChuDe is null then 0 else 1 end)
+        + (case when MaBaiTap is null then 0 else 1 end) = 1
     )
+);
+GO
+
+CREATE TABLE dbo.CauHoiBaiTapKhoaHoc(
+    MaCauHoi int identity(1,1) primary key, MaBaiTap int not null, MaPhienBan int not null,
+    ThuTu int not null check (ThuTu > 0), NoiDung nvarchar(max) not null, NguLieu nvarchar(max) null,
+    PhuongAnA nvarchar(max) not null, PhuongAnB nvarchar(max) not null,
+    PhuongAnC nvarchar(max) not null, PhuongAnD nvarchar(max) not null,
+    PhuongAnDung char(1) not null check (PhuongAnDung in ('A','B','C','D')),
+    GiaiThich nvarchar(max) null,
+    constraint FK_CauHoi_PhienBan foreign key (MaBaiTap, MaPhienBan)
+        references dbo.PhienBanBaiTapKhoaHoc(MaBaiTap, MaPhienBan),
+    constraint UQ_CauHoi_ThuTu unique (MaPhienBan, ThuTu),
+    constraint UQ_CauHoi_Ownership unique (MaBaiTap, MaPhienBan, MaCauHoi)
+);
+GO
+CREATE TABLE dbo.LuotBaiTapKhoaHoc(
+    MaLuot bigint identity(1,1) primary key,
+    MaDangKy int not null foreign key references dbo.DangKyGoiHoc(MaDangKy),
+    MaBuoc int not null, MaBaiTap int not null, MaPhienBan int not null,
+    LanLam int not null check (LanLam > 0),
+    TrangThai varchar(16) not null default 'DANG_LAM' check (TrangThai in ('DANG_LAM','HOAN_THANH')),
+    BatDauLuc datetime2 not null default sysutcdatetime(), HoanThanhLuc datetime2 null,
+    constraint CK_Luot_HoanThanh check ((TrangThai = 'DANG_LAM' and HoanThanhLuc is null)
+        or (TrangThai = 'HOAN_THANH' and HoanThanhLuc is not null)),
+    constraint FK_Luot_Buoc foreign key (MaBuoc, MaBaiTap) references dbo.BuocLoTrinh(MaBuoc, MaBaiTap),
+    constraint FK_Luot_PhienBan foreign key (MaBaiTap, MaPhienBan)
+        references dbo.PhienBanBaiTapKhoaHoc(MaBaiTap, MaPhienBan),
+    constraint UQ_Luot_LanLam unique (MaDangKy, MaBuoc, LanLam),
+    constraint UQ_Luot_Ownership unique (MaLuot, MaBaiTap, MaPhienBan)
+);
+GO
+CREATE TABLE dbo.LanKiemTraBaiTapKhoaHoc(
+    MaLan bigint identity(1,1) primary key, MaLuot bigint not null,
+    MaBaiTap int not null, MaPhienBan int not null, MaCauHoi int not null,
+    LanKiemTra int not null check (LanKiemTra > 0), KhoaYeuCau uniqueidentifier not null,
+    PhuongAnChon char(1) not null check (PhuongAnChon in ('A','B','C','D')),
+    PhuongAnDungLucKiemTra char(1) not null check (PhuongAnDungLucKiemTra in ('A','B','C','D')),
+    Dung bit not null, GiaiThichLucKiemTra nvarchar(max) null,
+    KiemTraLuc datetime2 not null default sysutcdatetime(),
+    constraint CK_KiemTra_Dung check (Dung = case when PhuongAnChon = PhuongAnDungLucKiemTra then 1 else 0 end),
+    constraint FK_KiemTra_Luot foreign key (MaLuot, MaBaiTap, MaPhienBan)
+        references dbo.LuotBaiTapKhoaHoc(MaLuot, MaBaiTap, MaPhienBan),
+    constraint FK_KiemTra_CauHoi foreign key (MaBaiTap, MaPhienBan, MaCauHoi)
+        references dbo.CauHoiBaiTapKhoaHoc(MaBaiTap, MaPhienBan, MaCauHoi),
+    constraint UQ_KiemTra_Lan unique (MaLuot, MaCauHoi, LanKiemTra),
+    constraint UQ_KiemTra_YeuCau unique (MaLuot, KhoaYeuCau)
 );
 GO
 
 -- 05. TIEN DO VA LUYEN TU VUNG
 CREATE TABLE dbo.TienDoBuocLoTrinh(
     MaTienDoBLT int primary key identity(1,1),
+    MaNguoiDung int not null,
     MaDangKy int not null foreign key references DangKyGoiHoc(MaDangKy),
     MaBuoc int not null foreign key references BuocLoTrinh(MaBuoc),
     TrangThai varchar(16) not null default 'CHUA_LAM' check (TrangThai in ('CHUA_LAM','DANG_LAM','HOAN_THANH')),
