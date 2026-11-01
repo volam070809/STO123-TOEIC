@@ -168,7 +168,9 @@ else
 }
 
 var app = builder.Build();
-
+app.Logger.LogInformation(
+    "Effective VNPay ReturnUrl: {Url}",
+    app.Configuration["VNPay:ReturnUrl"]);
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
