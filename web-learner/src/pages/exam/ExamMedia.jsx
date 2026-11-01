@@ -24,7 +24,29 @@ function timeLabel(seconds) {
   return `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
 }
 
+function ReviewAudio({ endpoint, token }) {
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    let objectUrl = "";
+    examMediaBlob(endpoint, token, controller.signal).then(blob => {
+      if (!controller.signal.aborted) { objectUrl = URL.createObjectURL(blob); setUrl(objectUrl); }
+    }).catch(() => { if (!controller.signal.aborted) setError(true); });
+    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [endpoint, token]);
+  if (error) return <p className="exam-media-error">Không thể tải âm thanh để nghe lại.</p>;
+  return <div className="exam-audio review-audio" aria-label="Nghe lại âm thanh câu hỏi">
+    {url ? <audio controls preload="metadata" src={url} /> : <span role="status">Đang tải âm thanh…</span>}
+  </div>;
+}
+
 export function PrivateAudio({ endpoint, token, mode = "MOCK" }) {
+  return mode === "REVIEW" ? <ReviewAudio endpoint={endpoint} token={token} /> :
+    <RestrictedAudio endpoint={endpoint} token={token} mode={mode} />;
+}
+
+function RestrictedAudio({ endpoint, token, mode }) {
   const session = audioSession(endpoint);
   const audioRef = useRef(null);
   const [playing, setPlaying] = useState(false);

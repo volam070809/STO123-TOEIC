@@ -124,7 +124,7 @@ public sealed class PaymentCallbackTests
         {
             MaGiaoDich = 2, MaDangKy = 2, MaCongThanhToan = 7,
             SoTien = 298_000m, MaGiaoDichCongThanhToan = "customref",
-            TrangThai = "CHO_XU_LY", NgayTao = Now.UtcDateTime
+            TrangThai = "CHO_XU_LY", NgayTao = Now.ToOffset(TimeSpan.FromHours(7)).DateTime
         });
         await fixture.Db.SaveChangesAsync();
         fixture.Db.ChangeTracker.Clear();
@@ -228,7 +228,7 @@ public sealed class PaymentCallbackTests
         Assert.Equal("00", RspCode(await controller.Ipn(CancellationToken.None)));
         fixture.Db.ChangeTracker.Clear();
         Assert.Equal("THAT_BAI", (await fixture.Db.GiaoDichThanhToan.SingleAsync()).TrangThai);
-        Assert.Equal("CHO_THANH_TOAN", (await fixture.Db.DangKyGoiHoc.SingleAsync()).TrangThai);
+        Assert.Equal("THAT_BAI", (await fixture.Db.DangKyGoiHoc.SingleAsync()).TrangThai);
         Assert.Equal("02", RspCode(await fixture.Controller().Ipn(CancellationToken.None)));
         Assert.Equal("THAT_BAI", (await fixture.Db.GiaoDichThanhToan.SingleAsync()).TrangThai);
     }
@@ -395,11 +395,11 @@ public sealed class PaymentCallbackTests
                 CREATE TABLE DangKyGoiHoc (MaDangKy INTEGER PRIMARY KEY, MaNguoiDung INTEGER NOT NULL,
                     MaGoiHoc INTEGER NULL, GiaDangKy TEXT NOT NULL, SoNgaySuDung INTEGER NOT NULL,
                     NgayDangKy TEXT NOT NULL, NgayBatDau TEXT NULL, NgayKetThuc TEXT NULL,
-                    TrangThai TEXT NOT NULL CHECK(TrangThai IN ('CHO_THANH_TOAN','DANG_SU_DUNG','HET_HAN')));
+                    TrangThai TEXT NOT NULL CHECK(TrangThai IN ('CHO_THANH_TOAN','DANG_SU_DUNG','HET_HAN','THAT_BAI','QUA_HAN')));
                 CREATE TABLE GiaoDichThanhToan (MaGiaoDich INTEGER PRIMARY KEY,
                     MaDangKy INTEGER NOT NULL, MaCongThanhToan INTEGER NOT NULL, SoTien TEXT NOT NULL,
                     MaGiaoDichCongThanhToan TEXT NOT NULL,
-                    TrangThai TEXT NOT NULL CHECK(TrangThai IN ('CHO_XU_LY','THANH_CONG','THAT_BAI')),
+                    TrangThai TEXT NOT NULL CHECK(TrangThai IN ('CHO_XU_LY','THANH_CONG','THAT_BAI','QUA_HAN')),
                     NgayTao TEXT NOT NULL, NgayThanhToan TEXT NULL);
                 CREATE UNIQUE INDEX UX_GiaoDichThanhToan_MaCong
                     ON GiaoDichThanhToan(MaCongThanhToan, MaGiaoDichCongThanhToan);
@@ -428,7 +428,7 @@ public sealed class PaymentCallbackTests
             {
                 MaGiaoDich = 1, MaDangKy = 1, MaCongThanhToan = 7,
                 SoTien = 120_000m, MaGiaoDichCongThanhToan = "abc123",
-                TrangThai = "CHO_XU_LY", NgayTao = Now.UtcDateTime
+                TrangThai = "CHO_XU_LY", NgayTao = Now.ToOffset(TimeSpan.FromHours(7)).DateTime
             });
             await db.SaveChangesAsync();
             db.ChangeTracker.Clear();

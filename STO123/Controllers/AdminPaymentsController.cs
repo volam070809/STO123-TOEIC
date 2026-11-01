@@ -14,7 +14,7 @@ namespace STO123.Controllers;
 public sealed class AdminPaymentsController(ToeicDbContext db) : ControllerBase
 {
     private static readonly HashSet<string> SupportedStatuses =
-        ["CHO_XU_LY", "THANH_CONG", "THAT_BAI"];
+        ["CHO_XU_LY", "THANH_CONG", "THAT_BAI", "QUA_HAN"];
 
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] AdminPaymentListQuery request, CancellationToken ct)

@@ -307,22 +307,22 @@ public sealed class AdminContentIdempotencySqlServerTests
             var category = new LectureCategoryRequest("Category A", null, "DANG_MO");
             Assert.IsType<CreatedResult>(await CreateOther(isolated, "CREATE_LECTURE_CATEGORY", "/api/admin/content/lectures/categories",
                 "category-key-2026", category, (db, ctx) => new AdminLecturesController(db,
-                    IsolatedStorage(), NullLogger<AdminLecturesController>.Instance) { ControllerContext = new ControllerContext(ctx) }
+                    IsolatedStorage(), new CourseBlobSynchronizer(db, IsolatedStorage()), NullLogger<AdminLecturesController>.Instance) { ControllerContext = new ControllerContext(ctx) }
                     .AddCategory(category, default)));
             Assert.IsType<CreatedResult>(await CreateOther(isolated, "CREATE_LECTURE_CATEGORY", "/api/admin/content/lectures/categories",
                 "category-key-2026", category, (db, ctx) => new AdminLecturesController(db,
-                    IsolatedStorage(), NullLogger<AdminLecturesController>.Instance) { ControllerContext = new ControllerContext(ctx) }
+                    IsolatedStorage(), new CourseBlobSynchronizer(db, IsolatedStorage()), NullLogger<AdminLecturesController>.Instance) { ControllerContext = new ControllerContext(ctx) }
                     .AddCategory(category, default)));
             Assert.Equal(1, await Scalar(isolated, "SELECT COUNT(*) FROM dbo.DanhMucBaiGiang"));
 
             var lecture = new LectureRequest("Lecture A", null, "Text", null, null, null, "DANG_MO");
             Assert.IsType<CreatedResult>(await CreateOther(isolated, "CREATE_LECTURE", "/api/admin/content/lectures",
                 "lecture-key-2026", lecture, (db, ctx) => new AdminLecturesController(db,
-                    IsolatedStorage(), NullLogger<AdminLecturesController>.Instance) { ControllerContext = new ControllerContext(ctx) }
+                    IsolatedStorage(), new CourseBlobSynchronizer(db, IsolatedStorage()), NullLogger<AdminLecturesController>.Instance) { ControllerContext = new ControllerContext(ctx) }
                     .Add(lecture, default)));
             Assert.IsType<CreatedResult>(await CreateOther(isolated, "CREATE_LECTURE", "/api/admin/content/lectures",
                 "lecture-key-2026", lecture, (db, ctx) => new AdminLecturesController(db,
-                    IsolatedStorage(), NullLogger<AdminLecturesController>.Instance) { ControllerContext = new ControllerContext(ctx) }
+                    IsolatedStorage(), new CourseBlobSynchronizer(db, IsolatedStorage()), NullLogger<AdminLecturesController>.Instance) { ControllerContext = new ControllerContext(ctx) }
                     .Add(lecture, default)));
             Assert.Equal(1, await Scalar(isolated, "SELECT COUNT(*) FROM dbo.BaiGiang"));
 
@@ -348,7 +348,7 @@ public sealed class AdminContentIdempotencySqlServerTests
             var categoryB = new LectureCategoryRequest("Category B", null, "DANG_MO");
             var parallelCategories = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => CreateOther(isolated,
                 "CREATE_LECTURE_CATEGORY", "/api/admin/content/lectures/categories", "category-parallel-2026", categoryB,
-                (db, ctx) => new AdminLecturesController(db, IsolatedStorage(), NullLogger<AdminLecturesController>.Instance)
+                (db, ctx) => new AdminLecturesController(db, IsolatedStorage(), new CourseBlobSynchronizer(db, IsolatedStorage()), NullLogger<AdminLecturesController>.Instance)
                     { ControllerContext = new ControllerContext(ctx) }.AddCategory(categoryB, default))));
             Assert.Contains(parallelCategories, x => x is CreatedResult);
             Assert.Equal(2, await Scalar(isolated, "SELECT COUNT(*) FROM dbo.DanhMucBaiGiang"));
@@ -356,7 +356,7 @@ public sealed class AdminContentIdempotencySqlServerTests
             var lectureB = new LectureRequest("Lecture B", null, "Text", null, null, null, "DANG_MO");
             var parallelLectures = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => CreateOther(isolated,
                 "CREATE_LECTURE", "/api/admin/content/lectures", "lecture-parallel-2026", lectureB,
-                (db, ctx) => new AdminLecturesController(db, IsolatedStorage(), NullLogger<AdminLecturesController>.Instance)
+                (db, ctx) => new AdminLecturesController(db, IsolatedStorage(), new CourseBlobSynchronizer(db, IsolatedStorage()), NullLogger<AdminLecturesController>.Instance)
                     { ControllerContext = new ControllerContext(ctx) }.Add(lectureB, default))));
             Assert.Contains(parallelLectures, x => x is CreatedResult);
             Assert.Equal(2, await Scalar(isolated, "SELECT COUNT(*) FROM dbo.BaiGiang"));
@@ -438,7 +438,7 @@ public sealed class AdminContentIdempotencySqlServerTests
         http.User = new ClaimsPrincipal(new ClaimsIdentity([
             new Claim(ClaimTypes.NameIdentifier, "1"), new Claim(ClaimTypes.Role, "ADMIN_QUAN_LY")], "test"));
         var action = new ActionContext(http, new RouteData(), new Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor());
-        var controller = new AdminLecturesController(db, storage, NullLogger<AdminLecturesController>.Instance) {
+        var controller = new AdminLecturesController(db, storage, new CourseBlobSynchronizer(db, storage), NullLogger<AdminLecturesController>.Instance) {
             ControllerContext = new ControllerContext(action)
         };
         var filters = new List<IFilterMetadata>();

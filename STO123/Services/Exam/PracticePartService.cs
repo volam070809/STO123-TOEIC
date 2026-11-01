@@ -34,7 +34,6 @@ public static class PracticeQuestionBank
 
 public static class PracticeHistoryMetrics
 {
-    // Unanswered occurrences remain in the denominator, as in Correct / Total.
     public static decimal Accuracy(int correct, int total) => total == 0 ? 0 :
         Math.Round(100m * correct / total, 1);
 }
@@ -71,23 +70,7 @@ public sealed class PracticePartService(ToeicDbContext db)
         if (units.Count < target)
             throw new ExamProblem("INSUFFICIENT_CONTENT", $"Chỉ có {units.Count} câu hỏi hoặc nhóm hợp lệ; mức {preset} cần {target}.", 409);
 
-        var sourceQuestionIds = units.SelectMany(x => x.Questions).Select(x => x.MaCauHoi).Distinct().ToArray();
-        var past = await (from answer in db.ChiTietKetQua.AsNoTracking()
-                          join q in db.CauHoiLuotLam.AsNoTracking() on answer.MaCauHoiLuotLam equals q.MaCauHoiLuotLam
-                          join priorAttempt in db.KetQuaLamBai.AsNoTracking() on q.MaKetQua equals priorAttempt.MaKetQua
-                          where priorAttempt.MaHocVien == learnerId && priorAttempt.LoaiBaiLam == PracticeQuestionBank.AttemptType &&
-                                sourceQuestionIds.Contains(q.MaCauHoiGoc ?? 0)
-                          select new { SourceId = q.MaCauHoiGoc!.Value, answer.DapAnChon, q.PhuongAnDung, priorAttempt.NgayLamBai })
-            .ToListAsync(ct);
-        var history = past.GroupBy(x => x.SourceId).ToDictionary(g => g.Key, g => new {
-            Last = g.Max(x => x.NgayLamBai), Wrong = g.Any(x => !string.IsNullOrWhiteSpace(x.DapAnChon) && x.DapAnChon != x.PhuongAnDung)
-        });
-        var random = Random.Shared;
-        units = units.OrderBy(unit => unit.Questions.Any(q => !history.ContainsKey(q.MaCauHoi)) ? 0 : 1)
-            .ThenBy(unit => unit.Questions.Any(q => history.TryGetValue(q.MaCauHoi, out var h) && h.Wrong) ? 0 : 1)
-            .ThenBy(unit => unit.Questions.Where(q => history.ContainsKey(q.MaCauHoi))
-                .Select(q => history[q.MaCauHoi].Last).DefaultIfEmpty(DateTime.MinValue).Max())
-            .ThenBy(_ => random.Next()).Take(target).ToList();
+        units = units.OrderBy(_ => Random.Shared.Next()).Take(target).ToList();
 
         var now = DateTime.UtcNow;
         var attempt = new KetQuaLamBai { MaHocVien = learnerId, MaLuotLam = Guid.NewGuid(),
@@ -266,64 +249,72 @@ public sealed class PracticePartService(ToeicDbContext db)
         var attempt = await db.KetQuaLamBai.Include(a => a.CauHoiLuotLam).ThenInclude(q => q.ChiTietKetQua)
             .FirstOrDefaultAsync(a => a.MaKetQua == attemptId && a.MaHocVien == learnerId &&
                 a.LoaiBaiLam == PracticeQuestionBank.AttemptType, ct);
-        if (attempt is null) throw new ExamProblem("PRACTICE_NOT_FOUND", "Lượt luyện tập không tồn tại.", 404);
-        if (attempt.TrangThai == ExamCore.Active)
-        { attempt.TrangThai = ExamCore.Submitted; attempt.NgayNopBai = DateTime.UtcNow; await db.SaveChangesAsync(ct); }
+        if (attempt is null)
+        {
+            var receipt = await db.ThongKeLuyenPart.AsNoTracking().FirstOrDefaultAsync(
+                x => x.MaHocVien == learnerId && x.MaKetQuaCuoi == attemptId, ct);
+            if (receipt is null) throw new ExamProblem("PRACTICE_NOT_FOUND", "Lượt luyện tập không tồn tại.", 404);
+            await transaction.CommitAsync(ct);
+            return PracticeSummary(attemptId, receipt.MaPart, receipt.SoCauTrongLanCuoi, receipt.SoCauLanCuoi,
+                receipt.SoDungLanCuoi);
+        }
+        if (attempt.TrangThai != ExamCore.Active)
+            throw new ExamProblem("PRACTICE_NOT_ACTIVE", "Bài luyện này đã kết thúc.", 409);
+        var partIds = attempt.CauHoiLuotLam.Select(q => q.MaPart).Distinct().ToArray();
+        if (partIds.Length != 1 || partIds[0] is < 1 or > 7)
+            throw new ExamProblem("PRACTICE_INVALID_PART", "Part của bài luyện không hợp lệ.", 409);
+        var total = attempt.CauHoiLuotLam.Count;
+        var answered = attempt.CauHoiLuotLam.Count(q => !string.IsNullOrWhiteSpace(q.ChiTietKetQua?.DapAnChon));
+        var correct = attempt.CauHoiLuotLam.Count(q => q.ChiTietKetQua?.DapAnChon == q.PhuongAnDung);
+        var stat = await db.ThongKeLuyenPart.FirstOrDefaultAsync(
+            x => x.MaHocVien == learnerId && x.MaPart == partIds[0], ct);
+        if (stat is null)
+        {
+            stat = new ThongKeLuyenPart { MaHocVien = learnerId, MaPart = partIds[0] };
+            db.ThongKeLuyenPart.Add(stat);
+        }
+        stat.SoLanLuyen++;
+        stat.TongCauDaLam += answered;
+        stat.TongCauDung += correct;
+        stat.SoCauTrongLanCuoi = total;
+        stat.SoCauLanCuoi = answered;
+        stat.SoDungLanCuoi = correct;
+        stat.MaKetQuaCuoi = attemptId;
+        stat.LanLuyenGanNhat = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE d FROM dbo.ChiTietKetQua d JOIN dbo.CauHoiLuotLam q
+                ON q.MaCauHoiLuotLam = d.MaCauHoiLuotLam WHERE q.MaKetQua = {attemptId};
+            DELETE FROM dbo.CauHoiLuotLam WHERE MaKetQua = {attemptId};
+            DELETE FROM dbo.NhomLuotLam WHERE MaKetQua = {attemptId};
+            DELETE FROM dbo.KetQuaLamBai WHERE MaKetQua = {attemptId} AND MaHocVien = {learnerId}
+                AND LoaiBaiLam = 'PRACTICE';
+            """, ct);
         await transaction.CommitAsync(ct);
-        return Summary(attempt);
+        db.ChangeTracker.Clear();
+        return PracticeSummary(attemptId, partIds[0], total, answered, correct);
     }
 
-    public async Task<object> HistoryAsync(int learnerId, int page, int pageSize, int? part, string? sort, CancellationToken ct)
-    {
-        sort = (sort ?? "NEWEST").Trim().ToUpperInvariant();
-        if (page < 1 || pageSize is < 5 or > 10 || part is < 1 or > 7 ||
-            sort is not ("NEWEST" or "OLDEST"))
-            throw new ExamProblem("INVALID_REQUEST", "Bộ lọc hoặc trang lịch sử không hợp lệ.");
-        var completed = db.KetQuaLamBai.AsNoTracking().Where(a => a.MaHocVien == learnerId &&
-            a.LoaiBaiLam == PracticeQuestionBank.AttemptType && a.NgayNopBai != null);
-        var completedAttempts = await completed.CountAsync(ct);
-        var counts = await (from question in db.CauHoiLuotLam.AsNoTracking()
-                            join attempt in completed on question.MaKetQua equals attempt.MaKetQua
-                            group question by 1 into grouped
-                            select new {
-                                Total = grouped.Count(),
-                                Answered = grouped.Sum(q => q.ChiTietKetQua != null && q.ChiTietKetQua.DapAnChon != null ? 1 : 0),
-                                Correct = grouped.Sum(q => q.ChiTietKetQua != null && q.ChiTietKetQua.DapAnChon == q.PhuongAnDung ? 1 : 0)
-                            }).FirstOrDefaultAsync(ct);
-        var historyQuery = part.HasValue ? completed.Where(a => a.CauHoiLuotLam.Any(q => q.MaPartNavigation.SoPart == part.Value)) : completed;
-        var total = part.HasValue ? await historyQuery.CountAsync(ct) : completedAttempts;
-        var ordered = sort == "OLDEST" ? historyQuery.OrderBy(a => a.NgayNopBai).ThenBy(a => a.MaKetQua) :
-            historyQuery.OrderByDescending(a => a.NgayNopBai).ThenByDescending(a => a.MaKetQua);
-        var rows = await ordered
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(a => new { a.MaKetQua, a.NgayLamBai, a.NgayNopBai, a.TrangThai, Total = a.CauHoiLuotLam.Count(),
-                Answered = a.CauHoiLuotLam.Count(q => q.ChiTietKetQua != null && q.ChiTietKetQua.DapAnChon != null),
-                Correct = a.CauHoiLuotLam.Count(q => q.ChiTietKetQua != null && q.ChiTietKetQua.DapAnChon == q.PhuongAnDung),
-                Part = a.CauHoiLuotLam.Select(q => q.MaPartNavigation.SoPart).FirstOrDefault() })
-            .ToListAsync(ct);
-        return new { items = rows.Select(a => new { attemptId = a.MaKetQua,
-            startedAt = DateTime.SpecifyKind(a.NgayLamBai, DateTimeKind.Utc),
-            finishedAt = DateTime.SpecifyKind(a.NgayNopBai!.Value, DateTimeKind.Utc),
-            status = a.TrangThai, total = a.Total, attempted = a.Answered,
-            correct = a.Correct, incorrect = a.Answered - a.Correct, unanswered = a.Total - a.Answered,
-            accuracy = PracticeHistoryMetrics.Accuracy(a.Correct, a.Total), part = a.Part }).ToArray(),
-            summary = new { totalCompleted = completedAttempts, totalQuestions = counts?.Total ?? 0,
-                totalAnswered = counts?.Answered ?? 0, totalCorrect = counts?.Correct ?? 0,
-                overallAccuracy = PracticeHistoryMetrics.Accuracy(counts?.Correct ?? 0, counts?.Total ?? 0) },
-            total, page, pageSize, part, sort };
-    }
+    private static object PracticeSummary(int attemptId, int part, int total, int answered, int correct) => new {
+        attemptId, part, total, attempted = answered, correct, incorrect = answered - correct,
+        unanswered = total - answered, accuracy = PracticeHistoryMetrics.Accuracy(correct, answered),
+        status = ExamCore.Submitted
+    };
 
-    public async Task<object> ReviewAsync(int learnerId, int attemptId, CancellationToken ct)
+    public async Task<object> StatisticsAsync(int learnerId, CancellationToken ct)
     {
-        var attempt = await db.KetQuaLamBai.AsNoTracking().Where(a => a.MaKetQua == attemptId &&
-                a.MaHocVien == learnerId && a.LoaiBaiLam == PracticeQuestionBank.AttemptType && a.NgayNopBai != null)
-            .Include(a => a.NhomLuotLam)
-            .Include(a => a.CauHoiLuotLam).ThenInclude(q => q.ChiTietKetQua)
-            .Include(a => a.CauHoiLuotLam).ThenInclude(q => q.MaPartNavigation)
-            .AsSplitQuery().FirstOrDefaultAsync(ct);
-        if (attempt is null) throw new ExamProblem("PRACTICE_NOT_FOUND", "Lượt luyện tập đã nộp không tồn tại.", 404);
-        return Payload(attempt, attempt.CauHoiLuotLam.FirstOrDefault()?.MaPartNavigation.SoPart ?? 0,
-            null, null, null, true);
+        var rows = await db.ThongKeLuyenPart.AsNoTracking()
+            .Where(x => x.MaHocVien == learnerId).ToListAsync(ct);
+        var byPart = rows.ToDictionary(x => x.MaPart);
+        return new { parts = Enumerable.Range(1, 7).Select(part => {
+            byPart.TryGetValue(part, out var row);
+            return new { part, completedSessions = row?.SoLanLuyen ?? 0,
+                totalQuestions = row?.TongCauDaLam ?? 0, totalCorrect = row?.TongCauDung ?? 0,
+                overallAccuracy = PracticeHistoryMetrics.Accuracy(row?.TongCauDung ?? 0, row?.TongCauDaLam ?? 0),
+                latestAccuracy = PracticeHistoryMetrics.Accuracy(row?.SoDungLanCuoi ?? 0, row?.SoCauLanCuoi ?? 0),
+                lastPracticedAt = row?.LanLuyenGanNhat is { } at ? DateTime.SpecifyKind(at, DateTimeKind.Utc) : (DateTime?)null
+            };
+        }).ToArray() };
     }
 
     private async Task<List<Unit>> LoadUnitsAsync(int? part, int? difficulty, CancellationToken ct,

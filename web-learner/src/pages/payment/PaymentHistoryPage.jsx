@@ -9,7 +9,7 @@ import "../../styles/payment.css";
 const money = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" });
 const date = new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" });
 const labels = {
-  pending: "Đang chờ xác minh", success: "Thành công", failed: "Thất bại",
+  pending: "Đang chờ xác minh", success: "Thành công", failed: "Thất bại", expired: "Quá hạn",
   reconciliation: "Cần đối soát quyền học", error: "Cần kiểm tra",
 };
 

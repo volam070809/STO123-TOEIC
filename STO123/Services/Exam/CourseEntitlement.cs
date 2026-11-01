@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using STO123.Models;
+using STO123.Services.Payment;
 
 namespace STO123.Services.Exam;
 
@@ -19,10 +20,11 @@ public static class CourseEntitlement
         return legacy.Concat(custom).Distinct();
     }
 
-    public static IQueryable<int> PendingCourseIds(ToeicDbContext db, int learnerId) {
+    public static IQueryable<int> PendingCourseIds(ToeicDbContext db, int learnerId, DateTime? localNow = null) {
+        var cutoff = (localNow ?? DateTime.UtcNow.AddHours(7)).AddMinutes(-PaymentExpiry.PendingMinutes);
         var pending = db.DangKyGoiHoc.AsNoTracking().Where(e => e.MaNguoiDung == learnerId &&
             e.TrangThai == "CHO_THANH_TOAN" && e.GiaoDichThanhToan.Any(p =>
-                p.TrangThai == "CHO_XU_LY" || p.TrangThai == "THANH_CONG"));
+                (p.TrangThai == "CHO_XU_LY" && p.NgayTao >= cutoff) || p.TrangThai == "THANH_CONG"));
         return pending.Where(e => e.MaGoiHoc != null)
             .SelectMany(e => e.MaGoiHocNavigation.MaKhoaHoc.Select(c => c.MaKhoaHoc))
             .Concat(pending.Where(e => e.MaGoiHoc == null)

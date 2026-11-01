@@ -9,18 +9,18 @@ namespace STO123.Tests;
 public sealed class LectureBlobIsolatedTests
 {
     [Theory]
-    [InlineData("Bài giảng TOEIC.pdf")]
+    [InlineData("BÃ i giáº£ng TOEIC.pdf")]
     [InlineData("Đề thi.TOEIC.Final.PDF")]
-    [InlineData("bài giảng TOEIC.pdf")]
+    [InlineData("bÃ i giáº£ng TOEIC.pdf")]
     public void Original_unicode_and_multi_dot_filenames_are_accepted(string name)
     {
         Assert.True(LectureResourceStorage.SafeFileName(name));
     }
 
     [Theory]
-    [InlineData("../Bài giảng.pdf")]
-    [InlineData("thư mục\\Bài giảng.pdf")]
-    [InlineData("Bài giảng.pdf.")]
+    [InlineData("../BÃ i giáº£ng.pdf")]
+    [InlineData("thÆ° má»¥c\\BÃ i giáº£ng.pdf")]
+    [InlineData("BÃ i giáº£ng.pdf.")]
     public void Traversal_or_unsafe_filenames_are_rejected(string name)
     {
         Assert.False(LectureResourceStorage.SafeFileName(name));
@@ -31,7 +31,7 @@ public sealed class LectureBlobIsolatedTests
     {
         var storage = new LectureResourceStorage(new BlobServiceClient("UseDevelopmentStorage=true"),
             new ConfigurationBuilder().Build());
-        const string name = "Bài giảng TOEIC.Final.PDF";
+        const string name = "BÃ i giáº£ng TOEIC.Final.PDF";
         var first = storage.NewPath(name);
         var second = storage.NewPath(name);
         Assert.NotEqual(first, second);
@@ -44,15 +44,15 @@ public sealed class LectureBlobIsolatedTests
     [Fact]
     public void Course_resource_path_uses_stable_ids_and_original_unicode_name()
     {
-        const string name = "Bài giảng TOEIC.pdf";
-        var path = LectureResourceStorage.CoursePath(1, 2, 5, 12, 101, name);
-        Assert.Equal("courses/course-1/unit-2/lesson-5/activity-12/resource-101/" + name, path);
+        const string name = "BÃ i giáº£ng TOEIC.pdf";
+        var path = LectureResourceStorage.CoursePath(1, 2, 5, "activity", 12, 101, name);
+        Assert.Equal("course-1/unit-2/lesson-5/activity-a12-r101/" + name, path);
         Assert.True(LectureResourceStorage.Owned(path));
         Assert.Equal(path, LectureResourceStorage.FromReservationPath(LectureResourceStorage.ReservationPath(path)));
-        Assert.StartsWith("lecture-resources/courses/course-1/", LectureResourceStorage.ReservationPath(path), StringComparison.Ordinal);
+        Assert.StartsWith("lecture-resources/course-1/", LectureResourceStorage.ReservationPath(path), StringComparison.Ordinal);
         Assert.Equal(name, LectureResourceStorage.DownloadName(name, path));
-        Assert.False(LectureResourceStorage.Owned("courses/course-1/unit-2/lesson-5/activity-12/resource-0/" + name));
-        Assert.False(LectureResourceStorage.Owned("courses/course-1/unit-2/lesson-5/activity-12/resource-101/../x.pdf"));
+        Assert.False(LectureResourceStorage.Owned("course-1/unit-2/lesson-5/activity-a12-r0/" + name));
+        Assert.False(LectureResourceStorage.Owned("course-1/unit-2/lesson-5/activity-a12-r101/../x.pdf"));
     }
 
     [Fact]

@@ -18,6 +18,7 @@ const statusLabels = {
   CHO_XU_LY: "Chờ xử lý",
   THANH_CONG: "Thành công",
   THAT_BAI: "Thất bại",
+  QUA_HAN: "Quá hạn",
   DANG_LAM: "Đang làm",
   DA_NOP: "Đã nộp",
   BO_DO: "Bỏ dở",
@@ -33,7 +34,7 @@ export function statusLabel(status) {
 
 export function statusTone(status) {
   if (["HOAT_DONG", "DANG_MO", "DANG_SU_DUNG", "THANH_CONG", "HOAN_THANH", "DA_NOP"].includes(status)) return "success";
-  if (["BI_KHOA", "DA_DONG", "THAT_BAI", "HUY"].includes(status)) return "danger";
+  if (["BI_KHOA", "DA_DONG", "THAT_BAI", "QUA_HAN", "HUY"].includes(status)) return "danger";
   return "warning";
 }
 

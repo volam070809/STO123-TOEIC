@@ -162,6 +162,7 @@ public sealed class PaymentController(
     {
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var learnerId) || learnerId <= 0)
             return Unauthorized();
+        await payments.ExpirePendingAsync(learnerId, cancellationToken);
         var result = await db.GiaoDichThanhToan.AsNoTracking()
             .Where(item => item.MaGiaoDich == id && item.MaDangKyNavigation.MaNguoiDung == learnerId)
             .Select(item => new PaymentStatusDto(item.MaGiaoDich, item.TrangThai,
@@ -175,6 +176,7 @@ public sealed class PaymentController(
     {
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var learnerId) || learnerId <= 0)
             return Unauthorized();
+        await payments.ExpirePendingAsync(learnerId, cancellationToken);
         var rows = await db.GiaoDichThanhToan.AsNoTracking()
             .Where(item => item.MaDangKyNavigation.MaNguoiDung == learnerId)
             .OrderByDescending(item => item.NgayTao).ThenByDescending(item => item.MaGiaoDich)

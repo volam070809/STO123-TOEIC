@@ -47,10 +47,6 @@ function LearnerPlacementPage() {
   const navigate = useNavigate();
   const [state, setState] = useState(null);
   const [history, setHistory] = useState(null);
-  const [historyRows, setHistoryRows] = useState([]);
-  const [historyPage, setHistoryPage] = useState(0);
-  const [historyMore, setHistoryMore] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
@@ -58,6 +54,7 @@ function LearnerPlacementPage() {
   const [target, setTarget] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [retryLoad, setRetryLoad] = useState(0);
   const [, setTick] = useState(0);
   useEffect(() => {
     let live = true;
@@ -67,10 +64,14 @@ function LearnerPlacementPage() {
     }).catch(() => { if (live) setError("Không thể tải lộ trình học."); });
     const timer = setInterval(() => setTick(n => n + 1), 1000);
     return () => { live = false; clearInterval(timer); };
-  }, [token]);
+  }, [token, retryLoad]);
 
   async function showAnalysis() {
-    if (analysisLoading || result) return;
+    if (analysisLoading) return;
+    if (result) {
+      document.getElementById("placement-analysis")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     setAnalysisLoading(true); setError("");
     try {
       const outcome = await placementApi.result(token);
@@ -95,19 +96,6 @@ function LearnerPlacementPage() {
       setCoursesLoaded(true);
     } catch { setError("Không thể tải khóa học đang mở. Vui lòng thử lại."); }
     finally { setAnalysisLoading(false); }
-  }
-
-  async function loadHistory() {
-    if (historyLoading || (historyPage > 0 && !historyMore)) return;
-    setHistoryLoading(true); setError("");
-    try {
-      const next = historyPage + 1;
-      const data = await placementApi.history(token, next);
-      setHistoryRows(old => [...old, ...data.items]);
-      setHistoryPage(next); setHistoryMore(data.hasMore);
-      if (next === 1) requestAnimationFrame(() => document.getElementById("placement-history")?.scrollIntoView({ behavior: "smooth", block: "start" }));
-    } catch { setError("Không thể tải lịch sử kiểm tra đầu vào."); }
-    finally { setHistoryLoading(false); }
   }
 
   async function start() {
@@ -141,22 +129,32 @@ function LearnerPlacementPage() {
   const hasActive = state?.status === "DANG_LAM" || state?.status === "BO_DO";
   return <SiteLayout><div className="site-container exam-home placement-page">
     <div className="page-heading placement-heading"><span>Lộ trình học</span><h1>Kiểm tra đầu vào và lộ trình học</h1>
-      <p>7 Part · tối đa 200 câu · 120 phút · Có thể làm lại để cập nhật kết quả</p></div>
+      <p>7 Part · 200 câu · 120 phút · Có thể làm lại để cập nhật kết quả</p></div>
     <div className="exam-navigation"><Link className="outline-button" to="/">← Quay lại</Link></div>
     {error && <p className="exam-error" role="alert">{error}</p>}
+    {!state && error && <button className="outline-button" type="button" onClick={() => { setError(""); setRetryLoad(value => value + 1); }}>Thử tải lại</button>}
     {!state && !error && <p>Đang tải lộ trình học…</p>}
-    {hasActive && <section className="exam-card placement-action-card"><div><span className="placement-eyebrow">Tiếp tục hành trình</span><h2>Bài kiểm tra đầu vào đang làm</h2>
+    {hasActive && <section className="exam-card placement-action-card"><div><span className="placement-eyebrow">Bài đang làm</span><h2>Tiếp tục kiểm tra đầu vào</h2>
       <p>7 Part · {state.totalQuestions} câu · Đã trả lời {state.answered} / {state.totalQuestions}</p>
+      <div className="placement-bar" role="progressbar" aria-label="Câu đã trả lời" aria-valuemin="0"
+        aria-valuemax={state.totalQuestions || 200} aria-valuenow={state.answered || 0}>
+        <span style={{ width: `${state.totalQuestions ? 100 * state.answered / state.totalQuestions : 0}%` }} /></div>
       <p>{state.isPaused ? "Đang tạm dừng · " : ""}Thời gian còn lại: {remaining(state.remainingSeconds)}</p></div>
       <Link className="primary-button" to={`/exam/${state.attemptId}`}>Tiếp tục kiểm tra</Link></section>}
-    {!hasActive && state && <section className="exam-card placement-action-card"><div><span className="placement-eyebrow">Đánh giá năng lực</span><h2>{history?.completedCount ? "Kiểm tra lại năng lực" : "Bắt đầu kiểm tra đầu vào"}</h2>
+    {!hasActive && state && !history?.completedCount && <section className="exam-card placement-action-card"><div><span className="placement-eyebrow">Đánh giá năng lực</span><h2>Bắt đầu kiểm tra đầu vào</h2>
       <p>Kết quả 7 Part giúp đánh giá năng lực và chọn khóa học phù hợp.</p></div>
       <button className="primary-button" type="button" disabled={pending} onClick={start}>
-        {history?.completedCount ? "Làm lại kiểm tra đầu vào" : "Bắt đầu kiểm tra đầu vào"}</button></section>}
-    {history?.completedCount > 0 && !result && <section className="exam-card placement-latest-card"><div><span className="placement-eyebrow">Lần kiểm tra gần nhất</span><h2>Kết quả gần nhất</h2>
-      <p>{date(history.latestCompletedAt)} · {history.currentStage ? `Giai đoạn ${history.currentStage}` : "Chưa có đánh giá trình độ"}</p></div>
-      <button className="outline-button" type="button" disabled={analysisLoading} onClick={showAnalysis}>
-        {analysisLoading ? "Đang tải…" : "Xem phân tích"}</button></section>}
+        {pending ? "Đang bắt đầu…" : "Bắt đầu kiểm tra"}</button></section>}
+    {history?.completedCount > 0 && <section className="exam-card placement-latest-card"><div><span className="placement-eyebrow">Kết quả gần nhất</span>
+      <h2>{history.currentStage ? `Giai đoạn ${history.currentStage}` : "Chưa có kết quả phân lớp"}</h2>
+      <p>Hoàn thành {date(history.latestCompletedAt)}</p></div>
+      <div className="placement-latest-actions">
+        <button className="outline-button" type="button" disabled={analysisLoading} onClick={showAnalysis}>
+          {analysisLoading ? "Đang tải…" : "Xem phân tích"}</button>
+        {!hasActive && <button className="primary-button" type="button" disabled={pending} onClick={start}>
+          {pending ? "Đang bắt đầu…" : "Làm lại kiểm tra"}</button>}
+        <Link className="outline-button" to="/courses">Xem lộ trình học</Link>
+      </div></section>}
     {result && <PlacementAnalysisView analysis={result} courses={recommendations} target={target}
       onTargetChange={value => { setTarget(value); setRecommendations(old => old.map(course =>
         ({ ...course, recommended: false, recommendationOrder: null }))); }}
@@ -164,18 +162,6 @@ function LearnerPlacementPage() {
       coursesLoaded={coursesLoaded && !analysisLoading} />}
     {result?.stage && !coursesLoaded && !analysisLoading &&
       <button type="button" className="outline-button" onClick={reloadCourses}>Thử tải lại khóa học</button>}
-    {history?.completedCount > 0 && <section id="placement-history" className="exam-card placement-history-card"><div><h2>Lịch sử kiểm tra đầu vào</h2>
-      <p>Đã thực hiện {history.completedCount} lần · Lần gần nhất: {date(history.latestCompletedAt)}</p>
-      <p>Trình độ hiện tại: {history.currentStage ? `Giai đoạn ${history.currentStage}` : "Chưa có đánh giá trình độ"}</p>
-      <button className="outline-button" type="button" disabled={historyLoading || historyPage > 0} onClick={loadHistory}>
-        {historyLoading ? "Đang tải…" : historyPage ? "Lịch sử đã mở" : "Xem lịch sử"}</button>
-      {historyPage > 0 && <div className="placement-history-list">{historyRows.map(row =>
-        <div key={row.attemptId}><span><strong>Lần {row.number}</strong> · {date(row.completedAt)}
-          {row.stage ? ` · Giai đoạn ${row.stage}` : " · Chưa lưu kết quả phân loại"}</span>
-          <span className="action-row"><Link to={`/exam/${row.attemptId}/result`}>Xem kết quả</Link>
-            <Link to={`/exam/${row.attemptId}/review`}>Xem lại bài</Link></span></div>)}
-        {historyMore && <button className="outline-button" type="button" disabled={historyLoading} onClick={loadHistory}>
-          {historyLoading ? "Đang tải…" : "Xem thêm lần kiểm tra"}</button>}</div>}</div></section>}
-    <section><Link className="outline-button" to="/courses">Khám phá tất cả khóa học</Link></section>
+    {!history?.completedCount && <section><Link className="outline-button" to="/courses">Khám phá các khóa học</Link></section>}
   </div></SiteLayout>;
 }

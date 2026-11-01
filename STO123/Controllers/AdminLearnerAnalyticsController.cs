@@ -36,8 +36,9 @@ public sealed class AdminLearnerAnalyticsController(ToeicDbContext db, TimeProvi
             .Select(link => link.MaChuDe).Distinct().CountAsync(ct);
         var remembered = await db.TienDoTuVung.AsNoTracking()
             .CountAsync(progress => progress.MaNguoiDung == learnerId && progress.TrangThai == "DA_THUOC", ct);
-        var practiceAttempts = await db.KetQuaLamBai.AsNoTracking()
-            .CountAsync(attempt => attempt.MaHocVien == learnerId && attempt.LoaiBaiLam == PracticeType, ct);
+        var practiceAttempts = await db.ThongKeLuyenPart.AsNoTracking()
+            .Where(stat => stat.MaHocVien == learnerId)
+            .SumAsync(stat => (int?)stat.SoLanLuyen, ct) ?? 0;
         var completedMocks = await db.KetQuaLamBai.AsNoTracking()
             .CountAsync(attempt => attempt.MaHocVien == learnerId && attempt.LoaiBaiLam == MockType &&
                 (attempt.TrangThai == "DA_NOP" || attempt.TrangThai == "HET_GIO"), ct);
@@ -51,6 +52,10 @@ public sealed class AdminLearnerAnalyticsController(ToeicDbContext db, TimeProvi
                     attempt.LoaiBaiLam == MockType ? "Thi thử TOEIC" : "Kiểm tra đầu vào",
                 attempt.TrangThai, attempt.NgayNopBai ?? attempt.NgayLamBai, attempt.MaKetQua))
             .ToListAsync(ct);
+        var practiceActivity = await db.ThongKeLuyenPart.AsNoTracking()
+            .Where(stat => stat.MaHocVien == learnerId && stat.LanLuyenGanNhat != null)
+            .Select(stat => new AdminLearnerActivityDto("PRACTICE", "Luyện tập Part " + stat.MaPart,
+                "DA_NOP", stat.LanLuyenGanNhat!.Value, stat.MaPart)).ToListAsync(ct);
         var vocabularyActivity = await db.LanLuyenTuVung.AsNoTracking()
             .Where(attempt => attempt.MaNguoiDung == learnerId)
             .OrderByDescending(attempt => attempt.NgayNopBai ?? attempt.NgayBatDau)
@@ -64,7 +69,7 @@ public sealed class AdminLearnerAnalyticsController(ToeicDbContext db, TimeProvi
             .Select(progress => new AdminLearnerActivityDto(
                 "COURSE", "Tiến độ khóa học", progress.TrangThai,
                 progress.CapNhatLuc, progress.MaTienDoBLT)).ToListAsync(ct);
-        var recent = examActivity.Concat(vocabularyActivity).Concat(courseActivity)
+        var recent = examActivity.Concat(practiceActivity).Concat(vocabularyActivity).Concat(courseActivity)
             .OrderByDescending(activity => activity.OccurredAt).Take(8).ToList();
         var latestProgress = await db.TienDoTuVung.AsNoTracking()
             .Where(progress => progress.MaNguoiDung == learnerId)
@@ -141,38 +146,21 @@ public sealed class AdminLearnerAnalyticsController(ToeicDbContext db, TimeProvi
         [FromQuery] int pageSize = 10, [FromQuery] int? part = null, CancellationToken ct = default)
     {
         if (!ValidPage(page, pageSize) || part is < 1 or > 7)
-            return BadRequest(new { code = "INVALID_PRACTICE_FILTER", message = "Bộ lọc lịch sử luyện tập không hợp lệ." });
+            return BadRequest(new { code = "INVALID_PRACTICE_FILTER", message = "Bộ lọc thống kê luyện tập không hợp lệ." });
         if (!await LearnerExists(learnerId, ct)) return LearnerNotFound();
 
-        var query = db.KetQuaLamBai.AsNoTracking().Where(attempt =>
-            attempt.MaHocVien == learnerId && attempt.LoaiBaiLam == PracticeType);
-        var metrics = await PracticeMetrics(query).ToListAsync(ct);
-        var partRows = Enumerable.Range(1, 7).Select(number =>
+        var stats = await db.ThongKeLuyenPart.AsNoTracking()
+            .Where(stat => stat.MaHocVien == learnerId).ToListAsync(ct);
+        var partRows = Enumerable.Range(1, 7).Where(number => !part.HasValue || number == part.Value).Select(number =>
         {
-            var rows = metrics.Where(metric => metric.Part == number).ToList();
-            var total = rows.Sum(metric => metric.Total);
-            var answered = rows.Sum(metric => metric.Answered);
-            var correct = rows.Sum(metric => metric.Correct);
-            return new AdminLearnerPracticePartDto(number, rows.Count,
-                rows.Count(metric => metric.CompletedAt.HasValue), correct, answered - correct,
-                total - answered, AdminLearnerAnalyticsMath.Accuracy(correct, total),
-                rows.Count == 0 ? null : rows.Max(metric => (DateTime?)metric.StartedAt));
+            var row = stats.FirstOrDefault(stat => stat.MaPart == number);
+            return new AdminLearnerPracticePartDto(number, row?.SoLanLuyen ?? 0,
+                row?.SoLanLuyen ?? 0, row?.TongCauDung ?? 0,
+                (row?.TongCauDaLam ?? 0) - (row?.TongCauDung ?? 0), 0,
+                AdminLearnerAnalyticsMath.Accuracy(row?.TongCauDung ?? 0, row?.TongCauDaLam ?? 0),
+                row?.LanLuyenGanNhat);
         }).ToList();
-
-        if (part.HasValue) query = query.Where(attempt => attempt.CauHoiLuotLam
-            .Any(question => question.MaPartNavigation.SoPart == part.Value));
-        var totalItems = await query.CountAsync(ct);
-        var orderedHistory = query.OrderByDescending(attempt => attempt.NgayLamBai)
-            .ThenByDescending(attempt => attempt.MaKetQua);
-        var history = await PracticeMetrics(orderedHistory)
-            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
-        var items = history.Select(metric => new AdminLearnerPracticeAttemptDto(
-            metric.AttemptId, metric.Part == 0 ? null : metric.Part, metric.StartedAt,
-            metric.CompletedAt, metric.Status, null, null, metric.Total, metric.Correct,
-            metric.Answered - metric.Correct, metric.Total - metric.Answered,
-            AdminLearnerAnalyticsMath.Accuracy(metric.Correct, metric.Total))).ToList();
-        return Ok(new AdminLearnerPracticeAnalyticsDto(partRows, items, totalItems, page,
-            pageSize, Pages(totalItems, pageSize)));
+        return Ok(new AdminLearnerPracticeAnalyticsDto(partRows, [], 0, page, pageSize, 0));
     }
 
     [HttpGet("exams")]

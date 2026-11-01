@@ -26,6 +26,7 @@ export function paymentState(status, enrollmentStatus) {
       enrollmentStatus !== "HET_HAN") return "reconciliation";
   if (status === "THANH_CONG") return "success";
   if (status === "THAT_BAI") return "failed";
+  if (status === "QUA_HAN") return "expired";
   if (status === "CHO_XU_LY") return "pending";
   return "error";
 }

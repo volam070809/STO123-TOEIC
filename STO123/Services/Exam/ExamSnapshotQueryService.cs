@@ -14,7 +14,7 @@ public sealed record ExamSnapshot(KetQuaLamBai Attempt, string? ExamName,
     Dictionary<int, ChiTietKetQua> Answers);
 
 // One SQL batch keeps the independent snapshot result sets separate, avoiding a multiplying JOIN.
-public sealed class ExamSnapshotQueryService(ToeicDbContext db)
+public sealed class ExamSnapshotQueryService(ToeicDbContext db, CompactExamStore compact)
 {
     public async Task<ExamTimerDto> HeartbeatAsync(int id, int learnerId, CancellationToken ct)
     {
@@ -76,6 +76,9 @@ public sealed class ExamSnapshotQueryService(ToeicDbContext db)
     public async Task<ExamSnapshot> LoadAsync(int id, int learnerId, SnapshotView view,
         bool resume, CancellationToken ct)
     {
+        var compactJson = await db.KetQuaLamBai.AsNoTracking().Where(x => x.MaKetQua == id)
+            .Select(x => x.DuLieuBaiLamJson).FirstOrDefaultAsync(ct);
+        if (compactJson is not null) return await compact.LoadAsync(id, learnerId, view, resume, ct);
         var questionColumns = view switch
         {
             SnapshotView.Active => "q.MaCauHoiLuotLam, q.MaNhomLuotLam, q.ThuTu, q.ThuTuTrongPart, p.SoPart, " +

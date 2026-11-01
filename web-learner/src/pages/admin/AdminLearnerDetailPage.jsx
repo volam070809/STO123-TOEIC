@@ -164,7 +164,7 @@ function OverviewTab({ data }) {
     <div className="admin-kpi-grid admin-learner-kpis">
       <Stat label="Chủ đề từ vựng đã bắt đầu" value={data.vocabularyTopicsStarted} note="chủ đề có tiến độ thực tế" />
       <Stat label="Từ đã nhớ" value={data.uniqueRememberedWords} note="từ duy nhất, không đếm trùng chủ đề" />
-      <Stat label="Lượt luyện theo Part" value={data.practiceAttemptCount} note="bao gồm mọi trạng thái" />
+      <Stat label="Lượt luyện theo Part" value={data.practiceAttemptCount} note="đã hoàn thành" />
       <Stat label="Bài thi thử hoàn tất" value={data.completedMockCount} note="đã nộp hoặc hết giờ" />
     </div>
     <section className="admin-panel admin-detail-section">
@@ -237,12 +237,11 @@ function StartedVocabularyTopic({ topic }) {
   </article>;
 }
 
-function PracticeTab({ data, selectedPart, onPart, onPage }) {
+function PracticeTab({ data }) {
   const insights = practiceInsights(data.parts);
   return <>
-    <div className="admin-tab-toolbar"><div><h2>Hiệu suất Parts 1–7</h2><p>Độ chính xác = số đúng / tổng số câu trong snapshot.</p></div>
-      <label><span>Lọc lịch sử</span><select value={selectedPart || ""} onChange={event => onPart(event.target.value || null)}>
-        <option value="">Tất cả Part</option>{data.parts.map(part => <option key={part.part} value={part.part}>Part {part.part}</option>)}</select></label></div>
+    <div className="admin-tab-toolbar"><div><h2>Hiệu suất Parts 1–7</h2>
+      <p>Thống kê tích lũy từ các bài luyện đã hoàn thành. Độ chính xác = số câu đúng / số câu đã làm.</p></div></div>
     <section className="admin-panel admin-part-overview">
       <div className="admin-learning-insights" aria-label="Điểm mạnh và điểm cần chú ý">
         <Insight label="Mạnh nhất" part={insights.strongest} tone="positive" />
@@ -250,23 +249,8 @@ function PracticeTab({ data, selectedPart, onPart, onPage }) {
       </div>
       <div className="admin-part-comparison">{data.parts.map(part => <PartPerformance key={part.part} part={part} />)}</div>
     </section>
-    <details className="admin-panel admin-analytics-disclosure admin-history-disclosure">
-      <summary><span>Xem chi tiết lịch sử luyện tập</span><small>{data.totalItems} lượt</small></summary>
-      <div className="admin-disclosure-content">
-      <p className="admin-history-note">Preset và độ khó không được lưu trong snapshot hiện tại.</p>
-      {data.items.length ? <><div className="admin-table-wrap"><table className="admin-table admin-analytics-table">
-        <thead><tr><th>Lượt</th><th>Part</th><th>Ngày</th><th>Preset / Độ khó</th><th>Đúng</th><th>Sai</th><th>Chưa trả lời</th><th>Độ chính xác</th><th>Trạng thái</th></tr></thead>
-        <tbody>{data.items.map(item => <tr key={item.attemptId}><td>#{item.attemptId}</td><td>{item.part ? `Part ${item.part}` : "—"}</td>
-          <td>{formatDate(item.completedAt || item.startedAt, true)}</td><td>Chưa có dữ liệu</td><td>{item.correct}/{item.totalQuestions}</td>
-          <td>{item.incorrect}</td><td>{item.unanswered}</td><td>{percent(item.accuracy)}</td>
-          <td><span className={`admin-status is-${statusTone(item.status)}`}>{analyticsStatus(item.status)}</span></td></tr>)}</tbody>
-      </table></div><Pagination page={data.page} totalPages={data.totalPages} onPage={onPage} /></> :
-        <AdminMessage title="Chưa có lượt luyện tập" detail="Không có lịch sử phù hợp với bộ lọc hiện tại." />}
-      </div>
-    </details>
   </>;
 }
-
 function Insight({ label, part, tone }) {
   return <div className={`admin-insight is-${tone}`}><span>{label}</span>
     {part ? <><strong>Part {part.part}</strong><small>{percent(part.accuracy)} · {part.totalAttempts} lượt</small></> :
@@ -282,7 +266,7 @@ function PartPerformance({ part }) {
       aria-valuemin="0" aria-valuemax="100" aria-valuenow={accuracy}><i style={{ width: `${accuracy}%` }} /></div>
     <b>{percent(part.accuracy)}</b>
     <span>{part.totalAttempts} lượt · {part.completedAttempts} hoàn tất</span>
-    <span>{part.unanswered} chưa trả lời</span>
+    <span>{part.correct} đúng · {part.incorrect} sai</span>
   </div>;
 }
 

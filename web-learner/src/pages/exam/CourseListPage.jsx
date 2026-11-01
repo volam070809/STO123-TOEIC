@@ -19,7 +19,7 @@ const accessLabels = {
   NOT_PURCHASED: "Chưa mua", PAYMENT_PENDING: "Đang chờ thanh toán",
   ACTIVE: "Đang có quyền học", EXPIRED: "Đã hết hạn", PAYMENT_FAILED: "Thanh toán thất bại",
 };
-const paymentLabels = { CHO_XU_LY: "Đang chờ xác nhận", THANH_CONG: "Thành công", THAT_BAI: "Thất bại" };
+const paymentLabels = { CHO_XU_LY: "Đang chờ xác nhận", THANH_CONG: "Thành công", THAT_BAI: "Thất bại", QUA_HAN: "Quá hạn" };
 
 export default function CourseListPage() {
   const { token } = useAuth();
@@ -95,6 +95,7 @@ export default function CourseListPage() {
   const paymentMessage = {
     success: "Thanh toán đã được xác nhận. Quyền học đã cập nhật.",
     failed: "Thanh toán thất bại. Bạn có thể thử lại.",
+    expired: "Phiên thanh toán đã quá hạn. Bạn có thể tạo lần thanh toán mới; nếu đã bị trừ tiền, hãy liên hệ hỗ trợ để đối soát.",
     pending: "Đang chờ VNPay xác nhận. Nội dung vẫn khóa cho đến khi thanh toán thành công.",
     reconciliation: "Giao dịch cần được đối soát. Quyền học chưa được kích hoạt.",
     "not-found": "Không tìm thấy giao dịch thuộc tài khoản của bạn.",

@@ -298,3 +298,18 @@
   .practice-session .exam-email, .practice-session .exam-form-document { padding: .75rem; }
   .practice-session .exam-email-meta > div, .practice-session .exam-form-document dl > div { grid-template-columns: minmax(4rem, 25%) minmax(0, 1fr); }
 }
+.practice-stats-panel { grid-column: 1 / -1; }
+.practice-stats-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.practice-stats-heading h2 { margin-bottom: .25rem; }
+.practice-stats-heading p { margin: 0; color: #566574; }
+.practice-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: .8rem; }
+.practice-stats-grid article { padding: 1rem; border: 1px solid #d9e3ea; border-radius: 10px; background: #fff; }
+.practice-stats-title { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.practice-stats-title strong { color: #145876; font-size: 1.1rem; }
+.practice-stats-title span { color: #566574; font-size: .8rem; text-align: right; }
+.practice-stats-values, .practice-stats-rates { display: flex; flex-wrap: wrap; gap: .45rem .9rem; margin-top: .8rem; }
+.practice-stats-values span, .practice-stats-rates span { color: #344b58; font-size: .85rem; }
+.practice-stats-values b, .practice-stats-rates b { color: #173a4a; font-variant-numeric: tabular-nums; }
+.practice-stats-rates { padding-top: .65rem; border-top: 1px solid #e6edf1; }
+.practice-stats-grid small { display: block; margin-top: .8rem; color: #647582; }
+.practice-finish-summary { margin-bottom: 1rem; }

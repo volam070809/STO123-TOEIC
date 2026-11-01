@@ -49,14 +49,17 @@ export default function PaymentResultPage() {
         <p>Giao dịch đã được ghi nhận. Hệ thống chưa kích hoạt thêm gói học vì có đăng ký đang sử dụng. Vui lòng liên hệ hỗ trợ và cung cấp mã giao dịch.</p>
       </div>}
       {kind === "failed" && <div className="payment-message payment-failed" role="status">
-        <h2>Thanh toán không thành công</h2><p>Giao dịch đã được hệ thống xác nhận thất bại.</p>
+        <h2>Thanh toán không thành công</h2><p>Giao dịch đã được xác nhận thất bại. Bạn có thể chọn khóa học và thanh toán lại.</p>
+      </div>}
+      {kind === "expired" && <div className="payment-message payment-failed" role="status">
+        <h2>Phiên thanh toán đã hết hạn</h2><p>Liên kết VNPay đã hết thời gian. Bạn có thể tạo lần thanh toán mới; nếu đã bị trừ tiền, hãy liên hệ hỗ trợ với mã giao dịch này để đối soát.</p>
       </div>}
       {kind === "unauthorized" && <p role="alert" className="payment-alert">Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại để xem giao dịch của bạn.</p>}
       {kind === "not-found" && <p role="alert" className="payment-alert">Không tìm thấy giao dịch này trong tài khoản của bạn.</p>}
       {(kind === "network-error" || kind === "error") && <p role="alert" className="payment-alert">Chưa thể tải trạng thái giao dịch. Vui lòng thử lại.</p>}
       {paymentId && (kind === "pending" || kind === "network-error" || kind === "error") &&
         <button type="button" className="primary-button payment-refresh" onClick={refresh}>Kiểm tra lại</button>}
-      <div className="payment-links"><Link to="/payment/history">Lịch sử thanh toán</Link><Link to="/packages">Xem gói học</Link><Link to="/courses">Xem khóa học</Link></div>
+      <div className="payment-links"><Link to="/payment/history">Lịch sử thanh toán</Link><Link to="/packages">Xem gói học</Link><Link to="/courses">{kind === "failed" || kind === "expired" ? "Chọn khóa học để thanh toán lại" : "Xem khóa học"}</Link></div>
     </div>
   </main></SiteLayout>;
 }

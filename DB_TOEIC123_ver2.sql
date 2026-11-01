@@ -110,9 +110,9 @@ CREATE TABLE dbo.DangKyGoiHoc(
     NgayDangKy datetime not null default getdate(),
     NgayBatDau datetime null,
     NgayKetThuc datetime null,
-    TrangThai varchar(16) not null default 'CHO_THANH_TOAN' check (TrangThai in ('CHO_THANH_TOAN','DANG_SU_DUNG','HET_HAN')),
+    TrangThai varchar(16) not null default 'CHO_THANH_TOAN' check (TrangThai in ('CHO_THANH_TOAN','DANG_SU_DUNG','HET_HAN','THAT_BAI','QUA_HAN')),
     constraint CK_DangKyGoiHoc_ThoiHan check (
-        (TrangThai = 'CHO_THANH_TOAN' and NgayBatDau is null and NgayKetThuc is null)
+        (TrangThai in ('CHO_THANH_TOAN','THAT_BAI','QUA_HAN') and NgayBatDau is null and NgayKetThuc is null)
         or
         (TrangThai in ('DANG_SU_DUNG','HET_HAN') and NgayBatDau is not null and NgayKetThuc is not null and NgayKetThuc > NgayBatDau)
     )
@@ -149,7 +149,7 @@ CREATE TABLE dbo.GiaoDichThanhToan(
     MaCongThanhToan int not null foreign key references CongThanhToan(MaCongThanhToan),
     SoTien decimal(18,2) not null check (SoTien >= 0),
     MaGiaoDichCongThanhToan varchar(128) not null,
-    TrangThai varchar(32) not null default 'CHO_XU_LY' check (TrangThai in ('CHO_XU_LY','THANH_CONG','THAT_BAI')),
+    TrangThai varchar(32) not null default 'CHO_XU_LY' check (TrangThai in ('CHO_XU_LY','THANH_CONG','THAT_BAI','QUA_HAN')),
     NgayTao datetime not null default getdate(),
     NgayThanhToan datetime null,
     constraint CK_GiaoDichThanhToan_ThanhCong check (
@@ -288,6 +288,8 @@ CREATE TABLE dbo.KetQuaLamBai(
     ThoiGianConLaiGiay int null,
     BatDauPhienLuc datetime2(3) null,
     GiaiDoanLucNop tinyint null,
+    DuLieuBaiLamJson nvarchar(max) null,
+    constraint CK_KetQuaLamBai_DuLieuJson check (DuLieuBaiLamJson is null or isjson(DuLieuBaiLamJson) = 1),
     constraint CK_KetQuaLamBai_ThoiHan check (HetHanLuc is null or HetHanLuc > NgayLamBai),
     constraint CK_KetQuaLamBai_NopBai check (
         (TrangThai in ('DA_NOP','HET_GIO') and NgayNopBai is not null)
@@ -298,6 +300,26 @@ CREATE TABLE dbo.KetQuaLamBai(
     constraint CK_KetQuaLamBai_GiaiDoanLucNop check (
         GiaiDoanLucNop is null
         or (LoaiBaiLam = 'PLACEMENT' and TrangThai in ('DA_NOP','HET_GIO') and GiaiDoanLucNop between 1 and 3)
+    )
+);
+GO
+
+CREATE TABLE dbo.ThongKeLuyenPart(
+    MaHocVien int not null foreign key references NguoiDung(MaNguoiDung),
+    MaPart int not null foreign key references PartTOEIC(MaPart),
+    SoLanLuyen int not null default 0 check (SoLanLuyen >= 0),
+    TongCauDaLam int not null default 0 check (TongCauDaLam >= 0),
+    TongCauDung int not null default 0 check (TongCauDung >= 0),
+    SoCauTrongLanCuoi int not null default 0 check (SoCauTrongLanCuoi >= 0),
+    SoCauLanCuoi int not null default 0 check (SoCauLanCuoi >= 0),
+    SoDungLanCuoi int not null default 0 check (SoDungLanCuoi >= 0),
+    MaKetQuaCuoi int null,
+    LanLuyenGanNhat datetime2(3) null,
+    constraint PK_ThongKeLuyenPart primary key (MaHocVien, MaPart),
+    constraint CK_ThongKeLuyenPart_ThongNhat check (
+        TongCauDung <= TongCauDaLam and SoDungLanCuoi <= SoCauLanCuoi and
+        (SoLanLuyen = 0 and MaKetQuaCuoi is null and LanLuyenGanNhat is null)
+        or (SoLanLuyen > 0 and MaKetQuaCuoi is not null and LanLuyenGanNhat is not null)
     )
 );
 GO

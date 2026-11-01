@@ -77,13 +77,13 @@ export default function ExamContent({ group, independentQuestion, attemptId, tok
       {group.context && <p className="exam-preserve-lines">{group.context}</p>}
       {group.documents?.map(document =>
         <DocumentRenderer key={document.order} document={document} token={token} />)}
-      {partOne && group.hasAudio && !review && <PrivateAudio key={base} endpoint={base + "/audio"} token={token} mode={mode} />}
+      {partOne && group.hasAudio && <PrivateAudio key={base} endpoint={base + "/audio"} token={token} mode={review ? "REVIEW" : mode} />}
       {partOne && group.hasImage && <div className="exam-part-one-image-frame">
         <PrivateImage endpoint={base + "/image"} token={token} alt="Hình minh họa câu hỏi" />
       </div>}
       {group.hasImage && !partOne && <PrivateImage endpoint={base + "/image"} token={token} alt="Hình minh họa câu hỏi"
         onDimensions={(width, height) => setImageSize({ width, height })} />}
-      {group.hasAudio && !partOne && !review && <PrivateAudio key={base} endpoint={base + "/audio"} token={token} mode={mode} />}
+      {group.hasAudio && !partOne && <PrivateAudio key={base} endpoint={base + "/audio"} token={token} mode={review ? "REVIEW" : mode} />}
       </div>
     </div>}
     <div className="exam-group-questions">{questions.map(question => <Question key={question.attemptQuestionId} question={question} review={review}

@@ -41,12 +41,14 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
             if (row is null) return Ok(new { attemptId = (int?)null, status = "NOT_STARTED" });
             if (row.TrangThai is ExamCore.Active or "BO_DO")
             {
-                var counts = await db.CauHoiLuotLam.AsNoTracking().Where(q => q.MaKetQua == row.MaKetQua)
+                var compact = row.DuLieuBaiLamJson is null ? null : CompactExamStore.Decode(row.DuLieuBaiLamJson);
+                var counts = compact is null ? await db.CauHoiLuotLam.AsNoTracking().Where(q => q.MaKetQua == row.MaKetQua)
                     .GroupBy(q => q.MaKetQua).Select(g => new { Total = g.Count(),
                         Answered = g.Count(q => q.ChiTietKetQua != null && q.ChiTietKetQua.DapAnChon != null) })
-                    .FirstOrDefaultAsync(ct);
+                    .FirstOrDefaultAsync(ct) : null;
                 return Ok(new { attemptId = (int?)row.MaKetQua, status = row.TrangThai,
-                    totalQuestions = counts?.Total ?? 0, answered = counts?.Answered ?? 0,
+                    totalQuestions = compact?.QuestionIds.Count ?? counts?.Total ?? 0,
+                    answered = compact?.Answers.Values.Count(a => a.Selected is not null) ?? counts?.Answered ?? 0,
                     remainingSeconds = ExamTimer.Remaining(row, DateTime.UtcNow),
                     isPaused = row.BatDauPhienLuc is null || ExamTimer.IsStale(row, DateTime.UtcNow) });
             }
@@ -159,12 +161,12 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
         var query = db.KetQuaLamBai.AsNoTracking().Where(x => x.MaHocVien == LearnerId &&
             x.LoaiBaiLam == ExamCore.Placement &&
             (x.TrangThai == ExamCore.Submitted || x.TrangThai == ExamCore.Expired));
-        var completedCount = await query.CountAsync(ct);
-        var latestCompletedAt = await query.OrderByDescending(x => x.NgayLamBai)
-            .ThenByDescending(x => x.MaKetQua).Select(x => x.NgayNopBai).FirstOrDefaultAsync(ct);
+        var latest = await query.OrderByDescending(x => x.NgayNopBai)
+            .ThenByDescending(x => x.MaKetQua)
+            .Select(x => new { x.MaKetQua, x.NgayNopBai }).FirstOrDefaultAsync(ct);
         var current = await CurrentKnn(ct);
-        return Ok(new { completedCount,
-            latestCompletedAt = latestCompletedAt.HasValue ? ExamCore.Utc(latestCompletedAt.Value) : (DateTime?)null,
+        return Ok(new { completedCount = latest is null ? 0 : 1,
+            latestCompletedAt = latest?.NgayNopBai is { } completedAt ? ExamCore.Utc(completedAt) : (DateTime?)null,
             currentStage = current?.GiaiDoanDeXuat, targetScore = current?.DiemMucTieu });
     }
 
@@ -176,11 +178,11 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
         var query = db.KetQuaLamBai.AsNoTracking().Where(x => x.MaHocVien == LearnerId &&
             x.LoaiBaiLam == ExamCore.Placement &&
             (x.TrangThai == ExamCore.Submitted || x.TrangThai == ExamCore.Expired));
-        var total = await query.CountAsync(ct);
-        var rows = await query.OrderByDescending(x => x.NgayLamBai).ThenByDescending(x => x.MaKetQua)
-            .Skip((page - 1) * pageSize).Take(pageSize)
+        var rows = page == 1 ? await query.OrderByDescending(x => x.NgayNopBai).ThenByDescending(x => x.MaKetQua)
+            .Take(1)
             .Select(x => new { attemptId = x.MaKetQua, completedAt = x.NgayNopBai,
-                status = x.TrangThai, stage = x.GiaiDoanLucNop }).ToListAsync(ct);
+                status = x.TrangThai, stage = x.GiaiDoanLucNop }).ToListAsync(ct) : [];
+        var total = page == 1 ? rows.Count : await query.AnyAsync(ct) ? 1 : 0;
         return Ok(new { items = rows.Select((row, index) => new { row.attemptId,
             number = total - (page - 1) * pageSize - index,
             completedAt = row.completedAt.HasValue ? ExamCore.Utc(row.completedAt.Value) : (DateTime?)null,

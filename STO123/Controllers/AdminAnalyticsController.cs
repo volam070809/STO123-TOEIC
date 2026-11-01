@@ -188,7 +188,7 @@ public sealed class AdminAnalyticsController(ToeicDbContext db, TimeProvider clo
         (x.TrangThai == "THANH_CONG" && x.NgayThanhToan.HasValue ? x.NgayThanhToan.Value : x.NgayTao) < r.ToExclusive);
     private IQueryable<KetQuaLamBai> AttemptsIn(AnalyticsRange r) => db.KetQuaLamBai.AsNoTracking().Where(x =>
         x.NgayLamBai >= r.From && x.NgayLamBai < r.ToExclusive &&
-        (x.LoaiBaiLam == "PLACEMENT" || x.LoaiBaiLam == "MOCK" || x.LoaiBaiLam == "PRACTICE"));
+        (x.LoaiBaiLam == "PLACEMENT" || x.LoaiBaiLam == "MOCK"));
 
     private async Task<List<AdminPerformanceDto>> PackagePerformance(AnalyticsRange r, int take, CancellationToken ct) =>
         (await AdminAnalyticsQueries.PackagePerformance(db, r.From, r.ToExclusive)

@@ -103,6 +103,8 @@ builder.Services.AddOptions<VNPayOptions>()
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPaymentGateway, VNPayGateway>();
 builder.Services.AddScoped<PaymentCreationService>();
+builder.Services.AddHostedService<PaymentExpiryWorker>();
+builder.Services.AddHostedService<PracticeExpiryWorker>();
 builder.Services.AddScoped<VNPayCallbackVerifier>();
 builder.Services.AddScoped<PaymentConfirmationService>();
 
@@ -139,6 +141,7 @@ builder.Services.AddScoped<CourseBlobSyncFilter>();
 builder.Services.AddHostedService<CourseBlobSyncRecovery>();
 builder.Services.AddScoped<ExamGenerationService>();
 builder.Services.AddScoped<PersistedExamTemplate>();
+builder.Services.AddScoped<CompactExamStore>();
 builder.Services.AddScoped<PersistedExamSnapshotWriter>();
 builder.Services.AddScoped<RandomStartProfiler>();
 builder.Services.AddScoped<RandomStartCommandInterceptor>();

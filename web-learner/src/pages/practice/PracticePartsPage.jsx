@@ -6,7 +6,6 @@ import { useAuth } from "../../contexts/AuthState";
 import { apiRequest } from "../../services/api";
 import { practiceRead } from "../../services/practiceRead";
 import { answerViewed, canNavigateTo, checked, restoredFeedback } from "./practiceFlow.mjs";
-import PracticeHistoryDashboard from "./PracticeHistoryDashboard";
 import DocumentRenderer from "../exam/DocumentRenderer";
 import { examMediaBlob } from "../../services/examApi";
 import "../../styles/exam.css";
@@ -14,14 +13,12 @@ import "../../styles/vocabulary.css";
 import "../../styles/practice-parts.css";
 
 const api = "/api/practice";
-const historyPageSize = 8;
 const parts = ["Photographs", "Question-Response", "Conversations", "Talks", "Incomplete Sentences", "Text Completion", "Reading Comprehension"];
 
 export default function PracticePartsPage() {
   const { token } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const routeAttemptId = Number(searchParams.get("attempt")) || null;
-  const routeReviewId = Number(searchParams.get("review")) || null;
   const [available, setAvailable] = useState(null);
   const [part, setPart] = useState(5);
   const [difficulty, setDifficulty] = useState(1);
@@ -30,13 +27,9 @@ export default function PracticePartsPage() {
   const [attemptData, setAttempt] = useState(null);
   const [feedback, setFeedback] = useState({});
   const [summary, setSummary] = useState(null);
-  const [history, setHistory] = useState(null);
-  const [historyPart, setHistoryPart] = useState(0);
-  const [historySort, setHistorySort] = useState("NEWEST");
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyError, setHistoryError] = useState("");
-  const [historyRetry, setHistoryRetry] = useState(0);
+  const [stats, setStats] = useState(null);
+  const [statsError, setStatsError] = useState("");
+  const [statsRetry, setStatsRetry] = useState(0);
   const [activeAttempts, setActiveAttempts] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,10 +37,7 @@ export default function PracticePartsPage() {
   const startLock = useRef(false);
   const questionLocks = useRef(new Set());
   const loadedAttempt = useRef(null);
-  const loadedReview = useRef(null);
-  const attempt = (routeAttemptId && attemptData?.attemptId === routeAttemptId && !attemptData.isReview) ||
-    (routeReviewId && attemptData?.attemptId === routeReviewId && attemptData.isReview) ||
-    (routeReviewId && summary?.attemptId === routeReviewId) ? attemptData : null;
+  const attempt = routeAttemptId && attemptData?.attemptId === routeAttemptId ? attemptData : null;
 
   function showAttempt(data) {
     loadedAttempt.current = data.attemptId;
@@ -82,33 +72,27 @@ export default function PracticePartsPage() {
           .catch(() => { if (live) setError("Không thể khôi phục bài luyện đang làm."); })
           .finally(() => { if (live) setBusy(false); });
       }
-    } else if (routeReviewId) {
-      if (loadedReview.current !== routeReviewId) {
-        setBusy(true);
-        practiceRead(`${api}/history/${routeReviewId}`, token).then(data => {
-          if (live) { loadedReview.current = routeReviewId; setAttempt(data); setCurrent(0); setFeedback({}); setSummary(null); }
-        }).catch(() => { if (live) setError("Không thể tải bài đã luyện."); })
-          .finally(() => { if (live) setBusy(false); });
-      }
     } else {
-      loadedAttempt.current = null; loadedReview.current = null;
+      loadedAttempt.current = null;
       loadAvailability(); loadActiveList();
     }
     return () => { live = false; };
-  }, [token, routeAttemptId, routeReviewId, loadAvailability, loadActiveList]);
+  }, [token, routeAttemptId, loadAvailability, loadActiveList]);
 
   useEffect(() => {
-    if (routeAttemptId || routeReviewId) return;
+    if (routeAttemptId) return;
     let live = true;
-    const query = new URLSearchParams({ page: String(historyPage), pageSize: String(historyPageSize), sort: historySort });
-    if (historyPart) query.set("part", String(historyPart));
-    practiceRead(`${api}/history?${query}`, token).then(data => {
-      if (live) { setHistory(data); setHistoryError(""); setHistoryLoading(false); }
+    practiceRead(`${api}/statistics`, token).then(data => {
+      if (live) { setStats(data.parts || []); setStatsError(""); }
     }).catch(() => {
-      if (live) { setHistoryError("HISTORY_LOAD_FAILED"); setHistoryLoading(false); }
+      if (live) setStatsError("Không thể tải thống kê luyện tập.");
     });
     return () => { live = false; };
-  }, [token, routeAttemptId, routeReviewId, historyPart, historySort, historyPage, historyRetry]);
+  }, [token, routeAttemptId, statsRetry]);
+
+  useEffect(() => {
+    if (searchParams.has("review")) setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   async function start() {
     if (startLock.current) return;
@@ -160,21 +144,17 @@ export default function PracticePartsPage() {
     if (busy || questionLocks.current.size > 0) return;
     setBusy(true);
     try {
-      setSummary(await apiRequest(`${api}/${attempt.attemptId}/finish`, { method: "POST", token }));
-      loadedReview.current = attempt.attemptId;
-      setSearchParams({ review: String(attempt.attemptId) }, { replace: true });
+      const completed = await apiRequest(`${api}/${attempt.attemptId}/finish`, { method: "POST", token });
+      setSummary(completed);
+      setAttempt(null);
+      setSearchParams({}, { replace: true });
+      setStatsRetry(value => value + 1);
     }
     catch (e) { setError(e.data?.message || "Không thể hoàn thành bài luyện. Vui lòng thử lại."); }
     finally { setBusy(false); }
   }
 
-  function review(id) {
-    setError("");
-    setSearchParams({ review: String(id) });
-  }
-
   const questions = attempt?.questions || [];
-  const activeReview = attempt?.isReview;
   const counts = available?.find(x => x.part === part)?.difficulties || [];
   const selectedAvailability = counts.find(x => x.difficulty === difficulty);
   const canStart = selectedAvailability?.presets?.find(x => x.preset === preset)?.available === true;
@@ -182,14 +162,19 @@ export default function PracticePartsPage() {
   const activeGroup = attempt?.groups?.find(g => g.groupId === activeQuestion?.groupId);
   const currentUnlocked = activeQuestion && (checked(activeQuestion, feedback) ||
     feedback[activeQuestion.questionOccurrenceId]?.viewed);
-  const leave = () => { setAttempt(null); setSummary(null); setHistoryLoading(true); setSearchParams({}); };
+  const leave = () => { setAttempt(null); setSummary(null); setSearchParams({}); };
   return <SiteLayout className="vocab-page"><SessionBoundary><div className="site-container practice-page practice-parts">
     <div className="page-heading"><span><Link to="/practice">Luyện tập</Link> / TOEIC theo Part</span>
       <h1>Luyện tập TOEIC theo Part</h1><p>Luyện không giới hạn thời gian, kiểm tra từng câu và xem lại lời giải.</p>
       <Link className="outline-button" to="/practice">← Quay lại chọn hình thức</Link></div>
     {error && <p className="vocab-error" role="alert">{error}</p>}
-    {busy && !attempt && (routeAttemptId || routeReviewId) && <p role="status">Đang tải bài luyện tập…</p>}
-    {!attempt && !routeAttemptId && !routeReviewId && <div className="practice-parts-hub">
+    {error && !attempt && !routeAttemptId && <button className="outline-button" type="button"
+      onClick={() => { setError(""); loadAvailability(); loadActiveList(); setStatsRetry(value => value + 1); }}>Thử tải lại</button>}
+    {busy && !attempt && routeAttemptId && <p role="status">Đang tải bài luyện tập…</p>}
+    {summary && <section className="vocab-panel practice-finish-summary" role="status"><h2>Đã hoàn thành Part {summary.part}</h2>
+      <p>Đúng {summary.correct}/{summary.attempted} câu đã làm · Chính xác {summary.accuracy}%</p>
+      <button className="outline-button" type="button" onClick={() => setSummary(null)}>Đóng</button></section>}
+    {!attempt && !routeAttemptId && <div className="practice-parts-hub">
       <section className="vocab-panel practice-active-panel"><h2><span className="practice-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></svg></span>Bài đang làm</h2>
         {activeAttempts === null ? <p role="status">Đang tải…</p> : activeAttempts.length === 0 ?
           <p>Chưa có bài luyện nào đang làm.</p> : activeAttempts.map(row =>
@@ -213,19 +198,24 @@ export default function PracticePartsPage() {
         <div className="practice-selection-action">{!canStart && <p>Chưa đủ nội dung hợp lệ cho mức luyện tập này.</p>}
         <button className="primary-button" disabled={busy || !canStart} onClick={start}>Bắt đầu luyện<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 12h14m-5-5 5 5-5 5" /></svg></button></div>
       </section>
-      <PracticeHistoryDashboard history={history} loading={historyLoading} error={historyError}
-        partFilter={historyPart} sort={historySort} page={historyPage}
-        onPartChange={value => { if (value === historyPart) return;
-          setHistoryPart(value); setHistoryPage(1); setHistoryLoading(true); setHistoryError(""); }}
-        onSortChange={value => { if (value === historySort) return;
-          setHistorySort(value); setHistoryPage(1); setHistoryLoading(true); setHistoryError(""); }}
-        onPageChange={value => { if (value === historyPage) return;
-          setHistoryPage(value); setHistoryLoading(true); setHistoryError(""); }}
-        onRetry={() => { setHistoryLoading(true); setHistoryError(""); setHistoryRetry(value => value + 1); }}
-        onReview={review} />
+      <section className="vocab-panel practice-stats-panel"><div className="practice-stats-heading"><div>
+        <h2>Tiến bộ theo Part</h2><p>Thống kê tích lũy từ các bài đã hoàn thành.</p></div>
+        {statsError && <button type="button" className="outline-button" onClick={() => { setStatsError(""); setStatsRetry(value => value + 1); }}>Thử lại</button>}
+      </div>
+        {statsError && <p className="vocab-error" role="alert">{statsError}</p>}
+        {!stats && !statsError && <p role="status">Đang tải thống kê…</p>}
+        {stats && <div className="practice-stats-grid">{stats.map(row => <article key={row.part}>
+          <div className="practice-stats-title"><strong>Part {row.part}</strong><span>{parts[row.part - 1]}</span></div>
+          <div className="practice-stats-values"><span><b>{row.completedSessions}</b> lượt</span>
+            <span><b>{row.totalQuestions}</b> câu đã làm</span><span><b>{row.totalCorrect}</b> câu đúng</span></div>
+          <div className="practice-stats-rates"><span>Tích lũy <b>{row.overallAccuracy}%</b></span>
+            <span>Lần gần nhất <b>{row.latestAccuracy}%</b></span></div>
+          <small>{row.lastPracticedAt ? `Lần gần nhất: ${new Date(row.lastPracticedAt).toLocaleString("vi-VN")}` : "Chưa có bài hoàn thành"}</small>
+        </article>)}</div>}
+      </section>
     </div>}
-    {!attempt && (routeAttemptId || routeReviewId) && !busy && <button type="button" className="outline-button" onClick={leave}>← Quay lại chọn bài</button>}
-    {attempt && !activeReview && !summary && <div className="practice-session" data-part={attempt.part}>
+    {!attempt && routeAttemptId && !busy && <button type="button" className="outline-button" onClick={leave}>← Quay lại chọn bài</button>}
+    {attempt && !summary && <div className="practice-session" data-part={attempt.part}>
       <div className="practice-session-top"><div>
       <h2>Part {attempt.part} · {attempt.preset ? `${attempt.preset} · ` : ""}{attempt.selectedUnitCount} {attempt.part === 3 || attempt.part === 4 || attempt.part === 6 || attempt.part === 7 ? "nhóm" : "câu"} · {attempt.actualQuestionCount} câu hỏi</h2>
       <p>Câu {current + 1} / {questions.length}</p></div>
@@ -253,17 +243,6 @@ export default function PracticePartsPage() {
       <button className="primary-button" disabled={busy || Object.values(questionBusy).some(Boolean)} onClick={finish}>Hoàn thành bài luyện</button>
       </aside></div>
     </div>}
-    {routeReviewId === summary?.attemptId && <section className="vocab-panel"><h2>Kết quả luyện tập</h2>
-      <p>Tổng: {summary.total} · Đã trả lời: {summary.attempted} · Đúng: {summary.correct} · Sai: {summary.incorrect}</p>
-      <p>Chưa trả lời: {summary.unanswered} · Chính xác: {summary.accuracy}%</p>
-      <button className="primary-button" onClick={leave}>Luyện tiếp</button></section>}
-    {activeReview && <><button className="vocab-text-button" onClick={leave}>← Lịch sử</button>
-      <h2>Xem lại bài · Part {attempt.part}</h2>
-      {activeGroup && <PracticeGroup key={activeGroup.groupId} group={activeGroup} part={attempt.part} token={token} review />}
-      {activeQuestion && <PracticeQuestion key={activeQuestion.questionOccurrenceId} question={activeQuestion}
-        transcriptContext={activeGroup?.context} review />}
-      <QuestionNavigation current={current} total={questions.length} onChange={setCurrent}
-        canPrevious={current > 0} canNext={current < questions.length - 1} /></>}
   </div></SessionBoundary></SiteLayout>;
 }
 

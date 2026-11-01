@@ -71,6 +71,7 @@
 .exam-question { scroll-margin-top: 7rem; }
 .exam-context { border-bottom: 1px solid #e3eaef; padding-bottom: 1rem; margin-bottom: 1rem; }
 .exam-context audio { display: none; }
+.exam-context .review-audio audio { display: block; width: 100%; max-width: 640px; }
 .exam-audio { min-width: 0; margin-top: 1rem; }
 .exam-content-grouped.is-part-one .exam-audio { width: min(100%, 640px); margin: 0 auto .75rem; }
 .exam-audio-controls { display: grid; grid-template-columns: auto auto minmax(2rem, 1fr) auto;
@@ -327,3 +328,25 @@
   .placement-stage-destination { flex-direction: column; align-items: stretch; }
   .placement-stage-destination .primary-button { width: 100%; }
 }
+.placement-latest-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; }
+.placement-result-hero { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; padding: clamp(1.25rem, 3vw, 2rem); border: 1px solid #b8cef1; border-radius: 16px; background: #edf5ff; }
+.placement-result-hero h2 { margin: .3rem 0; color: var(--sto-navy); font-size: clamp(1.8rem, 4vw, 2.8rem); }
+.placement-result-hero p, .placement-result-hero small { margin: .3rem 0; color: var(--text-muted); }
+.placement-result-hero-score { display: grid; gap: .3rem; min-width: 9rem; text-align: right; }
+.placement-result-hero-score strong { color: var(--primary); font-size: clamp(1.8rem, 4vw, 2.6rem); }
+.placement-result-hero-score span { color: var(--text-muted); }
+.placement-result-section { padding: 1.25rem 0; border-bottom: 1px solid var(--sto-border); }
+.placement-result-section h3 { margin: 0 0 1rem; color: var(--sto-navy); }
+.placement-skill-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.placement-skill-grid > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem; padding: 1rem; border: 1px solid var(--sto-border); border-radius: 12px; background: #fff; }
+.placement-skill-grid strong { color: var(--sto-navy); font-size: 1.3rem; }
+.placement-skill-grid b { color: var(--primary); }
+.placement-part-grid { display: grid; gap: 1rem; }
+.placement-part-row > div:first-child { display: flex; align-items: center; gap: .8rem; margin-bottom: .4rem; }
+.placement-part-row > div:first-child span { color: var(--text-muted); }
+.placement-part-row > div:first-child b { margin-left: auto; color: var(--primary); }
+.placement-next-steps { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.placement-next-steps p { max-width: 55ch; color: var(--text-muted); }
+.placement-course-list { display: grid; gap: .5rem; }
+.placement-course-list a { display: flex; justify-content: space-between; gap: .8rem; padding: .8rem 1rem; border: 1px solid var(--sto-border); border-radius: 9px; }
+@media (max-width: 650px) { .placement-result-hero, .placement-next-steps { flex-direction: column; align-items: stretch; } .placement-result-hero-score { text-align: left; } .placement-skill-grid { grid-template-columns: 1fr; } .placement-latest-actions > * { width: 100%; } }

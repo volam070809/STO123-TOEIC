@@ -15,7 +15,7 @@ namespace STO123.Controllers;
 public sealed class AdminEnrollmentsController(ToeicDbContext db, TimeProvider clock) : ControllerBase
 {
     private static readonly HashSet<string> SupportedStatuses =
-        ["CHO_THANH_TOAN", "DANG_SU_DUNG", "HET_HAN"];
+        ["CHO_THANH_TOAN", "DANG_SU_DUNG", "HET_HAN", "THAT_BAI", "QUA_HAN"];
 
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] AdminEnrollmentListQuery request, CancellationToken ct)
@@ -98,11 +98,11 @@ public sealed class AdminEnrollmentsController(ToeicDbContext db, TimeProvider c
                 item.GiaoDichThanhToan.Any(payment => payment.TrangThai == "THAT_BAI"), item.NgayBatDau))
             .ToListAsync(ct);
 
-        var paymentState = PaymentState(row.HasSuccess, row.HasPending, row.HasFailed);
+        var paymentState = PaymentState(row.HasSuccess, row.HasPending, row.HasFailed, row.StoredStatus);
         var accessState = AccessState(row.StoredStatus, row.StartsAt, row.ExpiresAt, row.HasSuccess, row.HasPending, row.HasFailed, localNow);
         var history = historyRows.Select(item => new AdminEnrollmentHistoryDto(item.EnrollmentId,
             PurchaseType(item.PackageId), item.PackageId, item.PackageName, item.Price, item.RegisteredAt,
-            item.ExpiresAt, item.StoredStatus, PaymentState(item.HasSuccess, item.HasPending, item.HasFailed),
+            item.ExpiresAt, item.StoredStatus, PaymentState(item.HasSuccess, item.HasPending, item.HasFailed, item.StoredStatus),
             AccessState(item.StoredStatus, item.StartsAt, item.ExpiresAt, item.HasSuccess, item.HasPending, item.HasFailed, localNow))).ToList();
         var learner = new AdminEnrollmentLearnerDto(row.LearnerId, row.LearnerName, row.LearnerEmail,
             row.PhoneNumber, row.LearnerStatus);
@@ -179,19 +179,20 @@ public sealed class AdminEnrollmentsController(ToeicDbContext db, TimeProvider c
         IReadOnlyList<AdminEnrollmentCourseDto> courses, DateTime now) => new(row.EnrollmentId,
         row.LearnerId, row.LearnerName, row.LearnerEmail, PurchaseType(row.PackageId), row.PackageId,
         row.PackageName, row.Price, row.AccessDays, row.RegisteredAt, row.StartsAt, row.ExpiresAt,
-        row.StoredStatus, PaymentState(row.HasSuccess, row.HasPending, row.HasFailed),
+        row.StoredStatus, PaymentState(row.HasSuccess, row.HasPending, row.HasFailed, row.StoredStatus),
         AccessState(row.StoredStatus, row.StartsAt, row.ExpiresAt, row.HasSuccess, row.HasPending, row.HasFailed, now),
         row.PaymentCount, courses);
 
     private static string PurchaseType(int? packageId) => packageId.HasValue ? "PACKAGE" : "DIRECT_COURSES";
-    private static string PaymentState(bool success, bool pending, bool failed) => success ? "SUCCESS" :
-        pending ? "PENDING" : failed ? "FAILED" : "NONE";
+    private static string PaymentState(bool success, bool pending, bool failed, string storedStatus) => success ? "SUCCESS" :
+        pending ? "PENDING" : storedStatus == "QUA_HAN" ? "EXPIRED" : failed ? "FAILED" : "NONE";
     private static string AccessState(string storedStatus, DateTime? startsAt, DateTime? expiresAt,
         bool success, bool pending, bool failed, DateTime now)
     {
         if (success && storedStatus == "DANG_SU_DUNG" && startsAt <= now && expiresAt > now) return "ACTIVE";
         if (success && (storedStatus == "HET_HAN" || expiresAt <= now)) return "EXPIRED";
         if (!success && pending) return "PAYMENT_PENDING";
+        if (!success && storedStatus == "QUA_HAN") return "PAYMENT_EXPIRED";
         if (!success && failed) return "PAYMENT_FAILED";
         return "NOT_ACTIVE";
     }

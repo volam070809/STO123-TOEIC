@@ -12,11 +12,10 @@ namespace STO123.Services.Exam;
 public sealed record PlacementStartResult(int AttemptId, string Status);
 
 public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate persistedTemplate,
-    PersistedExamSnapshotWriter snapshotWriter, IConfiguration configuration, RandomStartProfiler profile,
+    CompactExamStore compact, IConfiguration configuration, RandomStartProfiler profile,
     ExamGradingService grading, ExamSnapshotQueryService snapshots,
     IToeicScoreCalculator scoring, IKnnClassifier knnClassifier,
-    KnnDiagnosticsStore knnDiagnostics,
-    ILogger<ExamAttemptService> logger, IHostEnvironment environment)
+    KnnDiagnosticsStore knnDiagnostics, IHostEnvironment environment)
 {
     public Task<int> StartAsync(int learnerId, StartExamRequest request, CancellationToken ct)
     {
@@ -26,8 +25,6 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
     }
     private async Task<int> StartPersistedMockAsync(int learnerId, int examId, CancellationToken ct)
     {
-        if (examId == configuration.GetValue<int>("Placement:DefaultExamId"))
-            throw new ExamProblem("EXAM_NOT_OPEN", "Đề thi này không dành cho Mock.", 409);
         using var startProfile = profile.Begin(environment.IsDevelopment());
         var total = Stopwatch.StartNew();
         using var decisionPhase = profile.Phase("startDecision");
@@ -39,11 +36,7 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             SELECT @held = MaNguoiDung FROM dbo.NguoiDung WITH (UPDLOCK, HOLDLOCK)
             WHERE MaNguoiDung = @learner;
             SELECT e.TrangThai, e.LoaiDe, e.ThoiGianLamBai,
-                   a.MaKetQua, a.TrangThai,
-                   CAST(CASE WHEN EXISTS (SELECT 1 FROM dbo.KetQuaLamBai done
-                     WHERE done.MaHocVien = @learner AND done.MaDeThi = e.MaDeThi
-                       AND done.LoaiBaiLam = 'MOCK' AND done.TrangThai IN ('DA_NOP', 'HET_GIO'))
-                     THEN 1 ELSE 0 END AS bit)
+                   a.MaKetQua, a.TrangThai
             FROM dbo.DeThi e
             OUTER APPLY (SELECT TOP (1) MaKetQua, TrangThai FROM dbo.KetQuaLamBai
                          WHERE MaHocVien = @learner AND MaDeThi = e.MaDeThi AND LoaiBaiLam = 'MOCK'
@@ -52,7 +45,6 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             """;
         string? examStatus = null, examType = null, attemptStatus = null;
         int? previousId = null, duration = null;
-        var completed = false;
         var connection = db.Database.GetDbConnection();
         var openedForDecision = connection.State != ConnectionState.Open;
         if (openedForDecision) await connection.OpenAsync(ct);
@@ -70,7 +62,6 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             {
                 examStatus = reader.GetString(0); examType = reader.GetString(1); duration = reader.GetInt32(2);
                 if (!reader.IsDBNull(3)) { previousId = reader.GetInt32(3); attemptStatus = reader.GetString(4); }
-                completed = reader.GetBoolean(5);
             }
         }
         finally { if (openedForDecision) await connection.CloseAsync(); }
@@ -79,7 +70,6 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
         decisionPhase.Dispose();
         if (examStatus != "OPEN" || examType != "DE_THI" || duration != ExamCore.DurationMinutes)
             throw new ExamProblem("EXAM_NOT_OPEN", "Đề thi không mở hoặc không hợp lệ.", 409);
-        if (completed) throw new ExamProblem("MOCK_ALREADY_COMPLETED", "Bạn đã hoàn thành đề thi này.", 409);
         if (previousId.HasValue)
         {
             if (attemptStatus is ExamCore.Active or "BO_DO")
@@ -87,7 +77,8 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
                 await tx.CommitAsync(ct);
                 return previousId.Value;
             }
-            throw new ExamProblem("ATTEMPT_STATE_INVALID", "Trạng thái lượt thi không hợp lệ.", 409);
+            if (attemptStatus is not (ExamCore.Submitted or ExamCore.Expired))
+                throw new ExamProblem("ATTEMPT_STATE_INVALID", "Trạng thái lượt thi không hợp lệ.", 409);
         }
         var templateTime = Stopwatch.StartNew();
         using var templatePhase = profile.Phase("templateRead");
@@ -96,68 +87,10 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
         templatePhase.Dispose();
         if (!ExamGenerationService.ValidPlan(plan) || !ExamGenerationService.ValidGeneratedPlan(plan))
             throw new ExamProblem("INVALID_EXAM_STRUCTURE", "Cấu trúc đề thi không hợp lệ.", 409);
-        var buildTime = Stopwatch.StartNew();
-        using var buildPhase = profile.Phase("snapshotBuild");
-        var attemptGuid = Guid.NewGuid();
-        var global = 0;
-        var groupOrder = 0;
-        var groups = new List<NhomLuotLam>();
-        var questions = new List<(CauHoiLuotLam Question, int? GroupOrder)>(200);
-        var partOrders = ExamCore.PartCounts.Keys.ToDictionary(x => x, _ => 0);
-        foreach (var unit in plan)
-        {
-            var partId = unit.Questions[0].MaPart;
-            int? selectedGroupOrder = null;
-            if (unit.Resource is { } resource)
-            {
-                selectedGroupOrder = ++groupOrder;
-                var group = new NhomLuotLam {
-                    MaNguLieuGoc = resource.MaNguLieu,
-                    MaPart = partId, ThuTu = selectedGroupOrder.Value,
-                    NoiDungNguLieu = resource.NoiDungNguLieu, NoiDungDich = resource.NoiDungDich,
-                    DuongDanAudio = resource.DuongDanAudio, DuongDanAnh = resource.DuongDanAnh,
-                    TaiLieuJson = unit.Documents.Count > 0 ? ExamDocumentCodec.Encode(unit.Documents.Select(d =>
-                        new ExamDocumentSnapshot(d.ThuTu, d.LoaiTaiLieu, d.NoiDung, d.DuongDanAnh))) : null
-                };
-                groups.Add(group);
-            }
-            foreach (var source in unit.Questions)
-            {
-                var question = new CauHoiLuotLam {
-                    MaCauHoiGoc = source.MaCauHoi, MaPart = partId,
-                    ThuTu = ++global, ThuTuTrongPart = ++partOrders[unit.Part],
-                    NoiDung = source.NoiDung, PhuongAnA = source.PhuongAnA,
-                    PhuongAnB = source.PhuongAnB, PhuongAnC = source.PhuongAnC,
-                    PhuongAnD = source.PhuongAnD, PhuongAnDung = source.PhuongAnDung,
-                    GiaiThich = source.GiaiThich
-                };
-                questions.Add((question, selectedGroupOrder));
-            }
-        }
-        if (global != 200 || partOrders.Any(x => x.Value != ExamCore.PartCounts[x.Key]))
-            throw new ExamProblem("INVALID_EXAM_STRUCTURE", "Cấu trúc đề thi không hợp lệ.", 409);
-        buildTime.Stop();
-        buildPhase.Dispose();
-        var writeTime = Stopwatch.StartNew();
-        var created = await snapshotWriter.InsertAsync(learnerId, examId, ExamCore.Mock, attemptGuid,
-            ExamCore.DurationMinutes * 60, groups, questions, ct);
-        writeTime.Stop();
-        profile.AddMeasuredPhase("snapshotWrite", TimeSpan.FromMilliseconds(
-            Math.Max(0, writeTime.Elapsed.TotalMilliseconds - created.TimerMilliseconds)));
-        profile.AddMeasuredPhase("timerStart", TimeSpan.FromMilliseconds(created.TimerMilliseconds));
-        var commitTime = Stopwatch.StartNew();
-        using var commitPhase = profile.Phase("commit");
-        await tx.CommitAsync(ct);
-        commitTime.Stop(); total.Stop();
-        commitPhase.Dispose();
-        profile.SetInsertedRows(1 + groupOrder + global);
-        if (environment.IsDevelopment())
-            logger.LogInformation("Persisted Mock Start {ExamId}: StartDecision={DecisionMs}ms TemplateRead={TemplateMs}ms SnapshotBuild={BuildMs}ms SnapshotWrite={WriteMs}ms TimerStart={TimerMs}ms Commit={CommitMs}ms Total={TotalMs}ms SqlCommands={SqlCommands} Rows={Rows} SaveChanges=0",
-                examId, decisionTime.ElapsedMilliseconds, templateTime.ElapsedMilliseconds,
-                buildTime.ElapsedMilliseconds, Math.Max(0, writeTime.Elapsed.TotalMilliseconds - created.TimerMilliseconds),
-                created.TimerMilliseconds, commitTime.ElapsedMilliseconds, total.ElapsedMilliseconds,
-                3, 1 + groupOrder + global);
-        return created.AttemptId;
+        var createdId = await compact.CreateAsync(learnerId, examId, ExamCore.Mock, plan, ct);
+        using (profile.Phase("commit")) await tx.CommitAsync(ct);
+        profile.SetInsertedRows(1);
+        return createdId;
     }
 
     public async Task<PlacementStartResult> StartPlacementAsync(int learnerId, CancellationToken ct)
@@ -240,51 +173,10 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
         using (profile.Phase("templateRead")) plan = await persistedTemplate.LoadAsync(examId, ct);
         if (!ExamGenerationService.ValidPlan(plan) || !ExamGenerationService.ValidGeneratedPlan(plan))
             throw new ExamProblem("INVALID_EXAM_STRUCTURE", "Cấu trúc đề kiểm tra đầu vào không hợp lệ.", 409);
-        List<NhomLuotLam> groups;
-        List<(CauHoiLuotLam Question, int? GroupOrder)> questions;
-        using (profile.Phase("snapshotBuild"))
-        {
-            groups = [];
-            questions = new(200);
-            var partOrders = ExamCore.PartCounts.Keys.ToDictionary(part => part, _ => 0);
-            foreach (var unit in plan)
-            {
-                var partId = unit.Questions[0].MaPart;
-                int? groupOrder = null;
-                if (unit.Resource is { } resource)
-                {
-                    groupOrder = groups.Count + 1;
-                    groups.Add(new NhomLuotLam {
-                        MaNguLieuGoc = resource.MaNguLieu, MaPart = partId, ThuTu = groupOrder.Value,
-                        NoiDungNguLieu = resource.NoiDungNguLieu, NoiDungDich = resource.NoiDungDich,
-                        DuongDanAudio = resource.DuongDanAudio, DuongDanAnh = resource.DuongDanAnh,
-                        TaiLieuJson = unit.Documents.Count == 0 ? null : ExamDocumentCodec.Encode(unit.Documents.Select(d =>
-                            new ExamDocumentSnapshot(d.ThuTu, d.LoaiTaiLieu, d.NoiDung, d.DuongDanAnh)))
-                    });
-                }
-                foreach (var source in unit.Questions)
-                    questions.Add((new CauHoiLuotLam {
-                        MaCauHoiGoc = source.MaCauHoi, MaPart = partId,
-                        ThuTu = questions.Count + 1, ThuTuTrongPart = ++partOrders[unit.Part],
-                        NoiDung = source.NoiDung, PhuongAnA = source.PhuongAnA,
-                        PhuongAnB = source.PhuongAnB, PhuongAnC = source.PhuongAnC,
-                        PhuongAnD = source.PhuongAnD, PhuongAnDung = source.PhuongAnDung,
-                        GiaiThich = source.GiaiThich
-                    }, groupOrder));
-            }
-            if (questions.Count != 200 || partOrders.Any(pair => pair.Value != ExamCore.PartCounts[pair.Key]))
-                throw new ExamProblem("INVALID_EXAM_STRUCTURE", "Cấu trúc đề kiểm tra đầu vào không hợp lệ.", 409);
-        }
-        var writeTime = Stopwatch.StartNew();
-        var created = await snapshotWriter.InsertAsync(learnerId, examId, ExamCore.Placement,
-            Guid.NewGuid(), ExamCore.DurationMinutes * 60, groups, questions, ct);
-        writeTime.Stop();
-        profile.AddMeasuredPhase("snapshotWrite", TimeSpan.FromMilliseconds(
-            Math.Max(0, writeTime.Elapsed.TotalMilliseconds - created.TimerMilliseconds)));
-        profile.AddMeasuredPhase("timerStart", TimeSpan.FromMilliseconds(created.TimerMilliseconds));
+        var createdId = await compact.CreateAsync(learnerId, examId, ExamCore.Placement, plan, ct);
         using (profile.Phase("commit")) await tx.CommitAsync(ct);
-        profile.SetInsertedRows(1 + groups.Count + questions.Count);
-        return new PlacementStartResult(created.AttemptId, ExamCore.Active);
+        profile.SetInsertedRows(1);
+        return new PlacementStartResult(createdId, ExamCore.Active);
     }
 
     public async Task<PlacementClassification> UpdatePlacementTargetAsync(int learnerId, int? targetScore,
@@ -462,6 +354,26 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             await FinalizeAsync(id, learnerId, true, ct);
             throw new ExamProblem("ATTEMPT_EXPIRED", "Bài thi đã hết giờ.", 409);
         }
+        if (attempt.DuLieuBaiLamJson is not null)
+        {
+            var data = CompactExamStore.Decode(attempt.DuLieuBaiLamJson);
+            if (!data.QuestionIds.Contains(questionId))
+                throw new ExamProblem("QUESTION_NOT_IN_ATTEMPT", "Câu hỏi không thuộc lượt làm bài.", 404);
+            var hasD = data.FourOptionQuestionIds?.Contains(questionId) ??
+                await db.CauHoi.AsNoTracking().Where(q => q.MaCauHoi == questionId)
+                    .Select(q => q.PhuongAnD != null && q.PhuongAnD != "").FirstOrDefaultAsync(ct);
+            var selected = request.SelectedOption?.Trim().ToUpperInvariant();
+            if (selected is not null && selected is not ("A" or "B" or "C") && (selected != "D" || !hasD))
+                throw new ExamProblem("INVALID_OPTION", "Đáp án không hợp lệ.");
+            data.Answers.TryGetValue(questionId, out var previous);
+            var next = new CompactAnswer(selected, request.Flagged ?? previous?.Flagged ?? false);
+            if (next == previous) { await tx.CommitAsync(ct); return; }
+            data.Answers[questionId] = next;
+            attempt.DuLieuBaiLamJson = CompactExamStore.Encode(data);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return;
+        }
         var question = await db.CauHoiLuotLam.AsNoTracking()
             .Where(q => q.MaCauHoiLuotLam == questionId && q.MaKetQua == id)
             .Select(q => new { q.PhuongAnD }).FirstOrDefaultAsync(ct);
@@ -497,6 +409,20 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             await FinalizeAsync(id, learnerId, true, ct);
             throw new ExamProblem("ATTEMPT_EXPIRED", "Bài thi đã hết giờ.", 409);
         }
+        if (attempt.DuLieuBaiLamJson is not null)
+        {
+            var data = CompactExamStore.Decode(attempt.DuLieuBaiLamJson);
+            if (!data.QuestionIds.Contains(questionId))
+                throw new ExamProblem("QUESTION_NOT_IN_ATTEMPT", "Câu hỏi không thuộc lượt làm bài.", 404);
+            data.Answers.TryGetValue(questionId, out var previous);
+            var next = new CompactAnswer(previous?.Selected, flagged);
+            if (next == previous) { await tx.CommitAsync(ct); return; }
+            data.Answers[questionId] = next;
+            attempt.DuLieuBaiLamJson = CompactExamStore.Encode(data);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return;
+        }
         if (!await db.CauHoiLuotLam.AnyAsync(q => q.MaCauHoiLuotLam == questionId && q.MaKetQua == id, ct))
             throw new ExamProblem("QUESTION_NOT_IN_ATTEMPT", "Câu hỏi không thuộc lượt làm bài.", 404);
         var answer = await db.ChiTietKetQua.FindAsync([questionId], ct);
@@ -509,8 +435,10 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
     public async Task<ExamResultDto> FinalizeAsync(int id, int learnerId, bool expireOnly, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await LockLearnerAsync(learnerId, ct);
         var attempt = await OwnedForUpdateAsync(id, learnerId, ct);
         var newlyFinalized = attempt.TrangThai is ExamCore.Active or "BO_DO";
+        KnnClassificationResult? classification = null;
         if (newlyFinalized)
         {
             var now = DateTime.UtcNow;
@@ -518,7 +446,10 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             if (expireOnly && !expired) throw new ExamProblem("ATTEMPT_NOT_FINALIZED", "Bài thi chưa kết thúc.", 409);
             var end = now;
             ExamTimer.Charge(attempt, now, false);
-            var questions = await ResultQuestions(id, ct);
+            var compactData = attempt.DuLieuBaiLamJson is null ? null : CompactExamStore.Decode(attempt.DuLieuBaiLamJson);
+            var compactSnapshot = compactData is null ? null :
+                await compact.BuildSnapshotAsync(attempt, compactData, SnapshotView.Result, ct);
+            var questions = compactSnapshot?.Questions ?? await ResultQuestions(id, ct);
             var testedParts = questions.Select(q => q.MaPartNavigation.SoPart).Distinct().ToArray();
             var partMock = IsPartMock(attempt, questions);
             if (ExamCore.PartCounts.Any(p =>
@@ -529,7 +460,7 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
                 questions.Sum(q => ExamCore.PartCounts.ContainsKey(q.MaPartNavigation.SoPart) ? 1 : 0) != questions.Count ||
                 questions.Select(q => q.MaCauHoiGoc).Distinct().Count() != questions.Count)
                 throw new ExamProblem("INVALID_EXAM_STRUCTURE", "Cấu trúc bài thi không hợp lệ.", 409);
-            var answers = await Answers(questions, ct);
+            var answers = compactSnapshot?.Answers ?? await Answers(questions, ct);
             var raw = grading.Grade(attempt, questions, answers);
             var scaled = partMock ? null : scoring.Calculate(raw.Listening.Correct, raw.Listening.Total,
                 raw.Reading.Correct, raw.Reading.Total);
@@ -538,34 +469,23 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             attempt.ThoiGianLamBai = Math.Max(0, (ExamCore.DurationMinutes * 60 - attempt.ThoiGianConLaiGiay!.Value) / 60);
             attempt.DiemNghe = scaled?.ListeningScore;
             attempt.DiemDoc = scaled?.ReadingScore;
+            if (attempt.LoaiBaiLam == ExamCore.Placement)
+                classification = await ClassifyPlacementAsync(attempt, learnerId,
+                    ComposeResult(attempt, questions, answers, compactSnapshot?.ExamName), ct);
             await db.SaveChangesAsync(ct);
+            await PruneOlderCompletedAsync(attempt, ct);
         }
         await tx.CommitAsync(ct);
         await tx.DisposeAsync();
         await db.Entry(attempt).ReloadAsync(ct);
-        if (newlyFinalized && attempt.LoaiBaiLam == ExamCore.Placement)
-        {
-            try { await ClassifyPlacementAsync(attempt, learnerId, ct); }
-            catch (Exception e) when (e is not OperationCanceledException)
-            {
-                logger.LogError(e, "Placement {AttemptId} was graded but KNN classification failed", id);
-            }
-        }
+        if (classification is not null) knnDiagnostics.Set(id, classification);
         return await ResultAsync(id, learnerId, ct);
     }
 
-    private async Task ClassifyPlacementAsync(KetQuaLamBai attempt, int learnerId, CancellationToken ct)
+    private async Task<KnnClassificationResult> ClassifyPlacementAsync(KetQuaLamBai attempt,
+        int learnerId, ExamResultDto result, CancellationToken ct)
     {
-        var result = await ResultAsync(attempt.MaKetQua, learnerId, ct);
         var classification = knnClassifier.Classify(PlacementFeatures.FromFinalizedResult(result));
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
-        await LockLearnerAsync(learnerId, ct);
-        var latestId = await db.KetQuaLamBai.AsNoTracking()
-            .Where(x => x.MaHocVien == learnerId && x.LoaiBaiLam == ExamCore.Placement &&
-                (x.TrangThai == ExamCore.Submitted || x.TrangThai == ExamCore.Expired))
-            .OrderByDescending(x => x.NgayNopBai).ThenByDescending(x => x.MaKetQua)
-            .Select(x => x.MaKetQua).FirstAsync(ct);
-        if (latestId != attempt.MaKetQua) return;
         var rows = await db.KetQuaPhanLopKNN
             .Where(x => x.MaKetQuaNavigation.MaHocVien == learnerId)
             .OrderBy(x => x.MaPhanLop).Take(2).ToListAsync(ct);
@@ -584,16 +504,35 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             current.NgayPhanLop = DateTime.UtcNow;
             current.DiemMucTieu = null;
         }
-        var exactAttempt = await db.KetQuaLamBai.SingleAsync(x => x.MaKetQua == attempt.MaKetQua, ct);
-        if (exactAttempt.GiaiDoanLucNop is null)
-            exactAttempt.GiaiDoanLucNop = classification.Stage;
-        await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
-        knnDiagnostics.Set(attempt.MaKetQua, classification);
+        attempt.GiaiDoanLucNop ??= classification.Stage;
+        return classification;
+    }
+
+    private async Task PruneOlderCompletedAsync(KetQuaLamBai attempt, CancellationToken ct)
+    {
+        if (!db.Database.IsSqlServer() || attempt.LoaiBaiLam == ExamCore.Mock && attempt.MaDeThi is null)
+            return;
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            SET NOCOUNT ON;
+            DECLARE @old TABLE (MaKetQua int PRIMARY KEY);
+            INSERT @old(MaKetQua)
+            SELECT a.MaKetQua FROM dbo.KetQuaLamBai a
+            WHERE a.MaHocVien = {attempt.MaHocVien} AND a.LoaiBaiLam = {attempt.LoaiBaiLam}
+              AND ({attempt.LoaiBaiLam} = 'PLACEMENT' OR a.MaDeThi = {attempt.MaDeThi})
+              AND a.MaKetQua < {attempt.MaKetQua} AND a.TrangThai IN ('DA_NOP','HET_GIO')
+              AND NOT EXISTS (SELECT 1 FROM dbo.TienDoBuocLoTrinh p WHERE p.MaKetQua = a.MaKetQua)
+              AND NOT EXISTS (SELECT 1 FROM dbo.KetQuaPhanLopKNN k WHERE k.MaKetQua = a.MaKetQua);
+            DELETE d FROM dbo.ChiTietKetQua d JOIN dbo.CauHoiLuotLam q
+                ON q.MaCauHoiLuotLam = d.MaCauHoiLuotLam JOIN @old o ON o.MaKetQua = q.MaKetQua;
+            DELETE q FROM dbo.CauHoiLuotLam q JOIN @old o ON o.MaKetQua = q.MaKetQua;
+            DELETE n FROM dbo.NhomLuotLam n JOIN @old o ON o.MaKetQua = n.MaKetQua;
+            DELETE a FROM dbo.KetQuaLamBai a JOIN @old o ON o.MaKetQua = a.MaKetQua;
+            """, ct);
     }
 
     public async Task<ExamResultDto> ResultAsync(int id, int learnerId, CancellationToken ct)
     {
+        await EnsureLatestCompletedAsync(id, learnerId, ct);
         var snapshot = await snapshots.LoadAsync(id, learnerId, SnapshotView.Result, false, ct);
         var attempt = snapshot.Attempt;
         if (attempt.TrangThai is ExamCore.Active or "BO_DO" && ExamTimer.Remaining(attempt, DateTime.UtcNow) == 0)
@@ -619,11 +558,12 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
 
     public async Task<ExamReviewDto> ReviewAsync(int id, int learnerId, CancellationToken ct)
     {
+        await EnsureLatestCompletedAsync(id, learnerId, ct);
         var kind = await db.KetQuaLamBai.AsNoTracking()
             .Where(a => a.MaKetQua == id && a.MaHocVien == learnerId)
             .Select(a => a.LoaiBaiLam).FirstOrDefaultAsync(ct);
-        if (kind == ExamCore.Mock)
-            throw new ExamProblem("MOCK_REVIEW_UNAVAILABLE", "Đề thi thử chỉ hiển thị điểm và thống kê theo Part.", 403);
+        if (kind == ExamCore.Placement)
+            throw new ExamProblem("PLACEMENT_REVIEW_UNAVAILABLE", "Kiểm tra đầu vào chỉ hiển thị tỷ lệ đúng theo từng Part.", 403);
         var snapshot = await snapshots.LoadAsync(id, learnerId, SnapshotView.Review, false, ct);
         var attempt = snapshot.Attempt;
         if (attempt.TrangThai is ExamCore.Active or "BO_DO" && ExamTimer.Remaining(attempt, DateTime.UtcNow) == 0)
@@ -656,6 +596,21 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             questionsByGroup.GetValueOrDefault(g.MaNhomLuotLam, []).Select(Map).ToList())).ToList(),
             questions.Where(q => q.MaNhomLuotLam == null).Select(Map).ToList())
             { Source = result.Source, Result = result };
+    }
+
+    private async Task EnsureLatestCompletedAsync(int id, int learnerId, CancellationToken ct)
+    {
+        var row = await db.KetQuaLamBai.AsNoTracking()
+            .Where(a => a.MaKetQua == id && a.MaHocVien == learnerId)
+            .Select(a => new { a.MaDeThi, a.LoaiBaiLam, a.TrangThai })
+            .FirstOrDefaultAsync(ct);
+        if (row is null || row.TrangThai is not (ExamCore.Submitted or ExamCore.Expired)) return;
+        var latest = db.KetQuaLamBai.AsNoTracking().Where(a => a.MaHocVien == learnerId &&
+            a.LoaiBaiLam == row.LoaiBaiLam &&
+            (a.TrangThai == ExamCore.Submitted || a.TrangThai == ExamCore.Expired));
+        if (row.LoaiBaiLam == ExamCore.Mock) latest = latest.Where(a => a.MaDeThi == row.MaDeThi);
+        if (await latest.MaxAsync(a => a.MaKetQua, ct) != id)
+            throw new ExamProblem("RESULT_REPLACED", "Kết quả này đã được thay bằng lần thi gần nhất.", 404);
     }
 
     private async Task<List<CauHoiLuotLam>> ResultQuestions(int id, CancellationToken ct)

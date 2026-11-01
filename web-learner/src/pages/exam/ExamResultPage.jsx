@@ -76,7 +76,7 @@ export default function ExamResultPage() {
     {error && <p className="exam-error" role="alert">{error}</p>}
     {!currentResult && !error && <p>Đang tải kết quả…</p>}
     {currentResult && <>
-      {partMock ? <section className="exam-score"><p>Kết quả Part {tested[0]?.part}</p>
+      {result.source !== "PLACEMENT" && (partMock ? <section className="exam-score"><p>Kết quả Part {tested[0]?.part}</p>
         <strong>{tested[0]?.stats.correct} / {tested[0]?.stats.total}</strong>
         <p>{tested[0]?.stats.percentage}% câu đúng</p></section> :
         <section className="exam-score"><p>Điểm TOEIC ước tính</p>
@@ -84,18 +84,19 @@ export default function ExamResultPage() {
           <div className="exam-score-sections"><div>Listening <b>{result.listeningScore ?? "—"} / 495</b>
             <small>{result.listening.correct} / {result.listening.total} câu đúng</small></div>
             <div>Reading <b>{result.readingScore ?? "—"} / 495</b>
-              <small>{result.reading.correct} / {result.reading.total} câu đúng</small></div></div></section>}
-      <section><h2>Kết quả câu hỏi</h2><div className="exam-stat-grid">
+              <small>{result.reading.correct} / {result.reading.total} câu đúng</small></div></div></section>)}
+      {result.source !== "PLACEMENT" && <section><h2>Kết quả câu hỏi</h2><div className="exam-stat-grid">
         <div><b>{result.overall.correct} / {result.overall.total}</b><span>Đúng</span></div>
         <div><b>{result.overall.incorrect} / {result.overall.total}</b><span>Sai</span></div>
         <div><b>{result.overall.unanswered} / {result.overall.total}</b><span>Chưa trả lời</span></div>
-      </div></section>
-      <section><h2>Theo từng Part</h2><div className="exam-part-list">
+      </div></section>}
+      {result.source !== "PLACEMENT" && <section><h2>Theo từng Part</h2><div className="exam-part-list">
         {tested.map(row => <div key={row.part}><strong>Part {row.part}</strong>
-          <span>{row.stats.correct}/{row.stats.total} đúng</span><span>{row.stats.percentage}%</span></div>)}</div></section>
+          <span>{row.stats.correct}/{row.stats.total} đúng</span><span>{row.stats.percentage}%</span></div>)}</div></section>}
       {result.source === "PLACEMENT" && <section className="placement-result-analysis" aria-labelledby="placement-result-title">
         <div className="placement-result-heading"><div><span className="placement-eyebrow">Đánh giá sau bài kiểm tra</span>
           <h2 id="placement-result-title">Phân tích năng lực bằng KNN</h2></div></div>
+        {analysis?.status !== "available" && <p>Kết quả bài kiểm tra: {result.overall.correct}/{result.overall.total} câu đúng. Listening {result.listening.correct}/{result.listening.total} · Reading {result.reading.correct}/{result.reading.total}.</p>}
         {analysis?.attemptId !== attemptId && <p role="status">Đang phân tích năng lực… Kết quả sẽ tự cập nhật khi sẵn sàng.</p>}
         {analysis?.attemptId === attemptId && ["error", "missing"].includes(analysis.status) && <>
           <p role={analysis.status === "error" ? "alert" : "status"}>
@@ -120,7 +121,7 @@ export default function ExamResultPage() {
       </section>}
       <div className="exam-navigation">
         <Link className="outline-button" to={navigation.back}>← Quay lại</Link>
-        {result.source === "PLACEMENT" && <Link className="primary-button" to={`/exam/${attemptId}/review`}>Xem lại bài</Link>}
+        {result.source !== "PLACEMENT" && <Link className="primary-button" to={`/exam/${attemptId}/review`}>Xem chi tiết từng câu</Link>}
         {result.source === "PLACEMENT" &&
           <button className="outline-button" type="button" disabled={retrying} onClick={retry}>
             Làm lại kiểm tra</button>}

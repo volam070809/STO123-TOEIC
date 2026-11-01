@@ -10,7 +10,7 @@ import { ADMIN_DATE_FILTER_STATUS, adminDateDisplayState, validateAdminDateRange
 import { nextPaymentHistoryLearner, paymentHistoryRegionId, paymentHistoryState } from "./adminPaymentViewState";
 
 const PAGE_SIZE = 20;
-const paymentStatuses = { CHO_XU_LY: "Chờ xử lý", THANH_CONG: "Thành công", THAT_BAI: "Thất bại" };
+const paymentStatuses = { CHO_XU_LY: "Chờ xử lý", THANH_CONG: "Thành công", THAT_BAI: "Thất bại", QUA_HAN: "Quá hạn" };
 
 export default function AdminPaymentsPage() {
   const { token } = useAuth(); const [params, setParams] = useSearchParams();

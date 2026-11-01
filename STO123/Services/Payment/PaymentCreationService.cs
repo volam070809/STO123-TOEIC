@@ -27,8 +27,22 @@ public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway ga
 {
     public const int CourseValidDays = 30;
 
-    public Task<CourseQuoteOutcome> QuoteCoursesAsync(int learnerId, IReadOnlyList<int>? courseIds,
-        CancellationToken ct) => ValidateCoursesAsync(learnerId, courseIds, ct);
+    public async Task<CourseQuoteOutcome> QuoteCoursesAsync(int learnerId, IReadOnlyList<int>? courseIds,
+        CancellationToken ct)
+    {
+        await ExpirePendingAsync(learnerId, ct);
+        return await ValidateCoursesAsync(learnerId, courseIds, ct);
+    }
+
+    public async Task ExpirePendingAsync(int learnerId, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        if (db.Database.IsSqlServer())
+            await db.NguoiDung.FromSqlInterpolated($"SELECT * FROM dbo.NguoiDung WITH (UPDLOCK, HOLDLOCK) WHERE MaNguoiDung = {learnerId}")
+                .AsNoTracking().AnyAsync(ct);
+        await PaymentExpiry.ExpireAsync(db, learnerId, clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime, ct);
+        await transaction.CommitAsync(ct);
+    }
 
     private async Task<CourseQuoteOutcome> ValidateCoursesAsync(int learnerId, IReadOnlyList<int>? courseIds,
         CancellationToken ct)
@@ -49,7 +63,7 @@ public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway ga
         var localNow = clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime;
         if (await CourseEntitlement.ActiveCourseIds(db, learnerId, localNow)
             .AnyAsync(id => requested.Contains(id), ct)) return new(PaymentCreationError.AlreadyActive);
-        if (await CourseEntitlement.PendingCourseIds(db, learnerId)
+        if (await CourseEntitlement.PendingCourseIds(db, learnerId, localNow)
             .AnyAsync(id => requested.Contains(id), ct)) return new(PaymentCreationError.AlreadyPending);
         var ordered = courses.OrderBy(c => c.CourseId).ToArray();
         var total = ordered.Sum(c => c.Price);
@@ -74,6 +88,7 @@ public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway ga
         else if (!await db.NguoiDung.AsNoTracking().AnyAsync(u => u.MaNguoiDung == learnerId &&
             u.VaiTro == "HOC_VIEN" && u.TrangThai == "HOAT_DONG", ct))
             return new(PaymentCreationError.LearnerUnavailable);
+        await PaymentExpiry.ExpireAsync(db, learnerId, now.ToOffset(TimeSpan.FromHours(7)).DateTime, ct);
         var quote = await ValidateCoursesAsync(learnerId, courseIds, ct);
         if (quote.Error != PaymentCreationError.None) return new(quote.Error);
         if (quote.Quote!.Total != expectedTotal) return new(PaymentCreationError.PriceChanged);
@@ -127,6 +142,7 @@ public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway ga
             user.MaNguoiDung == learnerId && user.VaiTro == "HOC_VIEN" && user.TrangThai == "HOAT_DONG",
             cancellationToken))
             return new(PaymentCreationError.LearnerUnavailable);
+        await PaymentExpiry.ExpireAsync(db, learnerId, localNow, cancellationToken);
         var package = await db.GoiHoc.AsNoTracking().FirstOrDefaultAsync(item =>
             item.MaGoiHoc == packageId && item.TrangThai == "DANG_MO", cancellationToken);
         if (package is null || package.Gia <= 0 || package.Gia != decimal.Truncate(package.Gia) ||

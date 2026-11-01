@@ -55,6 +55,8 @@ public partial class KetQuaLamBai
 
     public byte? GiaiDoanLucNop { get; set; }
 
+    public string DuLieuBaiLamJson { get; set; }
+
     [InverseProperty("MaKetQuaNavigation")]
     public virtual ICollection<CauHoiLuotLam> CauHoiLuotLam { get; set; } = new List<CauHoiLuotLam>();
 

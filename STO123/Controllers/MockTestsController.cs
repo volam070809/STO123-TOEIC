@@ -24,19 +24,21 @@ public sealed class MockTestsController(ToeicDbContext db, ExamAttemptService at
         var rows = await MockExamEligibility.Visible(db.DeThi.AsNoTracking(), placementId)
             .Select(x => new {
                 ExamId = x.MaDeThi, ExamName = x.TenDe, Duration = x.ThoiGianLamBai,
-                Completed = x.KetQuaLamBai.Any(a => a.MaHocVien == learnerId &&
+                Completed = x.KetQuaLamBai.Where(a => a.MaHocVien == learnerId &&
                     a.LoaiBaiLam == ExamCore.Mock &&
-                    (a.TrangThai == ExamCore.Submitted || a.TrangThai == ExamCore.Expired)),
-                Attempt = x.KetQuaLamBai.Where(a => a.MaHocVien == learnerId &&
-                    a.LoaiBaiLam == ExamCore.Mock)
-                    .OrderByDescending(a => a.TrangThai == ExamCore.Submitted || a.TrangThai == ExamCore.Expired)
-                    .ThenByDescending(a => a.MaKetQua)
-                    .Select(a => new { a.MaKetQua, a.TrangThai, a.DiemTong }).FirstOrDefault()
+                    (a.TrangThai == ExamCore.Submitted || a.TrangThai == ExamCore.Expired))
+                    .OrderByDescending(a => a.NgayNopBai).ThenByDescending(a => a.MaKetQua)
+                    .Select(a => new { a.MaKetQua, a.DiemTong }).FirstOrDefault(),
+                Active = x.KetQuaLamBai.Where(a => a.MaHocVien == learnerId &&
+                    a.LoaiBaiLam == ExamCore.Mock &&
+                    (a.TrangThai == ExamCore.Active || a.TrangThai == "BO_DO"))
+                    .OrderByDescending(a => a.MaKetQua).Select(a => (int?)a.MaKetQua).FirstOrDefault()
             }).OrderBy(x => x.ExamId).ToListAsync(ct);
         return Ok(rows.Select(x => new {
             x.ExamId, ExamCode = MockExamCode.FromId(x.ExamId), x.ExamName, x.Duration,
-            State = x.Completed ? "COMPLETED" : x.Attempt == null ? "NOT_STARTED" : "IN_PROGRESS",
-            AttemptId = x.Attempt?.MaKetQua, TotalScore = x.Completed ? x.Attempt?.DiemTong : null
+            State = x.Active.HasValue ? "IN_PROGRESS" : x.Completed is not null ? "COMPLETED" : "NOT_STARTED",
+            AttemptId = x.Active ?? x.Completed?.MaKetQua, LastCompletedAttemptId = x.Completed?.MaKetQua,
+            TotalScore = x.Completed?.DiemTong
         }));
     }
 
@@ -60,7 +62,13 @@ public sealed class MockTestsController(ToeicDbContext db, ExamAttemptService at
         var query = db.KetQuaLamBai.AsNoTracking().Where(x => x.MaHocVien == learnerId &&
             x.LoaiBaiLam == ExamCore.Mock &&
             (x.TrangThai == ExamCore.Submitted || x.TrangThai == ExamCore.Expired));
-        var rows = await query.OrderByDescending(x => x.NgayLamBai).ThenByDescending(x => x.MaKetQua)
+        var latestIds = query.Where(x => x.MaDeThi != null).GroupBy(x => x.MaDeThi)
+            .Select(group => group.Max(x => x.MaKetQua));
+        var latestLegacyId = await query.Where(x => x.MaDeThi == null)
+            .MaxAsync(x => (int?)x.MaKetQua, ct);
+        var rows = await query.Where(x => latestIds.Contains(x.MaKetQua) ||
+                latestLegacyId.HasValue && x.MaKetQua == latestLegacyId.Value)
+            .OrderByDescending(x => x.NgayNopBai).ThenByDescending(x => x.MaKetQua)
             .Skip((page - 1) * pageSize).Take(pageSize + 1)
             .Select(x => new { AttemptId = x.MaKetQua, x.TrangThai, x.NgayLamBai,
                 ExamId = x.MaDeThi, ExamName = x.MaDeThiNavigation != null ? x.MaDeThiNavigation.TenDe : null,

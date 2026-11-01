@@ -25,6 +25,7 @@ test("only confirmed backend states are terminal", () => {
   assert.equal(paymentState("THANH_CONG", "DANG_SU_DUNG"), "success");
   assert.equal(paymentState("THANH_CONG", "CHO_THANH_TOAN"), "reconciliation");
   assert.equal(paymentState("THAT_BAI"), "failed");
+  assert.equal(paymentState("QUA_HAN"), "expired");
   assert.equal(paymentState("07"), "error");
   assert.equal(paymentError({ status: 401 }), "unauthorized");
   assert.equal(paymentError({ status: 404 }), "not-found");

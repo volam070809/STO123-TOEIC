@@ -24,8 +24,8 @@ export default function ExamReviewPage() {
     let live = true;
     examApi.review(attemptId, token)
       .then(data => { if (live) { setReview(data); setResult(data.result); } })
-      .catch(e => { if (live) setError(e.data?.code === "MOCK_REVIEW_UNAVAILABLE" ?
-        "Đề thi thử chỉ hiển thị điểm và thống kê theo Part." :
+      .catch(e => { if (live) setError(e.data?.code === "PLACEMENT_REVIEW_UNAVAILABLE" ?
+        "Kiểm tra đầu vào chỉ hiển thị tỷ lệ đúng theo từng Part." :
         e.data?.code === "ATTEMPT_NOT_FINALIZED" ? "Bài thi chưa kết thúc." : "Không thể tải phần xem lại."); });
     return () => { live = false; };
   }, [attemptId, token]);

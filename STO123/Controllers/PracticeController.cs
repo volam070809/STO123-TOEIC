@@ -49,14 +49,14 @@ public sealed class PracticeController(PracticePartService practice) : Controlle
     public async Task<IActionResult> Finish(int attemptId, CancellationToken ct) =>
         await WithLearner(id => practice.FinishAsync(id, attemptId, ct));
 
-    [HttpGet("history")]
-    public async Task<IActionResult> History([FromQuery] int page = 1, [FromQuery] int pageSize = 8,
-        [FromQuery] int? part = null, [FromQuery] string? sort = null, CancellationToken ct = default) =>
-        await WithLearner(id => practice.HistoryAsync(id, page, pageSize, part, sort, ct));
+    [HttpGet("statistics")]
+    public async Task<IActionResult> Statistics(CancellationToken ct) =>
+        await WithLearner(id => practice.StatisticsAsync(id, ct));
 
     [HttpGet("history/{attemptId:int}")]
-    public async Task<IActionResult> Review(int attemptId, CancellationToken ct) =>
-        await WithLearner(id => practice.ReviewAsync(id, attemptId, ct));
+    public IActionResult Review(int attemptId) => StatusCode(410, new {
+        code = "PRACTICE_HISTORY_REMOVED", message = "Luyện tập theo Part chỉ lưu thống kê tổng hợp."
+    });
 
     private async Task<IActionResult> WithLearner(Func<int, Task<object>> action)
     {

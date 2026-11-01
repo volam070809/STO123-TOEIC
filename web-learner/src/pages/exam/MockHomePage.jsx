@@ -47,7 +47,7 @@ export default function MockHomePage() {
   }
   return <SiteLayout><SessionBoundary><div className="site-container exam-home">
     <div className="page-heading"><span>Học tập</span><h1>Thi thử TOEIC</h1>
-      <p>Chọn một đề thi để bắt đầu. Mỗi đề chỉ được hoàn thành một lần.</p></div>
+      <p>Bạn có thể làm lại mỗi đề. Lịch sử chỉ hiển thị kết quả hoàn thành gần nhất của từng đề.</p></div>
     <div className="exam-navigation"><Link className="outline-button" to="/">← Quay lại</Link>
       {isAuthenticated && <Link className="outline-button" to="/mock-test/history">Lịch sử thi</Link>}</div>
     {(catalogError || actionError) && <p className="exam-error" role="alert">{catalogError || actionError}</p>}
@@ -56,7 +56,7 @@ export default function MockHomePage() {
     <div className="exam-card-list">{exams?.map(exam => <article className="exam-card fixed-exam-card" key={exam.examId}>
       <div><span className="mock-exam-code">{exam.examCode}</span><h2>{exam.examName}</h2>
         <p className="mock-exam-meta"><span>{exam.questionCount ?? 200} câu</span><span>{exam.duration} phút</span></p>
-        {exam.state === "COMPLETED" && <p className="mock-exam-status is-complete">Đã hoàn thành · {exam.totalScore ?? "—"}/990</p>}
+        {exam.lastCompletedAttemptId && <p className="mock-exam-status is-complete">Kết quả gần nhất · {exam.totalScore ?? "—"}/990</p>}
         {exam.state === "IN_PROGRESS" && <p className="mock-exam-status is-progress">Đang làm</p>}
         {exam.state === "NOT_STARTED" && <p className="mock-exam-status">Chưa bắt đầu</p>}</div>
       <div className="exam-card-actions">
@@ -66,8 +66,10 @@ export default function MockHomePage() {
           {pending === exam.examId ? "Đang bắt đầu…" : "Bắt đầu thi"}</button>}
         {exam.state === "IN_PROGRESS" && <Link className="primary-button" to={`/exam/${exam.attemptId}`}>
           Tiếp tục làm bài</Link>}
-        {exam.state === "COMPLETED" && <Link className="outline-button" to={`/exam/${exam.attemptId}/result`}>
-          Xem kết quả</Link>}
+        {exam.lastCompletedAttemptId && <Link className="outline-button" to={`/exam/${exam.lastCompletedAttemptId}/result`}>
+          Xem kết quả gần nhất</Link>}
+        {exam.state === "COMPLETED" && <button className="primary-button" type="button" disabled={pending !== null}
+          onClick={() => start(exam.examId)}>{pending === exam.examId ? "Đang bắt đầu…" : "Làm lại đề"}</button>}
       </div>
     </article>)}</div>
   </div></SessionBoundary></SiteLayout>;

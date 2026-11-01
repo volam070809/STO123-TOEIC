@@ -22,6 +22,7 @@ public sealed class PublicVocabularyPreviewTests
                 MaChuDe INTEGER PRIMARY KEY,
                 TenChuDe TEXT NOT NULL,
                 MoTa TEXT NULL,
+                DuongDanAnhBia TEXT NULL,
                 TrangThai TEXT NOT NULL
             );
             CREATE TABLE TuVung (

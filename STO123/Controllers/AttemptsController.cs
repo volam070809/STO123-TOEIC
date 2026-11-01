@@ -74,14 +74,16 @@ public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbConte
                      g.MaKetQuaNavigation.LoaiBaiLam == PracticeQuestionBank.AttemptType))
                 .Select(g => new { g.DuongDanAudio, g.DuongDanAnh, g.MaKetQuaNavigation.LoaiBaiLam })
                 .FirstOrDefaultAsync(ct);
-            if (group is null)
+            var compactGroup = group is null ? await CompactGroup(id, groupId, learnerId, ct) : null;
+            if (group is null && compactGroup is null)
             {
                 _ = await attempts.OwnedAsync(id, learnerId, ct);
                 throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Không tìm thấy tệp media.", 404);
             }
-            var path = kind == "audio" ? group.DuongDanAudio : group.DuongDanAnh;
+            var path = kind == "audio" ? group?.DuongDanAudio ?? compactGroup?.Audio :
+                group?.DuongDanAnh ?? compactGroup?.Image;
             if (string.IsNullOrWhiteSpace(path)) throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Không tìm thấy tệp media.", 404);
-            var containerName = MediaContainer(group.LoaiBaiLam);
+            var containerName = MediaContainer(group?.LoaiBaiLam ?? compactGroup!.Type);
             if (string.IsNullOrWhiteSpace(containerName)) throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Media chưa được cấu hình.", 503);
             var blob = blobs.GetBlobContainerClient(containerName).GetBlobClient(path);
             var properties = await blob.GetPropertiesAsync(cancellationToken: ct);
@@ -104,15 +106,17 @@ public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbConte
                      g.MaKetQuaNavigation.LoaiBaiLam == ExamCore.Placement ||
                      g.MaKetQuaNavigation.LoaiBaiLam == PracticeQuestionBank.AttemptType))
                 .Select(g => new { g.TaiLieuJson, g.MaKetQuaNavigation.LoaiBaiLam }).FirstOrDefaultAsync(ct);
-            if (group is null)
+            var compactGroup = group is null ? await CompactGroup(id, groupId, learnerId, ct) : null;
+            if (group is null && compactGroup is null)
             {
                 _ = await attempts.OwnedAsync(id, learnerId, ct);
                 throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Không tìm thấy hình ảnh.", 404);
             }
-            var document = ExamDocumentCodec.Decode(group.TaiLieuJson).FirstOrDefault(d => d.Order == order);
+            var document = ExamDocumentCodec.Decode(group?.TaiLieuJson ?? compactGroup?.Documents)
+                .FirstOrDefault(d => d.Order == order);
             if (string.IsNullOrWhiteSpace(document?.ImagePath))
                 throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Không tìm thấy hình ảnh.", 404);
-            var containerName = MediaContainer(group.LoaiBaiLam);
+            var containerName = MediaContainer(group?.LoaiBaiLam ?? compactGroup!.Type);
             if (string.IsNullOrWhiteSpace(containerName)) throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Media chưa được cấu hình.", 503);
             var blob = blobs.GetBlobContainerClient(containerName).GetBlobClient(document.ImagePath);
             var properties = await blob.GetPropertiesAsync(cancellationToken: ct);
@@ -136,6 +140,25 @@ public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbConte
     private string? MediaContainer(string attemptType) =>
         attemptType == PracticeQuestionBank.AttemptType ? "practice-question" :
         configuration["ExamMedia:ContainerName"] ?? configuration["AzureBlob:ContainerName"];
+
+    private sealed record CompactMedia(string? Audio, string? Image, string? Documents, string Type);
+    private async Task<CompactMedia?> CompactGroup(int attemptId, int groupId, int learnerId, CancellationToken ct)
+    {
+        var row = await db.KetQuaLamBai.AsNoTracking().Where(a => a.MaKetQua == attemptId &&
+            a.MaHocVien == learnerId && a.LoaiBaiLam != PracticeQuestionBank.AttemptType)
+            .Select(a => new { a.DuLieuBaiLamJson, a.LoaiBaiLam }).FirstOrDefaultAsync(ct);
+        if (row?.DuLieuBaiLamJson is null) return null;
+        var ids = CompactExamStore.Decode(row.DuLieuBaiLamJson).QuestionIds;
+        if (!await db.NhomCauHoi.AsNoTracking().AnyAsync(x => x.MaNguLieu == groupId && ids.Contains(x.MaCauHoi), ct))
+            return null;
+        var source = await db.NguLieu.AsNoTracking().Include(x => x.NguLieuTaiLieu)
+            .FirstOrDefaultAsync(x => x.MaNguLieu == groupId, ct);
+        if (source is null) return null;
+        var documents = source.NguLieuTaiLieu.Count == 0 ? null : ExamDocumentCodec.Encode(
+            source.NguLieuTaiLieu.Select(d => new ExamDocumentSnapshot(d.ThuTu, d.LoaiTaiLieu,
+                d.NoiDung, d.DuongDanAnh)));
+        return new CompactMedia(source.DuongDanAudio, source.DuongDanAnh, documents, row.LoaiBaiLam);
+    }
 }
 
 public sealed record FlagRequest(bool Flagged);

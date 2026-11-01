@@ -52,7 +52,7 @@ public sealed class AdminLearnersControllerTests
     }
 
     [Fact]
-    public async Task Practice_analytics_keeps_wrong_unanswered_and_mixed_statuses_distinct()
+    public async Task Practice_analytics_reads_aggregate_part_statistics_without_completed_attempts()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -69,15 +69,21 @@ public sealed class AdminLearnersControllerTests
                 ThuTu INTEGER NOT NULL, PhuongAnDung TEXT NOT NULL);
             CREATE TABLE ChiTietKetQua (
                 MaCauHoiLuotLam INTEGER PRIMARY KEY, DapAnChon TEXT NULL, DanhDau INTEGER NOT NULL DEFAULT 0);
+            CREATE TABLE ThongKeLuyenPart (
+                MaHocVien INTEGER NOT NULL, MaPart INTEGER NOT NULL, SoLanLuyen INTEGER NOT NULL,
+                TongCauDaLam INTEGER NOT NULL, TongCauDung INTEGER NOT NULL,
+                SoCauTrongLanCuoi INTEGER NOT NULL, SoCauLanCuoi INTEGER NOT NULL,
+                SoDungLanCuoi INTEGER NOT NULL, MaKetQuaCuoi INTEGER NULL,
+                LanLuyenGanNhat TEXT NULL, PRIMARY KEY (MaHocVien, MaPart));
             INSERT INTO NguoiDung VALUES (1, 'HOC_VIEN');
             INSERT INTO PartTOEIC VALUES (1, 1, 6), (2, 2, 25);
             INSERT INTO KetQuaLamBai VALUES
-                (10, 1, 'DANG_LAM', '2026-10-20', NULL, 'PRACTICE'),
-                (11, 1, 'DA_NOP', '2026-10-21', '2026-10-21', 'PRACTICE');
+                (10, 1, 'DANG_LAM', '2026-10-20', NULL, 'PRACTICE');
             INSERT INTO CauHoiLuotLam VALUES
-                (101, 10, 1, 1, 'A'), (102, 10, 1, 2, 'A'), (103, 10, 1, 3, 'C'),
-                (104, 11, 2, 1, 'B');
-            INSERT INTO ChiTietKetQua VALUES (101, 'A', 0), (102, 'B', 0), (104, 'B', 0);
+                (101, 10, 1, 1, 'A'), (102, 10, 1, 2, 'A'), (103, 10, 1, 3, 'C');
+            INSERT INTO ChiTietKetQua VALUES (101, 'A', 0), (102, 'B', 0);
+            INSERT INTO ThongKeLuyenPart VALUES
+                (1, 1, 2, 5, 3, 3, 2, 1, 99, '2026-10-21');
             """);
 
         var controller = new AdminLearnerAnalyticsController(db, TimeProvider.System);
@@ -86,13 +92,13 @@ public sealed class AdminLearnersControllerTests
             Assert.IsType<OkObjectResult>(action).Value);
 
         var part1 = payload.Parts.Single(item => item.Part == 1);
-        Assert.Equal(1, part1.TotalAttempts);
-        Assert.Equal(0, part1.CompletedAttempts);
-        Assert.Equal(1, part1.Correct);
-        Assert.Equal(1, part1.Incorrect);
-        Assert.Equal(1, part1.Unanswered);
-        Assert.Equal(33.3m, part1.Accuracy);
-        Assert.Equal(2, payload.TotalItems);
+        Assert.Equal(2, part1.TotalAttempts);
+        Assert.Equal(2, part1.CompletedAttempts);
+        Assert.Equal(3, part1.Correct);
+        Assert.Equal(2, part1.Incorrect);
+        Assert.Equal(0, part1.Unanswered);
+        Assert.Equal(60m, part1.Accuracy);
+        Assert.Equal(0, payload.TotalItems);
     }
 
     [Fact]
@@ -117,6 +123,12 @@ public sealed class AdminLearnersControllerTests
             CREATE TABLE KetQuaLamBai (
                 MaKetQua INTEGER PRIMARY KEY, MaHocVien INTEGER NOT NULL, TrangThai TEXT NOT NULL,
                 NgayLamBai TEXT NOT NULL, NgayNopBai TEXT NULL, LoaiBaiLam TEXT NOT NULL);
+            CREATE TABLE ThongKeLuyenPart (
+                MaHocVien INTEGER NOT NULL, MaPart INTEGER NOT NULL, SoLanLuyen INTEGER NOT NULL,
+                TongCauDaLam INTEGER NOT NULL, TongCauDung INTEGER NOT NULL,
+                SoCauTrongLanCuoi INTEGER NOT NULL, SoCauLanCuoi INTEGER NOT NULL,
+                SoDungLanCuoi INTEGER NOT NULL, MaKetQuaCuoi INTEGER NULL,
+                LanLuyenGanNhat TEXT NULL, PRIMARY KEY (MaHocVien, MaPart));
             CREATE TABLE LanLuyenTuVung (
                 MaLanLuyen INTEGER PRIMARY KEY, MaNguoiDung INTEGER NOT NULL, MaChuDe INTEGER NOT NULL,
                 TrangThai TEXT NOT NULL, NgayBatDau TEXT NOT NULL, NgayNopBai TEXT NULL);

@@ -84,7 +84,7 @@ public sealed class PaymentConfirmationService(
         var confirmedFailure = KnownFailureCodes.Contains(callback.ResponseCode) &&
                                callback.TransactionStatus == "02";
 
-        if (payment.TrangThai != "CHO_XU_LY")
+        if (payment.TrangThai is not ("CHO_XU_LY" or "QUA_HAN"))
         {
             if ((payment.TrangThai == "THANH_CONG") != confirmedSuccess ||
                 (!confirmedSuccess && !confirmedFailure))
@@ -107,7 +107,7 @@ public sealed class PaymentConfirmationService(
             await db.Entry(payment).Reference(item => item.MaDangKyNavigation)
                 .LoadAsync(cancellationToken);
             var enrollment = payment.MaDangKyNavigation;
-            if (enrollment is null || enrollment.TrangThai != "CHO_THANH_TOAN" ||
+            if (enrollment is null || enrollment.TrangThai is not ("CHO_THANH_TOAN" or "QUA_HAN") ||
                 enrollment.NgayBatDau is not null || enrollment.NgayKetThuc is not null ||
                 enrollment.SoNgaySuDung <= 0)
             {
@@ -143,6 +143,10 @@ public sealed class PaymentConfirmationService(
         else
         {
             payment.TrangThai = "THAT_BAI";
+            await db.Entry(payment).Reference(item => item.MaDangKyNavigation)
+                .LoadAsync(cancellationToken);
+            if (payment.MaDangKyNavigation?.TrangThai is "CHO_THANH_TOAN" or "QUA_HAN")
+                payment.MaDangKyNavigation.TrangThai = "THAT_BAI";
         }
 
         await db.SaveChangesAsync(cancellationToken);

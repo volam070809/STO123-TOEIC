@@ -49,6 +49,8 @@ public partial class ToeicDbContext : DbContext
 
     public virtual DbSet<KetQuaLamBai> KetQuaLamBai { get; set; }
 
+    public virtual DbSet<ThongKeLuyenPart> ThongKeLuyenPart { get; set; }
+
     public virtual DbSet<KetQuaPhanLopKNN> KetQuaPhanLopKNN { get; set; }
 
     public virtual DbSet<KhoaHoc> KhoaHoc { get; set; }
@@ -91,6 +93,16 @@ public partial class ToeicDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ThongKeLuyenPart>(entity =>
+        {
+            entity.ToTable("ThongKeLuyenPart");
+            entity.HasKey(x => new { x.MaHocVien, x.MaPart }).HasName("PK_ThongKeLuyenPart");
+            entity.Property(x => x.LanLuyenGanNhat).HasColumnType("datetime2(3)");
+            entity.HasOne<NguoiDung>().WithMany().HasForeignKey(x => x.MaHocVien)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<PartTOEIC>().WithMany().HasForeignKey(x => x.MaPart)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<AdminContentIdempotency>(entity =>
         {
             entity.Property(e => e.CapNhatLucUtc).HasDefaultValueSql("(sysutcdatetime())", "DF_AdminContentIdempotency_CapNhatLucUtc");
@@ -337,6 +349,7 @@ public partial class ToeicDbContext : DbContext
             entity.HasKey(e => e.MaKetQua).HasName("PK__KetQuaLa__D5B3102A2DFD48B1");
 
             entity.Property(e => e.DiemTong).HasComputedColumnSql("([DiemNghe]+[DiemDoc])", false);
+            entity.Property(e => e.DuLieuBaiLamJson).HasColumnType("nvarchar(max)");
             entity.Property(e => e.MaLuotLam).HasDefaultValueSql("(newid())");
             entity.Property(e => e.NgayLamBai).HasDefaultValueSql("(sysutcdatetime())", "DF_KetQuaLamBai_NgayLamBai");
             entity.Property(e => e.TrangThai).HasDefaultValue("DANG_LAM");
