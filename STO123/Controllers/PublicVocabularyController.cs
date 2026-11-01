@@ -36,11 +36,12 @@ public sealed class PublicVocabularyController : ControllerBase
                 topic.MaChuDe,
                 topic.TenChuDe,
                 topic.MoTa,
+                topic.DuongDanAnhBia,
                 TotalWords = topic.TuVungChuDe.Count
             })
             .ToListAsync(ct);
         return Ok(rows.Select(topic => new PublicVocabularyTopicDto(topic.MaChuDe, topic.TenChuDe,
-            topic.MoTa, topic.TotalWords, Math.Min(topic.TotalWords, PublicVocabularyQueries.PreviewLimit)))
+            topic.MoTa, topic.TotalWords, Math.Min(topic.TotalWords, PublicVocabularyQueries.PreviewLimit), topic.DuongDanAnhBia))
             .ToList());
     }
 
@@ -49,7 +50,7 @@ public sealed class PublicVocabularyController : ControllerBase
     {
         var topic = await db.ChuDe.AsNoTracking()
             .Where(item => item.MaChuDe == topicId && item.TrangThai == "DANG_MO")
-            .Select(item => new { item.MaChuDe, item.TenChuDe, item.MoTa,
+            .Select(item => new { item.MaChuDe, item.TenChuDe, item.MoTa, item.DuongDanAnhBia,
                 TotalWords = item.TuVungChuDe.Count })
             .SingleOrDefaultAsync(ct);
         if (topic is null) return NotFound(new { code = "VOCABULARY_TOPIC_NOT_FOUND" });
@@ -68,7 +69,7 @@ public sealed class PublicVocabularyController : ControllerBase
             .ToListAsync(ct);
 
         var summary = new PublicVocabularyTopicDto(topic.MaChuDe, topic.TenChuDe, topic.MoTa,
-            topic.TotalWords, words.Count);
+            topic.TotalWords, words.Count, topic.DuongDanAnhBia);
         return Ok(new PublicVocabularyPreviewDto(summary, words));
     }
 

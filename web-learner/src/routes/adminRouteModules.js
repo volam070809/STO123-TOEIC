@@ -2,6 +2,7 @@ export const adminRouteModules = {
   layout: () => import("../layouts/AdminLayout"),
   contentDashboard: () => import("../pages/admin/AdminContentDashboardPage"),
   curriculum: () => import("../pages/admin/AdminCurriculumPage"),
+  vocabulary: () => import("../pages/admin/AdminVocabularyPage"),
   dashboard: () => import("../pages/admin/AdminDashboardPage"),
   reports: () => import("../pages/admin/AdminReportsPage"),
   learners: () => import("../pages/admin/AdminLearnersPage"),
@@ -41,6 +42,7 @@ export function routeKey(path) {
   const pathname = path.split("?")[0];
   if (pathname === "/admin") return "dashboard";
   if (pathname === "/admin/content") return "contentDashboard";
+  if (pathname === "/admin/vocabulary") return "vocabulary";
   if (/^\/admin\/courses\/\d+\/content$/.test(pathname)) return "curriculum";
   if (pathname === "/admin/reports") return "reports";
   if (pathname === "/admin/learners") return "learners";

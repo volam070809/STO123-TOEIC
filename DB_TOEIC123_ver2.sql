@@ -447,6 +447,7 @@ CREATE TABLE dbo.ChuDe(
     MaChuDe int primary key identity(1,1),
     TenChuDe nvarchar(128) not null,
     MoTa nvarchar(256) null,
+    DuongDanAnhBia varchar(512) null,
     TrangThai varchar(32) not null default 'DANG_MO' check (TrangThai in ('DANG_MO','DA_DONG'))
 );
 GO

@@ -20,6 +20,10 @@ public partial class ChuDe
     [StringLength(256)]
     public string MoTa { get; set; }
 
+    [StringLength(512)]
+    [Unicode(false)]
+    public string DuongDanAnhBia { get; set; }
+
     [Required]
     [StringLength(32)]
     [Unicode(false)]

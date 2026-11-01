@@ -219,7 +219,7 @@ export default function VocabularyPage() {
           const remembered = Math.min(Math.max(item.completedWords || 0, 0), item.totalWords || 0);
           const percent = item.totalWords > 0 ? Math.round(remembered / item.totalWords * 100) : 0;
           return <article className="vocab-topic-card" key={item.maChuDe || "demo"}>
-            <VocabularyTopicCover name={item.tenChuDe} />
+            {item.duongDanAnhBia ? <div className="vocabulary-topic-cover"><img src={`${API_BASE_URL}/api/admin/vocabulary/topics/${item.maChuDe}/cover`} alt="" width="600" height="240" /><h2>{item.tenChuDe}</h2></div> : <VocabularyTopicCover name={item.tenChuDe} />}
             <div className="vocabulary-topic-details">
             <div className="vocabulary-topic-meta">
               <span className="vocab-pill available">{isLearner ? item.status : "HỌC THỬ"}</span>

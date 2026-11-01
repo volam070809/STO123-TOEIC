@@ -16,6 +16,9 @@ public sealed class LectureResourceStorage(BlobServiceClient blobs, IConfigurati
         configuration["LectureResources:ContainerName"] ?? "course-resources");
     public long MaxFileBytes { get; } = Math.Clamp(configuration.GetValue<long?>("LectureResources:MaxFileBytes") ?? 250_000_000L,
         12L, 500_000_000L);
+    public long MaxVideoBytes { get; } = Math.Clamp(configuration.GetValue<long?>("LectureResources:MaxVideoBytes") ?? 950_000_000L,
+        12L, 950_000_000L);
+    public BlobContainerClient Container => container;
     public bool ExcelEnabled => configuration.GetValue<bool>("LectureResources:EnableExcel");
 
     public static bool SafeFileName(string? fileName) => fileName is { Length: > 0 and <= 128 } &&
@@ -216,6 +219,7 @@ public sealed class LectureResourceStorage(BlobServiceClient blobs, IConfigurati
     public Task DeleteAsync(string path, CancellationToken ct) => Owned(path)
         ? container.GetBlobClient(path).DeleteIfExistsAsync(cancellationToken: ct)
         : Task.CompletedTask;
+
 
     public async Task CopyVerifiedAsync(string sourcePath, string targetPath, CancellationToken ct)
     {

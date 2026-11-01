@@ -3,8 +3,8 @@ import { clearSharedReadCache } from "./sharedRequest";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export async function apiRequest(endpoint, { method = "GET", body = null, token = null,
-  timeoutMs = 30_000, cache, idempotencyKey } = {}) {
-  const headers = { Accept: "application/json" };
+  timeoutMs = 30_000, cache, idempotencyKey, headers: extraHeaders = {} } = {}) {
+  const headers = { Accept: "application/json", ...extraHeaders };
   const multipart = typeof FormData !== "undefined" && body instanceof FormData;
   if (body !== null && !multipart) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = "Bearer " + token;

@@ -63,7 +63,7 @@ export default function AdminCurriculumPage() {
   const [content, setContent] = useState(emptyContent); const [exercise, setExercise] = useState(emptyExercise);
   const [lecture, setLecture] = useState(null); const [files, setFiles] = useState([]);
   const [copyMode, setCopyMode] = useState(false);
-  const [capabilities, setCapabilities] = useState({ excelEnabled: false, maxFileBytes: 250000000 });
+  const [capabilities, setCapabilities] = useState({ excelEnabled: false, maxFileBytes: 250000000, maxVideoBytes: 950000000 });
   const [preview, setPreview] = useState(null); const [loading, setLoading] = useState(true);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [nameDialog, setNameDialog] = useState(null);
@@ -74,6 +74,7 @@ export default function AdminCurriculumPage() {
   const [search, setSearch] = useState("");
   const [progressSummary, setProgressSummary] = useState(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(null);
   const unit = outline?.units.find(x => x.id === selected?.unitId);
   const lesson = unit?.lessons.find(x => x.id === selected?.lessonId);
   const activity = lesson?.steps.find(x => x.id === selected?.stepId);
@@ -92,12 +93,12 @@ export default function AdminCurriculumPage() {
   useEffect(() => { if (studioTab !== "progress" || !token) return; let live = true;
     api.progressSummary(courseId, token).then(value => live && setProgressSummary(value))
       .catch(e => live && setError(errorText(e))); return () => { live = false; }; }, [courseId, studioTab, token]);
-  useEffect(() => { if (!editorDirty) return; const warn = e => { e.preventDefault(); e.returnValue = ""; };
-    window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, [editorDirty]);
+  useEffect(() => { if (!editorDirty && !files.length) return; const warn = e => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, [editorDirty, files.length]);
   const expand = key => setExpanded(x => ({ ...x, [key]: !x[key] }));
   function resetEditor() { setContent(emptyContent()); setExercise(emptyExercise()); setLecture(null); setFiles([]); setCopyMode(false); setMode("LECTURE"); setEditorTab("info"); setEditorDirty(false); setError(""); setNotice(""); }
   async function select(unitId, lessonId = null, step = null, discard = false) {
-    if (editorDirty && !discard && !window.confirm("Bạn có thay đổi chưa lưu. Rời khỏi hoạt động này?")) return;
+    if ((editorDirty || files.length) && !discard && !window.confirm("Bạn có thông tin hoặc tệp chưa lưu. Rời khỏi hoạt động này?")) return;
     resetEditor(); setSelected({ unitId, lessonId, stepId: step?.id || null });
     if (!step) return;
     setMode(step.activityType);
@@ -183,54 +184,59 @@ export default function AdminCurriculumPage() {
     <button type="button" onClick={() => remove(type, item, unitId, lessonId)}>Xóa</button></span></details>;
   function chooseFiles(list) {
     const next = [...list].map(file => ({ file, kind: kindFromFile(file, capabilities.excelEnabled) }));
-    if (next.some(x => !x.kind || x.file.size > capabilities.maxFileBytes)) {
+    if (next.some(x => !x.kind || x.file.size > (x.kind === "VIDEO" ? capabilities.maxVideoBytes : capabilities.maxFileBytes))) {
       setError("Tệp không đúng định dạng hoặc vượt quá giới hạn dung lượng."); return;
     }
     setFiles(next); setError("");
   }
   async function saveContent(e) {
     e.preventDefault(); if (busy || !lesson) return;
-    if (!content.content.trim() && !files.length && (!activity || copyMode) && !(!copyMode && lecture?.resources.length)) {
-      setError("Nhập nội dung hoặc chọn ít nhất một tệp."); return;
-    }
     setBusy(true); setError(""); setNotice("");
-    let lectureId = lecture?.id;
-    let stage = "lecture";
-    const uploadedIds = [];
     try {
       if (activity && !copyMode) {
+        const lectureId = lecture?.id ?? activity.activityId;
         const changed = !lecture || content.title !== lecture.title || content.summary !== (lecture.summary || "") ||
           content.content !== (lecture.content || "");
         if (changed) await api.editCourseLecture(courseId, unit.id, lesson.id, activity.id,
           { ...content, categoryId: null, level: null, partId: null }, token);
+        setLecture(await api.lecture(lectureId, token));
       }
       else {
         const result = await api.addCourseLecture(courseId, unit.id, lesson.id,
           { ...content, categoryId: null, level: null, partId: null }, token);
-        lectureId = result.lectureId; setSelected({ unitId: unit.id, lessonId: lesson.id, stepId: result.id });
+        setSelected({ unitId: unit.id, lessonId: lesson.id, stepId: result.id });
+        setLecture(await api.lecture(result.lectureId, token));
       }
       await refresh();
-      stage = "upload";
+      setCopyMode(false); setEditorDirty(false); setNotice("Đã lưu thông tin hoạt động. Để thêm tài nguyên, chọn tệp rồi nhấn Tải tệp đã chọn.");
+    } catch (e) {
+      const needsCopy = e.status === 409 && activity && !copyMode;
+      if (needsCopy) setCopyMode(true);
+      setError(needsCopy ? `${errorText(e)} Lưu thành hoạt động mới để giữ lịch sử học.` : errorText(e));
+    } finally { setBusy(false); }
+  }
+  async function uploadSelectedFiles() {
+    if (!lecture || !files.length || busy) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
       for (const entry of files) {
         const body = new FormData(); body.set("name", entry.file.name); body.set("kind", entry.kind); body.set("file", entry.file);
-        const uploaded = await api.uploadResource(lectureId, null, body, token);
-        uploadedIds.push(uploaded.id);
-        setFiles(current => current.filter(x => x !== entry));
+        setUploadProgress({ name: entry.file.name, percent: 0, phase: "upload" });
+        const uploaded = await api.uploadResource(lecture.id, null, body, token,
+          (percent, phase = "upload") => setUploadProgress({ name: entry.file.name, percent, phase }));
+        setFiles(current => current.filter(file => file !== entry));
+        let saved;
+        try { saved = await api.lecture(lecture.id, token); }
+        catch { throw new Error("Tệp đã lưu nhưng chưa tải lại được danh sách. Mở lại hoạt động để xem; không tải lại cùng tệp."); }
+        setLecture(saved);
+        if (!saved.resources.some(resource => resource.id === uploaded.id))
+          throw new Error("Máy chủ đã xác nhận lưu tệp nhưng danh sách chưa cập nhật. Tải lại hoạt động để kiểm tra; không tải lại cùng tệp.");
       }
-      stage = "verify";
-      const saved = await api.lecture(lectureId, token); setLecture(saved);
-      if (!uploadedIds.every(id => saved.resources.some(r => r.id === id)))
-        throw new Error("Máy chủ chưa trả về đủ tài nguyên vừa tải lên. Mở lại hoạt động để kiểm tra.");
-      setFiles([]); setCopyMode(false);
-      setEditorDirty(false);
-      setNotice("Đã lưu nội dung và toàn bộ tài nguyên.");
+      await refresh(); setNotice("Đã tải và lưu tệp. Tài nguyên hiện có trong mục Tệp đã lưu.");
     } catch (e) {
-      const needsCopy = stage === "lecture" && e.status === 409 && activity && !copyMode;
-      if (needsCopy) setCopyMode(true);
-      setError(needsCopy ? `${errorText(e)} Chọn lại tệp cần giữ và lưu hoạt động mới; bản cũ vẫn nguyên vẹn.` :
-        stage === "lecture" ? errorText(e) : `${errorText(e)} Mở lại hoạt động để kiểm tra tệp đã lưu trước khi thử lại.`);
-      if (lectureId) { try { setLecture(await api.lecture(lectureId, token)); await refresh(); } catch { /* keep original error */ } }
-    } finally { setBusy(false); }
+      setError(errorText(e));
+      try { setLecture(await api.lecture(lecture.id, token)); } catch { /* Giữ thông báo lỗi gốc. */ }
+    } finally { setBusy(false); setUploadProgress(null); }
   }
   async function saveExercise(e, publish) {
     e.preventDefault(); if (busy || !lesson) return; setBusy(true); setError(""); setNotice("");
@@ -264,15 +270,17 @@ export default function AdminCurriculumPage() {
   }
   async function replaceResource(resource, file) {
     if (!file || !lecture) return; const kind = kindFromFile(file, capabilities.excelEnabled);
-    if (!kind || file.size > capabilities.maxFileBytes) { setError("Tệp không đúng định dạng hoặc vượt giới hạn dung lượng."); return; }
+    if (!kind || file.size > (kind === "VIDEO" ? capabilities.maxVideoBytes : capabilities.maxFileBytes)) { setError("Tệp không đúng định dạng hoặc vượt giới hạn dung lượng."); return; }
     setBusy(true); setError(""); setNotice("");
     try { const body = new FormData(); body.set("name", file.name); body.set("kind", kind); body.set("file", file);
-      await api.uploadResource(lecture.id, null, body, token);
+      setUploadProgress({ name: file.name, percent: 0, phase: "upload" });
+      await api.uploadResource(lecture.id, null, body, token,
+        (percent, phase = "upload") => setUploadProgress({ name: file.name, percent, phase }));
       await api.archiveResource(lecture.id, resource.id, true, token);
       setLecture(await api.lecture(lecture.id, token)); setNotice("Đã thay tệp; bản cũ được lưu trữ để bảo vệ lịch sử."); }
     catch (e) { setError(`${errorText(e)} Tải lại danh sách tệp để kiểm tra trạng thái trước khi thử lại.`);
       try { setLecture(await api.lecture(lecture.id, token)); } catch { /* giữ lỗi gốc */ } }
-    finally { setBusy(false); }
+    finally { setBusy(false); setUploadProgress(null); }
   }
   async function showPreview(steps, title) {
     setPreviewIndex(0); setPreview({ loading: true, title });
@@ -291,10 +299,11 @@ export default function AdminCurriculumPage() {
     .filter(u => !query || u.name.toLocaleLowerCase("vi-VN").includes(query) ||
       u.lessons.some(l => l.name.toLocaleLowerCase("vi-VN").includes(query) || l.steps.some(s => s.title.toLocaleLowerCase("vi-VN").includes(query)))) || [];
   return <div className="admin-page builder-page"><div className="studio-breadcrumb"><Link to="/admin/courses">Khóa học</Link><span>›</span><span>{outline?.course.name || "Nội dung khóa học"}</span><span>›</span><strong>Nội dung khóa học</strong></div>
-    {outline && <div className="studio-course-hero"><div className="studio-cover"><CourseCover course={outline.course}/></div><div className="studio-course-info"><div className="studio-title-line"><h1>{outline.course.name}</h1><span className="studio-status">{outline.course.status === "DANG_MO" ? "Đang mở" : "Đã đóng"}</span></div><p>{outline.course.description || "Nội dung và lộ trình học của khóa học."}</p><div className="studio-meta"><span>{outline.units.filter(u => !u.isArchived).length} Unit</span><span>{outline.units.reduce((sum, u) => sum + u.lessons.filter(l => !l.isArchived).length, 0)} Lesson</span><span>{outline.units.reduce((sum, u) => sum + u.lessons.reduce((n, l) => n + l.steps.filter(s => !s.isArchived).length, 0), 0)} hoạt động</span></div></div><button className="studio-hero-preview" onClick={() => showPreview(outline.units.filter(u => !u.isArchived).flatMap(u => u.lessons.filter(l => !l.isArchived).flatMap(l => l.steps.filter(s => !s.isArchived))), outline.course.name)}>◎ Xem như học viên</button><button className="studio-top-save" disabled={busy || !lesson || activity?.activityType === "VOCABULARY"} onClick={() => document.querySelector('.builder-editor .builder-form')?.requestSubmit()}>Lưu thay đổi</button></div>}
-    <nav className="studio-tabs" aria-label="Nội dung khóa học">{[["curriculum","Chương trình học"],["resources","Thư viện tài nguyên"],["exercises","Bài tập"],["progress","Tiến độ học viên"],["archived","Đã lưu trữ"]].map(([key,label]) => <button key={key} className={studioTab === key ? "is-active" : ""} onClick={() => { if (!editorDirty || window.confirm("Bạn có thay đổi chưa lưu. Chuyển mục?")) setStudioTab(key); }}>{label}</button>)}</nav>
+    {outline && <div className="studio-course-hero"><div className="studio-cover"><CourseCover course={outline.course}/></div><div className="studio-course-info"><div className="studio-title-line"><h1>{outline.course.name}</h1><span className="studio-status">{outline.course.status === "DANG_MO" ? "Đang mở" : "Đã đóng"}</span></div><p>{outline.course.description || "Nội dung và lộ trình học của khóa học."}</p><div className="studio-meta"><span>{outline.units.filter(u => !u.isArchived).length} Unit</span><span>{outline.units.reduce((sum, u) => sum + u.lessons.filter(l => !l.isArchived).length, 0)} Lesson</span><span>{outline.units.reduce((sum, u) => sum + u.lessons.reduce((n, l) => n + l.steps.filter(s => !s.isArchived).length, 0), 0)} hoạt động</span></div></div><button className="studio-hero-preview" onClick={() => showPreview(outline.units.filter(u => !u.isArchived).flatMap(u => u.lessons.filter(l => !l.isArchived).flatMap(s => s.steps.filter(step => !step.isArchived))), outline.course.name)}>◎ Xem như học viên</button></div>}
+    <nav className="studio-tabs" aria-label="Nội dung khóa học">{[["curriculum","Chương trình học"],["resources","Thư viện tài nguyên"],["exercises","Bài tập"],["progress","Tiến độ học viên"],["archived","Đã lưu trữ"]].map(([key,label]) => <button key={key} className={studioTab === key ? "is-active" : ""} onClick={() => { if ((!editorDirty && !files.length) || window.confirm("Bạn có thông tin hoặc tệp chưa lưu. Chuyển mục?")) setStudioTab(key); }}>{label}</button>)}</nav>
     {error && <p className="admin-feedback is-error" role="alert">{error}</p>}
     {notice && !error && <p className="admin-feedback is-success" role="status">{notice}</p>}
+    {uploadProgress && <div role="status" className="admin-feedback"><strong>{uploadProgress.phase === "verify" ? "Đang ghép, xác minh Blob và lưu SQL" : uploadProgress.phase === "saved" ? "Đã lưu tài nguyên" : `Đang tải ${uploadProgress.name}: ${uploadProgress.percent}%`}</strong><progress max="100" value={uploadProgress.percent}/></div>}
     {studioTab === "progress" && progressSummary && <div className="studio-progress-summary"><div><strong>{progressSummary.enrolled}</strong><span>Học viên đang đăng ký</span></div><div><strong>{progressSummary.learnersStarted}</strong><span>Học viên đã bắt đầu</span></div><div><strong>{progressSummary.completedActivityRecords}</strong><span>Lượt hoàn thành hoạt động</span></div><div><strong>{progressSummary.activeActivities}</strong><span>Hoạt động đang hiển thị</span></div></div>}
     {loading ? <p role="status">Đang tải…</p> : outline && <div className="course-builder">
       <section className="admin-panel builder-tree"><header><div><h2>{studioTab === "archived" ? "Nội dung đã lưu trữ" : studioTab === "resources" ? "Nội dung có tài nguyên" : studioTab === "exercises" ? "Bài tập trong khóa học" : studioTab === "progress" ? "Tiến độ học viên" : "Chương trình học"}</h2><p>Quản lý cấu trúc khóa học, thêm, sửa, sắp xếp và xem trước.</p></div><div className="studio-tree-tools"><input type="search" aria-label="Tìm kiếm nội dung" placeholder="Tìm kiếm Lesson, hoạt động..." value={search} onChange={e => setSearch(e.target.value)}/><button className="admin-button" onClick={addUnit}>+ Thêm Unit</button></div></header>
@@ -320,15 +329,17 @@ export default function AdminCurriculumPage() {
           {activity && <nav className="studio-editor-tabs" aria-label="Chỉnh sửa hoạt động"><button type="button" className={editorTab === "info" ? "is-active" : ""} onClick={() => { setEditorTab("info"); document.querySelector('.builder-editor-body')?.scrollTo({ top: 0, behavior: 'smooth' }); }}>Thông tin</button><button type="button" className={editorTab === "resources" ? "is-active" : ""} onClick={() => { setEditorTab("resources"); document.querySelector('.builder-editor-body .builder-resources, .builder-editor-body input[type=file]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}>Tài nguyên</button><button type="button" onClick={() => showPreview([activity], activity.title)}>Xem trước</button></nav>}
           {!activity && <div className="builder-type"><button className={mode === "LECTURE" ? "is-selected" : ""} onClick={() => setMode("LECTURE")}>Nội dung học</button>
             <button className={mode === "EXERCISE" ? "is-selected" : ""} onClick={() => setMode("EXERCISE")}>Bài tập</button></div>}
-          {(activity?.activityType === "LECTURE" || !activity && mode === "LECTURE") && <form className="builder-form" onChange={() => setEditorDirty(true)} onSubmit={saveContent}>
+          {(activity?.activityType === "LECTURE" || !activity && mode === "LECTURE") && <form className="builder-form" onSubmit={saveContent}>
             {activity && <label>Loại hoạt động<select value={lecture?.resources?.some(r => !r.isArchived && r.kind === "VIDEO") ? "Video" : "Bài giảng"} disabled><option>Video</option><option>Bài giảng</option></select></label>}
-            <label>Tiêu đề<input required maxLength={128} value={content.title} onChange={e => setContent({ ...content, title: e.target.value })}/></label>
-            <label>Mô tả<textarea rows={3} maxLength={2000} value={content.summary} onChange={e => setContent({ ...content, summary: e.target.value })}/></label>
-            <label>Nội dung (không bắt buộc nếu có tệp)<textarea rows={7} maxLength={100000} value={content.content} onChange={e => setContent({ ...content, content: e.target.value })}/></label>
-            <label>Thêm tệp<input type="file" multiple accept={capabilities.excelEnabled ? ".mp4,.mp3,.wav,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" : ".mp4,.mp3,.wav,.pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"} onChange={e => chooseFiles(e.target.files || [])}/></label>
-            {!!files.length && <ul>{files.map((x, i) => <li key={i}>{x.file.name} · {x.kind}</li>)}</ul>}
-            <button className="admin-button" disabled={busy}>{busy ? "Đang lưu…" : copyMode ? "Lưu hoạt động mới" : "Lưu hoạt động"}</button>
-            {lecture && <div className="builder-resources"><h3>Tệp đã lưu</h3>{lecture.resources.map((r, index) => <div key={r.id}><span>{r.name} · {r.kind}{r.isArchived ? " · Đã lưu trữ" : ""}</span>
+            <label>Tiêu đề<input required maxLength={128} value={content.title} onChange={e => { setContent({ ...content, title: e.target.value }); setEditorDirty(true); }}/></label>
+            <label>Mô tả<textarea rows={3} maxLength={2000} value={content.summary} onChange={e => { setContent({ ...content, summary: e.target.value }); setEditorDirty(true); }}/></label>
+            <label>Nội dung (không bắt buộc nếu có tệp)<textarea rows={7} maxLength={100000} value={content.content} onChange={e => { setContent({ ...content, content: e.target.value }); setEditorDirty(true); }}/></label>
+            {!lecture && <p className="content-empty">Lưu thông tin hoạt động trước, sau đó chọn và tải video.</p>}
+            {lecture && <label>Thêm tệp<input type="file" multiple accept={capabilities.excelEnabled ? ".mp4,.mp3,.wav,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" : ".mp4,.mp3,.wav,.pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"} onChange={e => chooseFiles(e.target.files || [])}/></label>}
+            {!!files.length && <ul>{files.map((x, i) => <li key={i}>{x.file.name} · {x.kind} · Chưa tải lên</li>)}</ul>}
+            <small>Video MP4 tối đa 950 MB, tải theo từng phần. Các tệp khác tối đa {(capabilities.maxFileBytes / 1000000).toFixed(0)} MB.</small>
+            {lecture && <button type="button" className="admin-button" disabled={busy || !files.length} onClick={uploadSelectedFiles}>{busy && uploadProgress ? "Đang tải tệp…" : `Tải ${files.length || ""} tệp đã chọn`}</button>}
+            {lecture && <div className="builder-resources"><h3>Tệp đã lưu</h3>{lecture.resources.map((r, index) => <div key={r.id}><span>{r.name} · {r.kind}{r.isArchived ? " · Đã lưu trữ" : " · Đã lưu"}</span>
               <button type="button" disabled={index === 0 || busy} aria-label={`Đưa ${r.name} lên`} onClick={() => moveResource(index, -1)}>↑</button>
               <button type="button" disabled={index === lecture.resources.length - 1 || busy} aria-label={`Đưa ${r.name} xuống`} onClick={() => moveResource(index, 1)}>↓</button>
               <button type="button" onClick={async () => { try { const blob = await api.resourceBlob(lecture.id, r.id, token); const url = URL.createObjectURL(blob); window.open(url, "_blank", "noopener,noreferrer"); setTimeout(() => URL.revokeObjectURL(url), 60000); } catch (e) { setError(errorText(e)); } }}>Mở</button>
@@ -356,7 +367,7 @@ export default function AdminCurriculumPage() {
           {activity?.activityType === "VOCABULARY" && <p>Chủ đề từ vựng hiện có. Dùng Xem trước để kiểm tra nội dung.</p>}
         </>}
         </div>
-        {lesson && <div className="studio-editor-actions"><button type="button" disabled={busy} onClick={() => activity ? select(unit.id, lesson.id, activity, true) : (resetEditor(), setSelected({ unitId: unit.id, lessonId: lesson.id }))}>Hủy</button><button type="button" className="is-primary" disabled={busy || activity?.activityType === "VOCABULARY"} onClick={() => document.querySelector('.builder-editor .builder-form')?.requestSubmit()}>Lưu thay đổi</button>{activity && <><button type="button" onClick={() => archive("step", activity, unit.id, lesson.id, !activity.isArchived)}>{activity.isArchived ? "Khôi phục" : "Lưu trữ"}</button><button type="button" className="is-danger" onClick={() => remove("step", activity, unit.id, lesson.id)}>Xóa hoạt động</button></>}</div>}
+        {lesson && <div className="studio-editor-actions"><button type="button" disabled={busy} onClick={() => { if ((editorDirty || files.length) && !window.confirm("Bạn có thông tin hoặc tệp chưa lưu. Hủy thay đổi?")) return; activity ? select(unit.id, lesson.id, activity, true) : (resetEditor(), setSelected({ unitId: unit.id, lessonId: lesson.id })); }}>Hủy</button>{(activity?.activityType === "LECTURE" || !activity && mode === "LECTURE") && <button type="button" className="is-primary" disabled={busy} onClick={() => document.querySelector('.builder-editor .builder-form')?.requestSubmit()}>{copyMode ? "Lưu hoạt động mới" : "Lưu thông tin"}</button>}{activity && <><button type="button" onClick={() => archive("step", activity, unit.id, lesson.id, !activity.isArchived)}>{activity.isArchived ? "Khôi phục" : "Lưu trữ"}</button><button type="button" className="is-danger" onClick={() => remove("step", activity, unit.id, lesson.id)}>Xóa hoạt động</button></>}</div>}
       </aside></div>}
     {deleteDialog && <div className="admin-modal-backdrop" onMouseDown={e => e.target === e.currentTarget && setDeleteDialog(null)}><section className="admin-modal builder-name-modal" role="alertdialog" aria-modal="true" aria-label="Xác nhận xóa vĩnh viễn">
       <span className="builder-eyebrow">XÓA VĨNH VIỄN</span><h2>{deleteDialog.item.name || deleteDialog.item.title}</h2>

@@ -244,6 +244,8 @@ public partial class ToeicDbContext : DbContext
         {
             entity.HasKey(e => e.MaChuDe).HasName("PK__ChuDe__35854511314EDB8B");
 
+            entity.Property(e => e.DuongDanAnhBia).HasMaxLength(512).IsUnicode(false);
+
             entity.Property(e => e.TrangThai).HasDefaultValue("DANG_MO");
         });
 

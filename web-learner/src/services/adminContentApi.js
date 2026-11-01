@@ -33,6 +33,90 @@ const multipartWithProgress = (path, method, body, token, onProgress, idempotenc
   request.send(body);
 });
 
+async function uploadVideo(lectureId, resourceId, body, token, onProgress) {
+  const file = body.get("file");
+  const base = `${root}/lectures/${lectureId}/video-upload`;
+  const key = `sto123-video:${lectureId}:${resourceId || 0}:${file.name}:${file.size}:${file.lastModified}`;
+  let session;
+  let alreadyUploaded = false;
+  try { session = JSON.parse(sessionStorage.getItem(key) || "null"); } catch { session = null; }
+  if (session) {
+    try {
+      const status = await apiRequest(`${base}/status`, { token, headers: { "X-Upload-Token": session.token } });
+      if (status.state === "saved") { sessionStorage.removeItem(key); onProgress?.(100, "saved"); return status.resource; }
+      alreadyUploaded = status.state === "uploaded";
+    } catch (error) {
+      if (error.status === 401 || error.status === 404) { sessionStorage.removeItem(key); session = null; }
+      else throw error;
+    }
+  }
+  if (!session) {
+    session = await apiRequest(`${base}/start`, { method: "POST", token,
+      body: { fileName: file.name, size: file.size, resourceId: resourceId || null } });
+    sessionStorage.setItem(key, JSON.stringify(session));
+  }
+  const loaded = new Array(session.blocks).fill(0);
+  const progress = () => onProgress?.(Math.min(99, Math.round(loaded.reduce((a, b) => a + b, 0) / file.size * 100)), "upload");
+  const send = index => new Promise((resolve, reject) => {
+    const start = index * session.blockBytes;
+    const chunk = file.slice(start, Math.min(file.size, start + session.blockBytes));
+    const request = new XMLHttpRequest();
+    request.open("PUT", `${API_BASE_URL}${base}/blocks/${index}`);
+    request.setRequestHeader("Authorization", `Bearer ${token}`);
+    request.setRequestHeader("X-Upload-Token", session.token);
+    request.timeout = 180_000;
+    request.upload.onprogress = event => { loaded[index] = event.loaded; progress(); };
+    request.onload = () => {
+      if (request.status === 204) { loaded[index] = chunk.size; progress(); resolve(); return; }
+      let message;
+      try { message = JSON.parse(request.responseText)?.message; } catch { /* Máy chủ có thể trả lỗi không phải JSON. */ }
+      const error = new Error(message || `Khối ${index + 1} tải lỗi (HTTP ${request.status}).`);
+      error.status = request.status;
+      reject(error);
+    };
+    request.onerror = () => reject(new Error(`Mất kết nối khi tải khối ${index + 1}.`));
+    request.ontimeout = () => reject(new Error(`Khối ${index + 1} tải quá lâu.`));
+    request.send(chunk);
+  });
+  let next = 0;
+  let stopped = false;
+  async function worker() {
+    while (!stopped && next < session.blocks) {
+      const index = next++;
+      let lastError;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try { await send(index); lastError = null; break; }
+        catch (error) { lastError = error; loaded[index] = 0; progress(); if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); }
+      }
+      if (lastError) { stopped = true; throw lastError; }
+    }
+  }
+  if (!alreadyUploaded) {
+    const results = await Promise.allSettled(Array.from({ length: Math.min(3, session.blocks) }, worker));
+    const failed = results.find(result => result.status === "rejected");
+    if (failed) throw failed.reason;
+  }
+  onProgress?.(99, "verify");
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const result = await apiRequest(`${base}/finish`, { method: "POST", token,
+        body: {}, timeoutMs: 180_000, headers: { "X-Upload-Token": session.token } });
+      sessionStorage.removeItem(key); onProgress?.(100, "saved"); return result;
+    } catch (error) {
+      lastError = error;
+      if (error.status && error.status < 500 && error.status !== 409) break;
+      if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  let status;
+  try { status = await apiRequest(`${base}/status`, { token, headers: { "X-Upload-Token": session.token } }); }
+  catch (statusError) { if (!lastError.status) throw statusError; }
+  if (status?.state === "saved") { sessionStorage.removeItem(key); onProgress?.(100, "saved"); return status.resource; }
+  if (status?.state === "uploaded") throw new Error("Video đã lên Blob nhưng chưa được lưu vào bài giảng. Nhấn Tải tệp để thử xác nhận lại.");
+  throw lastError;
+}
+
 export const adminContentApi = {
   dashboard: token => apiRequest(`${root}/dashboard`, { token }),
   outline: (courseId, token) => apiRequest(`${course(courseId)}/outline`, { token }),
@@ -78,6 +162,13 @@ export const adminContentApi = {
   editLecture: (id, body, token) => write(`${root}/lectures/${id}`, "PUT", body, token),
   deleteLecture: (id, token) => write(`${root}/lectures/${id}`, "DELETE", null, token),
   uploadResource: (id, resourceId, body, token, onProgress) => {
+    if (body.get("kind") === "VIDEO") return uploadVideo(id, resourceId, body, token, onProgress).catch(error => {
+      if (error.data?.errors?.["X-Upload-Token"])
+        throw new Error("Thiếu mã xác nhận phiên tải video. Vui lòng chọn lại tệp và thử lại.");
+      if (error.message?.startsWith("HTTP "))
+        throw new Error(`Không thể hoàn tất tải video (${error.message}). Vui lòng thử lại.`);
+      throw error;
+    });
     const path = `${root}/lectures/${id}/resources${resourceId ? `/${resourceId}` : ""}`;
     if (resourceId) return multipartWithProgress(path, "PUT", body, token, onProgress);
     const file = body.get("file");

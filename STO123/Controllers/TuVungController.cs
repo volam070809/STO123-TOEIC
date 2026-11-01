@@ -59,7 +59,7 @@ public class TuVungController : ControllerBase
             .OrderBy(x => x.MaChuDe)
             .Select(x => new
             {
-                x.MaChuDe, x.TenChuDe, x.MoTa,
+                x.MaChuDe, x.TenChuDe, x.MoTa, x.DuongDanAnhBia,
                 Total = x.TuVungChuDe.Count(),
                 Done = x.TuVungChuDe.Count(link => link.MaTuVungNavigation.TienDoTuVung
                     .Any(p => p.MaNguoiDung == userId && p.TrangThai == Completed)),
@@ -67,7 +67,7 @@ public class TuVungController : ControllerBase
                     .Any(p => p.MaNguoiDung == userId && p.TrangThai == Learning))
             }).ToListAsync(ct);
         return Ok(topics.Select(x => Summary(x.MaChuDe, x.TenChuDe, x.MoTa,
-            x.Total, x.Done, x.LearningCount)));
+            x.Total, x.Done, x.LearningCount, x.DuongDanAnhBia)));
     }
 
     [Authorize]
@@ -77,7 +77,7 @@ public class TuVungController : ControllerBase
         if (!TryGetUserId(out var userId)) return Unauthorized();
         var topic = await db.ChuDe.AsNoTracking()
             .Where(x => x.MaChuDe == topicId && x.TrangThai == "DANG_MO")
-            .Select(x => new { x.MaChuDe, x.TenChuDe, x.MoTa }).FirstOrDefaultAsync(ct);
+            .Select(x => new { x.MaChuDe, x.TenChuDe, x.MoTa, x.DuongDanAnhBia }).FirstOrDefaultAsync(ct);
         if (topic is null) return NotFound();
         var words = await db.TuVungChuDe.AsNoTracking().Where(x => x.MaChuDe == topicId)
             .OrderBy(x => x.MaTuVung)
@@ -92,7 +92,7 @@ public class TuVungController : ControllerBase
         var done = words.Count(x => x.TrangThai == Completed);
         var learning = words.Count(x => x.TrangThai == Learning);
         return Ok(new { topic = Summary(topic.MaChuDe, topic.TenChuDe, topic.MoTa,
-            words.Count, done, learning), words });
+            words.Count, done, learning, topic.DuongDanAnhBia), words });
     }
 
     [Authorize]
@@ -181,11 +181,11 @@ public class TuVungController : ControllerBase
     private bool TryGetUserId(out int userId) =>
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId) && userId > 0;
 
-    private static TopicDto Summary(int id, string name, string? description, int total, int done, int learning) =>
+    private static TopicDto Summary(int id, string name, string? description, int total, int done, int learning, string? cover = null) =>
         new(id, name, description, total, done, learning,
             total == 0 ? 0 : done * 100 / total,
             total > 0 && done == total ? "Hoàn thành" :
-                done > 0 ? "Đang học" : "Chưa học");
+                done > 0 ? "Đang học" : "Chưa học", cover);
 
     public sealed record PracticeWordDto(int MaTuVung, string Word, string Meaning);
     public sealed record ProgressRequest(string TrangThai, bool OnlyIfNotStarted = false);
@@ -193,5 +193,5 @@ public class TuVungController : ControllerBase
         string? PartOfSpeech, string Meaning, string? Example, string? ExampleMeaning,
         string? TrangThai, bool HasAudio, bool HasExampleAudio);
     public sealed record TopicDto(int MaChuDe, string TenChuDe, string? MoTa,
-        int TotalWords, int CompletedWords, int LearningWords, int ProgressPercent, string Status);
+        int TotalWords, int CompletedWords, int LearningWords, int ProgressPercent, string Status, string? DuongDanAnhBia = null);
 }

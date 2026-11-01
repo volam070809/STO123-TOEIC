@@ -46,7 +46,7 @@ public sealed class AdminLecturesController(ToeicDbContext db, LectureResourceSt
             description = x.MoTa, status = x.TrangThai, lectureCount = x.BaiGiang.Count }).ToListAsync(ct));
 
     [HttpGet("resource-capabilities")]
-    public IActionResult ResourceCapabilities() => Ok(new { maxFileBytes = storage.MaxFileBytes,
+    public IActionResult ResourceCapabilities() => Ok(new { maxFileBytes = storage.MaxFileBytes, maxVideoBytes = storage.MaxVideoBytes,
         excelEnabled = storage.ExcelEnabled });
 
     [HttpPost("categories")]
@@ -194,10 +194,7 @@ public sealed class AdminLecturesController(ToeicDbContext db, LectureResourceSt
             row = await db.TaiNguyenBaiGiang.FirstOrDefaultAsync(x => x.MaTaiNguyen == resourceId && x.MaBaiGiang == id, ct);
             if (row is null) return NotFound();
         }
-        var tempPath = Path.Combine(Path.GetTempPath(), "sto123-lecture-" + Guid.NewGuid().ToString("N"));
-        await using var input = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None,
-            81920, FileOptions.Asynchronous | FileOptions.DeleteOnClose);
-        await request.File.CopyToAsync(input, ct);
+        await using var input = request.File.OpenReadStream();
         if (input.Length != request.File.Length || input.Length > storage.MaxFileBytes)
             return Bad("Dung lượng tệp không hợp lệ.");
         if (!LectureResourceStorage.TryValidate(request.Kind, request.File.FileName, request.File.ContentType,

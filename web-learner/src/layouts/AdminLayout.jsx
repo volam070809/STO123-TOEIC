@@ -15,6 +15,7 @@ const managementItems = [
 const contentItems = [
   ["/admin/content", "Tổng quan nội dung", "overview", true],
   ["/admin/courses", "Khóa học & lộ trình", "courses"],
+  ["/admin/vocabulary", "Quản lý từ vựng", "courses"],
 ];
 
 export default function AdminLayout() {

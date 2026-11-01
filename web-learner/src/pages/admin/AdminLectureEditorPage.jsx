@@ -17,7 +17,7 @@ export default function AdminLectureEditorPage() {
   const [form, setForm] = useState(initial); const [lecture, setLecture] = useState(null);
   const [categories, setCategories] = useState([]); const [parts, setParts] = useState([]); const [loading, setLoading] = useState(!creating);
   const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
-  const [capabilities, setCapabilities] = useState({ maxFileBytes: 250000000, excelEnabled: false });
+  const [capabilities, setCapabilities] = useState({ maxFileBytes: 250000000, maxVideoBytes: 950000000, excelEnabled: false });
   const [progress, setProgress] = useState(null);
   const [resource, setResource] = useState({ name: "", kind: "PDF", file: null });
   const [replaceId, setReplaceId] = useState(null); const [deleteId, setDeleteId] = useState(null);
@@ -55,13 +55,13 @@ export default function AdminLectureEditorPage() {
   }
   async function upload(e) {
     e.preventDefault(); if (!resource.file || !resource.name.trim()) { setError("Chọn tệp và nhập tên tài nguyên."); return; }
-    if (resource.file.size > capabilities.maxFileBytes) { setError("Tệp vượt quá giới hạn dung lượng."); return; }
+    if (resource.file.size > (resource.kind === "VIDEO" ? capabilities.maxVideoBytes : capabilities.maxFileBytes)) { setError("Tệp vượt quá giới hạn dung lượng."); return; }
     setSaving(true); setError(""); setProgress(0);
     try {
       const data = new FormData(); data.set("name", resource.name.trim()); data.set("kind", resource.kind); data.set("file", resource.file);
       await adminContentApi.uploadResource(lectureId, replaceId, data, token, setProgress);
       setResource({ name: "", kind: "PDF", file: null }); setReplaceId(null); setNotice("Đã tải tài nguyên lên và lưu liên kết."); await load();
-    } catch (e) { setError(e.data?.message || "Không tải được tài nguyên."); }
+    } catch (e) { setError(e.data?.message || e.message || "Không tải được tài nguyên."); }
     finally { setSaving(false); setProgress(null); }
   }
   async function renameResource() {
@@ -126,7 +126,7 @@ export default function AdminLectureEditorPage() {
           <input aria-label="Tệp tài nguyên" type="file" accept={accepts[resource.kind]} required
             onChange={e => { const file = e.target.files?.[0] || null;
               setResource({ ...resource, file, name: resource.name || file?.name || "" }); }}/>
-          <small>Tối đa {(capabilities.maxFileBytes / 1000000).toFixed(0)} MB. Máy chủ kiểm tra chữ ký tệp, MIME và phần mở rộng.</small>
+          <small>{resource.kind === "VIDEO" ? "Video MP4 tối đa 950 MB; tải theo từng phần để tránh timeout." : `Tối đa ${(capabilities.maxFileBytes / 1000000).toFixed(0)} MB.`} Máy chủ kiểm tra định dạng tệp.</small>
           {progress !== null && <div role="status"><progress max="100" value={progress}/><span> Đang tải lên {progress}%</span></div>}
           <div className="content-actions"><button className="admin-button" disabled={saving} type="submit">{replaceId ? "Lưu tệp thay thế" : "Tải lên"}</button>
             {replaceId && <button type="button" onClick={() => { setReplaceId(null); setResource({ name: "", kind: "PDF", file: null }); }}>Hủy thay tệp</button>}</div>

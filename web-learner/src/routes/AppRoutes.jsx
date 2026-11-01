@@ -52,6 +52,7 @@ const AdminDashboardPage = lazy(adminRouteModules.dashboard);
 const AdminReportsPage = lazy(adminRouteModules.reports);
 const AdminContentDashboardPage = lazy(adminRouteModules.contentDashboard);
 const AdminCurriculumPage = lazy(adminRouteModules.curriculum);
+const AdminVocabularyPage = lazy(adminRouteModules.vocabulary);
 const CourseStepPage = lazy(() => import("../pages/exam/CourseStepPage"));
 
 const MANAGEMENT_ROLES = ["ADMIN_QUAN_LY"];
@@ -157,6 +158,7 @@ export default function AppRoutes() {
       <Route path="courses/:courseId" element={<AdminCourseDetailPage />} />
       <Route path="courses/:courseId/content" element={<AdminCurriculumPage />} />
       <Route path="content" element={<AdminContentDashboardPage />} />
+      <Route path="vocabulary" element={<AdminVocabularyPage />} />
       <Route path="packages" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackagesPage /></AdminRoute>} />
       <Route path="packages/new" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackageCreatePage /></AdminRoute>} />
       <Route path="packages/:packageId/edit" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackageEditPage /></AdminRoute>} />

@@ -5,7 +5,8 @@ public sealed record PublicVocabularyTopicDto(
     string TenChuDe,
     string? MoTa,
     int TotalWords,
-    int PreviewWords);
+    int PreviewWords,
+    string? DuongDanAnhBia = null);
 
 public sealed record PublicVocabularyWordDto(
     int MaTuVung,
