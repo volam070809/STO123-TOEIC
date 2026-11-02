@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { examMediaBlob } from "../../services/examApi";
 import { advanceAudioSession, audioSession, finishAudioSession, resetUnplayedAudioSession, setAudioSessionDuration, startAudioSession } from "./audioSession";
+import PlacementIcon from "./PlacementIcon";
 
 export function PrivateImage({ endpoint, token, alt, onDimensions }) {
   const [url, setUrl] = useState("");
@@ -115,7 +116,9 @@ function RestrictedAudio({ endpoint, token, mode }) {
       <button type="button" className="exam-audio-button" disabled={!ready || ended} onClick={toggle}
         aria-label={ended ? "Đã nghe âm thanh" : playing ? "Tạm dừng âm thanh" :
           session.started ? "Tiếp tục âm thanh" : "Nghe âm thanh"}>
-        {ended ? "✓ Đã nghe" : playing ? "Ⅱ Tạm dừng" : session.started ? "▶ Tiếp tục" : "▶ Nghe"}
+        {mode === "PLACEMENT" ? <><PlacementIcon name={ended ? "check" : playing ? "pause" : "play"} size={16} />
+          {ended ? "Đã nghe" : playing ? "Tạm dừng" : session.started ? "Tiếp tục" : "Nghe"}</> :
+          ended ? "✓ Đã nghe" : playing ? "Ⅱ Tạm dừng" : session.started ? "▶ Tiếp tục" : "▶ Nghe"}
       </button>
       <span className="exam-audio-time">{timeLabel(position)}</span>
       <div className="exam-audio-progress" role="progressbar" aria-label="Tiến độ âm thanh"

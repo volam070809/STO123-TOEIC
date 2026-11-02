@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { coursesForKnnStage, historicalPlacementAnalysis, placementAnalysisForAttempt, shouldLoadPlacementAnalysis, waitForPlacementAnalysis } from "./placementAttemptAnalysis.js";
+import { coursesForKnnStage, coursesForPlacementPath, historicalPlacementAnalysis, placementAnalysisForAttempt, shouldLoadPlacementAnalysis, verifiedCurrentStage, waitForPlacementAnalysis } from "./placementAttemptAnalysis.js";
 
 const latest = (attemptId, stage, classification = "AVAILABLE") =>
   ({ result: { attemptId }, classification, stage, targetScore: null });
@@ -98,6 +98,23 @@ test("multiple courses in one KNN stage remain separate choices", () => {
     { courseId: 31, stage: 3, accessStatus: "LOCKED" },
   ];
   assert.deepEqual(coursesForKnnStage(courses, 2).map(course => course.courseId), [21, 22]);
+});
+
+test("a goal spanning three stages keeps every API recommended course", () => {
+  const courses = [
+    { courseId: 4, stage: 1, recommended: true, recommendationOrder: 1 },
+    { courseId: 1, stage: 1, recommended: true, recommendationOrder: 1 },
+    { courseId: 2, stage: 2, recommended: true, recommendationOrder: 2 },
+    { courseId: 3, stage: 3, recommended: true, recommendationOrder: 3 },
+  ];
+  assert.deepEqual(coursesForPlacementPath(courses, 1, 900).map(course => course.courseId), [1, 4, 2, 3]);
+  assert.deepEqual(coursesForPlacementPath(courses, 1, 900, false).map(course => course.courseId), [4, 1]);
+});
+
+test("a stage is shown only when the latest result confirms its KNN classification", () => {
+  assert.equal(verifiedCurrentStage({ classification: "AVAILABLE", stage: 2 }), 2);
+  assert.equal(verifiedCurrentStage({ classification: "UNAVAILABLE", stage: 1 }), null);
+  assert.equal(verifiedCurrentStage(null), null);
 });
 
 test("missing KNN or missing stage course cannot create roadmap choices", () => {

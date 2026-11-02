@@ -141,6 +141,8 @@ builder.Services.AddScoped<CourseBlobSyncFilter>();
 builder.Services.AddHostedService<CourseBlobSyncRecovery>();
 builder.Services.AddScoped<ExamGenerationService>();
 builder.Services.AddScoped<PersistedExamTemplate>();
+builder.Services.AddScoped<ExamVersionStore>();
+builder.Services.AddHostedService<ExamSnapshotCleanupWorker>();
 builder.Services.AddScoped<CompactExamStore>();
 builder.Services.AddScoped<PersistedExamSnapshotWriter>();
 builder.Services.AddScoped<RandomStartProfiler>();

@@ -14,7 +14,7 @@ namespace STO123.Controllers;
 [ApiController]
 [Route("api/attempts")]
 public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbContext db,
-    BlobServiceClient blobs, IConfiguration configuration) : ControllerBase
+    BlobServiceClient blobs, IConfiguration configuration, ExamVersionStore versions) : ControllerBase
 {
     private int LearnerId => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id :
         throw new ExamProblem("ATTEMPT_FORBIDDEN", "Phiên đăng nhập không hợp lệ.", 403);
@@ -146,9 +146,22 @@ public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbConte
     {
         var row = await db.KetQuaLamBai.AsNoTracking().Where(a => a.MaKetQua == attemptId &&
             a.MaHocVien == learnerId && a.LoaiBaiLam != PracticeQuestionBank.AttemptType)
-            .Select(a => new { a.DuLieuBaiLamJson, a.LoaiBaiLam }).FirstOrDefaultAsync(ct);
+            .Select(a => new { a.DuLieuBaiLamJson, a.LoaiBaiLam, a.MaPhienBanDeThi, a.MaDeThi })
+            .FirstOrDefaultAsync(ct);
         if (row?.DuLieuBaiLamJson is null) return null;
         var ids = CompactExamStore.Decode(row.DuLieuBaiLamJson).QuestionIds;
+        if (row.MaPhienBanDeThi is { } versionId)
+        {
+            var version = await db.PhienBanDeThi.AsNoTracking().SingleOrDefaultAsync(
+                v => v.MaPhienBanDeThi == versionId && v.MaDeThi == row.MaDeThi, ct);
+            if (version is null) return null;
+            var snapshot = await versions.ReadAsync(version, ct);
+            var group = snapshot.Groups.SingleOrDefault(g => g.Id == groupId);
+            if (group is null || !snapshot.Questions.Any(q => q.GroupId == groupId && ids.Contains(q.Id)))
+                return null;
+            var savedDocuments = group.Documents.Count == 0 ? null : ExamDocumentCodec.Encode(group.Documents);
+            return new CompactMedia(group.Audio, group.Image, savedDocuments, row.LoaiBaiLam);
+        }
         if (!await db.NhomCauHoi.AsNoTracking().AnyAsync(x => x.MaNguLieu == groupId && ids.Contains(x.MaCauHoi), ct))
             return null;
         var source = await db.NguLieu.AsNoTracking().Include(x => x.NguLieuTaiLieu)

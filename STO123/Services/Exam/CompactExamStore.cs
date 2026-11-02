@@ -11,8 +11,8 @@ public sealed record CompactExamData(int Version, List<int> QuestionIds, Diction
     Dictionary<int, string>? AnswerKeys = null, Dictionary<int, int>? PartNumbers = null,
     HashSet<int>? FourOptionQuestionIds = null);
 
-/// <summary>Stores fixed exam IDs and answers on the attempt; source text and media stay in the question bank.</summary>
-public sealed class CompactExamStore(ToeicDbContext db)
+/// <summary>Stores answers on the attempt; versioned content is read from its immutable Blob.</summary>
+public sealed class CompactExamStore(ToeicDbContext db, ExamVersionStore? versions = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -62,6 +62,32 @@ public sealed class CompactExamStore(ToeicDbContext db)
         return row.MaKetQua;
     }
 
+    public async Task<int> CreateVersionedAsync(int learnerId, PhienBanDeThi version,
+        VersionedExam snapshot, string kind, CancellationToken ct)
+    {
+        if (snapshot.Questions.Count != 200 || snapshot.ExamId != version.MaDeThi ||
+            snapshot.Version != version.SoPhienBan)
+            throw new ExamProblem("EXAM_VERSION_CORRUPT", "Phiên bản đề không hợp lệ.", 503);
+        var ids = snapshot.Questions.OrderBy(q => q.Order).Select(q => q.Id).ToList();
+        if (ids.Distinct().Count() != 200)
+            throw new ExamProblem("EXAM_VERSION_CORRUPT", "Phiên bản đề có câu hỏi trùng.", 503);
+        var now = DateTime.UtcNow;
+        var row = new KetQuaLamBai {
+            MaDeThi = version.MaDeThi, MaPhienBanDeThi = version.MaPhienBanDeThi,
+            MaHocVien = learnerId, MaLuotLam = Guid.NewGuid(), LoaiBaiLam = kind,
+            TrangThai = ExamCore.Active, NgayLamBai = now,
+            HetHanLuc = now.AddMinutes(ExamCore.DurationMinutes),
+            ThoiGianConLaiGiay = ExamCore.DurationMinutes * 60, BatDauPhienLuc = now,
+            DuLieuBaiLamJson = Encode(new CompactExamData(1, ids, [],
+                snapshot.Questions.ToDictionary(q => q.Id, q => q.Correct),
+                snapshot.Questions.ToDictionary(q => q.Id, q => q.Part),
+                snapshot.Questions.Where(q => q.D is not null).Select(q => q.Id).ToHashSet()))
+        };
+        db.KetQuaLamBai.Add(row);
+        await db.SaveChangesAsync(ct);
+        return row.MaKetQua;
+    }
+
     public async Task<ExamSnapshot> LoadAsync(int id, int learnerId, SnapshotView view, bool resume, CancellationToken ct)
     {
         if (view != SnapshotView.Active)
@@ -100,6 +126,18 @@ public sealed class CompactExamStore(ToeicDbContext db)
     public async Task<ExamSnapshot> BuildSnapshotAsync(KetQuaLamBai row, CompactExamData data,
         SnapshotView view, CancellationToken ct)
     {
+        if (row.MaPhienBanDeThi is { } versionId)
+        {
+            if (versions is null)
+                throw new ExamProblem("EXAM_VERSION_UNAVAILABLE", "Dịch vụ phiên bản đề chưa sẵn sàng.", 503);
+            var version = await db.PhienBanDeThi.AsNoTracking().SingleOrDefaultAsync(
+                v => v.MaPhienBanDeThi == versionId && v.MaDeThi == row.MaDeThi, ct)
+                ?? throw new ExamProblem("EXAM_VERSION_MISSING", "Không tìm thấy phiên bản của lượt thi.", 503);
+            var snapshot = await versions.ReadAsync(version, ct);
+            if (!data.QuestionIds.SequenceEqual(snapshot.Questions.OrderBy(q => q.Order).Select(q => q.Id)))
+                throw new ExamProblem("EXAM_VERSION_CORRUPT", "Lượt thi không khớp phiên bản đề đã lưu.", 503);
+            return ExamVersionStore.ToAttempt(snapshot, row, data, view);
+        }
         if (view == SnapshotView.Result && data.AnswerKeys is { Count: 200 } &&
             data.PartNumbers is { Count: 200 })
         {

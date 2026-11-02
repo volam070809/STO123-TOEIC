@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { PrivateImage, PrivateAudio } from "./ExamMedia";
 import DocumentRenderer from "./DocumentRenderer";
+import PlacementIcon from "./PlacementIcon";
 
 function materialLayout(group, imageSize) {
   if (!group) return "";
@@ -29,12 +30,12 @@ function materialLayout(group, imageSize) {
   return "";
 }
 
-function Question({ question, review, onAnswer, onFlag, onRetry, saveState, submissionPending }) {
+function Question({ question, review, onAnswer, onFlag, onRetry, saveState, submissionPending, mode }) {
   const labels = [["A", question.a], ["B", question.b], ["C", question.c], ["D", question.d]];
   return <section className="exam-question" id={"question-" + question.attemptQuestionId} tabIndex={-1}>
     <div className="exam-question-title"><h3>Câu {question.order}</h3>
       {!review && <button type="button" className="outline-button" disabled={submissionPending} onClick={() => onFlag(question)}>
-        {question.flagged ? "Bỏ đánh dấu" : "Đánh dấu"}</button>}</div>
+        {mode === "PLACEMENT" && <PlacementIcon name="flag" size={16} />}{question.flagged ? "Bỏ đánh dấu" : "Đánh dấu"}</button>}</div>
     {question.text && <p className="exam-preserve-lines">{question.text}</p>}
     <div className="exam-options">{labels.filter(([letter, value]) => value != null ||
       (!review && (question.part === 1 || question.part === 2) && (question.part !== 2 || letter !== "D"))).map(([letter, value]) =>
@@ -88,6 +89,6 @@ export default function ExamContent({ group, independentQuestion, attemptId, tok
     </div>}
     <div className="exam-group-questions">{questions.map(question => <Question key={question.attemptQuestionId} question={question} review={review}
       onAnswer={onAnswer} onFlag={onFlag} onRetry={onRetry} saveState={saveStates[question.attemptQuestionId]}
-      submissionPending={submissionPending} />)}</div>
+      submissionPending={submissionPending} mode={mode} />)}</div>
   </div>;
 }

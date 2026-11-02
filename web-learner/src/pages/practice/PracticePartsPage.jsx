@@ -19,8 +19,11 @@ export default function PracticePartsPage() {
   const { token } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const routeAttemptId = Number(searchParams.get("attempt")) || null;
+  const queryPart = Number(searchParams.get("part"));
+  const suggestedPart = queryPart >= 1 && queryPart <= 7 ? queryPart : null;
   const [available, setAvailable] = useState(null);
-  const [part, setPart] = useState(5);
+  const [selectedPart, setSelectedPart] = useState(null);
+  const part = routeAttemptId ? selectedPart ?? 5 : selectedPart ?? suggestedPart ?? 5;
   const [difficulty, setDifficulty] = useState(1);
   const [preset, setPreset] = useState("SHORT");
   const [current, setCurrent] = useState(0);
@@ -184,7 +187,7 @@ export default function PracticePartsPage() {
             </article>)}</section>
       <section className="vocab-panel practice-selection-panel"><h2><span className="practice-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h3" /></svg></span>Chọn bài luyện</h2>
         {available === null && <p role="status">Đang tải số lượng câu hỏi và nhóm hợp lệ…</p>}
-        <div className="practice-selection-fields"><label>Part<select value={part} onChange={e => { setPart(Number(e.target.value)); setPreset("SHORT"); }}>{parts.map((name, i) =>
+        <div className="practice-selection-fields"><label>Part<select value={part} onChange={e => { setSelectedPart(Number(e.target.value)); setPreset("SHORT"); }}>{parts.map((name, i) =>
           <option key={i + 1} value={i + 1}>Part {i + 1} · {name}</option>)}</select></label>
         <label>Độ khó<select value={difficulty} onChange={e => { setDifficulty(Number(e.target.value)); setPreset("SHORT"); }}>{[1,2,3].map(x =>
           <option key={x} value={x}>Mức {x} · {counts.find(c => c.difficulty === x)?.validUnitCount || 0} {counts.find(c => c.difficulty === x)?.unitType === "GROUP" ? "nhóm" : "câu"} hợp lệ</option>)}</select></label></div>

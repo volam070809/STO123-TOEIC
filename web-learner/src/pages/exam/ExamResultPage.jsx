@@ -7,6 +7,7 @@ import { examNavigation } from "./examNavigation";
 import { historicalPlacementAnalysis, shouldLoadPlacementAnalysis, waitForPlacementAnalysis } from "./placementAttemptAnalysis";
 import PlacementAnalysisView from "./PlacementAnalysisView";
 import "../../styles/exam.css";
+import "../../styles/placement.css";
 
 export default function ExamResultPage() {
   const { attemptId } = useParams();
@@ -21,6 +22,7 @@ export default function ExamResultPage() {
   const [target, setTarget] = useState("");
   const [savingTarget, setSavingTarget] = useState(false);
   const [analysisActionError, setAnalysisActionError] = useState("");
+  const [targetFeedback, setTargetFeedback] = useState(null);
   useEffect(() => {
     let live = true;
     examApi.result(attemptId, token).then(data => { if (live) setResult(data); })
@@ -60,16 +62,17 @@ export default function ExamResultPage() {
   async function confirmTarget(event) {
     event.preventDefault();
     if (savingTarget || analysis?.attemptId !== attemptId || !analysis.current) return;
-    setSavingTarget(true); setAnalysisActionError("");
+    setSavingTarget(true); setAnalysisActionError(""); setTargetFeedback(null);
     try {
       const saved = await placementApi.target(Number(target), token);
-      const items = await placementApi.courses(token);
       setAnalysis(previous => ({ ...previous, outcome: { ...previous.outcome, targetScore: saved.targetScore } }));
-      setCourseData({ attemptId, items });
-    } catch { setAnalysisActionError("Không thể lưu mục tiêu hoặc tải khóa học đề xuất. Vui lòng thử lại."); }
+      setTargetFeedback({ type: "success", text: "Đã lưu điểm mục tiêu." });
+      try { setCourseData({ attemptId, items: await placementApi.courses(token) }); }
+      catch { setCourseData({ attemptId, error: true, items: [] }); }
+    } catch { setTargetFeedback({ type: "error", text: "Không thể lưu điểm mục tiêu. Vui lòng thử lại." }); }
     finally { setSavingTarget(false); }
   }
-  return <SiteLayout><div className="site-container exam-result">
+  return <SiteLayout><div className={`site-container exam-result${currentResult?.source === "PLACEMENT" ? " placement-result-page" : ""}`}>
     <div className="page-heading"><span>{currentResult?.source === "PLACEMENT" ? "Lộ trình học" : "Thi thử"} / Kết quả</span>
       <h1>{currentResult?.examName || "Kết quả bài thi"}</h1>
       {currentResult?.examCode && <p>{currentResult.examCode}</p>}</div>
@@ -109,20 +112,18 @@ export default function ExamResultPage() {
           <PlacementAnalysisView
             analysis={analysis.current ? analysis.outcome : historicalPlacementAnalysis(result, analysis.stage)}
             current={analysis.current} courses={courseData?.attemptId === attemptId ? courseData.items : []}
-            target={target} onTargetChange={setTarget} onTargetSubmit={confirmTarget} pending={savingTarget}
-            coursesLoaded={courseData?.attemptId === attemptId && !courseData.error} />
-          {courseData?.attemptId !== attemptId && <p role="status">Đang tải khóa học phù hợp…</p>}
-          {courseData?.attemptId === attemptId && courseData.error &&
-            <><p role="alert">Không thể tải khóa học hiện có.</p>
-              <button type="button" className="outline-button" onClick={() => { setCourseData(null); setAnalysis(null); setAnalysisRequest(value => value + 1); }}>
-                Thử tải lại phân tích và khóa học</button></>}
+            target={target} onTargetChange={value => { setTarget(value); setTargetFeedback(null); }} onTargetSubmit={confirmTarget} pending={savingTarget}
+            targetFeedback={targetFeedback}
+            onRetake={retry} retakePending={retrying}
+            coursesState={courseData?.attemptId === attemptId ? (courseData.error ? "error" : "ready") : "loading"}
+            onCoursesRetry={() => { setCourseData(null); setAnalysis(null); setAnalysisRequest(value => value + 1); }} />
           {analysisActionError && <p role="alert">{analysisActionError}</p>}
         </>}
       </section>}
       <div className="exam-navigation">
         <Link className="outline-button" to={navigation.back}>← Quay lại</Link>
         {result.source !== "PLACEMENT" && <Link className="primary-button" to={`/exam/${attemptId}/review`}>Xem chi tiết từng câu</Link>}
-        {result.source === "PLACEMENT" &&
+        {result.source === "PLACEMENT" && analysis?.status !== "available" &&
           <button className="outline-button" type="button" disabled={retrying} onClick={retry}>
             Làm lại kiểm tra</button>}
         {navigation.root !== navigation.back && <Link className="outline-button" to={navigation.root}>

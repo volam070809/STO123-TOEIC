@@ -255,11 +255,39 @@ CREATE TABLE dbo.DeThi(
     MaNguoiDuocGiao int null foreign key references NguoiDung(MaNguoiDung),
     TrangThai varchar(32) not null default 'CLOSE' check (TrangThai in ('OPEN','CLOSE')),
     MaSinhDe int null foreign key references ThongTinSinhDe(MaSinhDe),
+    MaPhienBanHienHanh int null,
     constraint CK_DeThi_ETS check (
         (NamETS is null and SoDeETS is null)
         or (NamETS is not null and SoDeETS is not null and SoDeETS > 0 and MaSinhDe is null)
     )
 );
+GO
+
+CREATE TABLE dbo.PhienBanDeThi(
+    MaPhienBanDeThi int primary key identity(1,1),
+    MaDeThi int not null,
+    SoPhienBan int not null check (SoPhienBan > 0),
+    BlobContainer varchar(63) not null,
+    BlobPath varchar(512) not null,
+    ContentHash char(64) not null,
+    SchemaVersion int not null check (SchemaVersion > 0),
+    SoCau int not null check (SoCau = 200),
+    ThoiGianLamBai int not null check (ThoiGianLamBai = 120),
+    TenDe nvarchar(128) not null,
+    NgayXuatBan datetime2(3) not null default sysutcdatetime(),
+    MaNguoiXuatBan int null foreign key references NguoiDung(MaNguoiDung),
+    KhoaYeuCau uniqueidentifier not null,
+    constraint FK_PhienBanDeThi_DeThi foreign key (MaDeThi) references dbo.DeThi(MaDeThi),
+    constraint UQ_PhienBanDeThi_SoPhienBan unique (MaDeThi, SoPhienBan),
+    constraint UQ_PhienBanDeThi_DeVaId unique (MaDeThi, MaPhienBanDeThi),
+    constraint UQ_PhienBanDeThi_Blob unique (BlobContainer, BlobPath),
+    constraint UQ_PhienBanDeThi_YeuCau unique (MaDeThi, KhoaYeuCau)
+);
+GO
+
+ALTER TABLE dbo.DeThi ADD CONSTRAINT FK_DeThi_PhienBanHienHanh
+    FOREIGN KEY (MaDeThi, MaPhienBanHienHanh)
+    REFERENCES dbo.PhienBanDeThi(MaDeThi, MaPhienBanDeThi);
 GO
 
 CREATE TABLE dbo.CauHoiDeThi(
@@ -274,6 +302,7 @@ GO
 CREATE TABLE dbo.KetQuaLamBai(
     MaKetQua int primary key identity(1,1),
     MaDeThi int null foreign key references DeThi(MaDeThi),
+    MaPhienBanDeThi int null,
     MaHocVien int not null foreign key references NguoiDung(MaNguoiDung),
     MaLuotLam uniqueidentifier not null default newid() unique,
     LoaiBaiLam varchar(16) not null check (LoaiBaiLam in ('PLACEMENT','MOCK','PRACTICE')),
@@ -289,6 +318,9 @@ CREATE TABLE dbo.KetQuaLamBai(
     BatDauPhienLuc datetime2(3) null,
     GiaiDoanLucNop tinyint null,
     DuLieuBaiLamJson nvarchar(max) null,
+    constraint FK_KetQuaLamBai_PhienBanDeThi foreign key (MaDeThi, MaPhienBanDeThi)
+        references dbo.PhienBanDeThi(MaDeThi, MaPhienBanDeThi),
+    constraint CK_KetQuaLamBai_PhienBanCoDe check (MaPhienBanDeThi is null or MaDeThi is not null),
     constraint CK_KetQuaLamBai_DuLieuJson check (DuLieuBaiLamJson is null or isjson(DuLieuBaiLamJson) = 1),
     constraint CK_KetQuaLamBai_ThoiHan check (HetHanLuc is null or HetHanLuc > NgayLamBai),
     constraint CK_KetQuaLamBai_NopBai check (

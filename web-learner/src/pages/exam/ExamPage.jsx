@@ -4,8 +4,10 @@ import { useAuth } from "../../contexts/AuthState";
 import SiteLayout from "../../layouts/SiteLayout";
 import { examApi } from "../../services/examApi";
 import ExamContent from "./ExamContent";
+import PlacementIcon from "./PlacementIcon";
 import { examPartInstructions } from "./examPartInstructions";
 import "../../styles/exam.css";
+import "../../styles/placement.css";
 
 const parts = [1, 2, 3, 4, 5, 6, 7];
 function clock(seconds) { return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map(n => String(n).padStart(2, "0")).join(":"); }
@@ -21,6 +23,7 @@ export default function ExamPage() {
   const [timerAnchor, setTimerAnchor] = useState(null);
   const [pending, setPending] = useState(false);
   const [exitTarget, setExitTarget] = useState(null);
+  const [submitConfirm, setSubmitConfirm] = useState(false);
   const [saveStates, setSaveStates] = useState({});
   const [navOpen, setNavOpen] = useState(() => window.matchMedia("(min-width: 1051px)").matches);
   const queues = useRef(new Map());
@@ -121,6 +124,8 @@ export default function ExamPage() {
   const backDestination = rootDestination;
   const group = attempt?.groups.find(g => g.groupId === selected?.groupId || g.questions.some(q => q.attemptQuestionId === selected?.attemptQuestionId));
   const answered = questions.filter(q => q.selectedOption).length;
+  const flagged = questions.filter(q => q.flagged).length;
+  const placement = attempt?.source === "PLACEMENT";
 
   function updateQuestion(id, patch) {
     setAttempt(old => ({ ...old,
@@ -197,18 +202,21 @@ export default function ExamPage() {
     setPending(true); setError("");
     try {
       await Promise.allSettled([...queues.current.values()]);
-      if (failedSaves.current.size) { setError("Một số câu trả lời chưa được lưu. Vui lòng thử lại trước khi nộp."); return; }
+      if (failedSaves.current.size) { setError("Một số câu trả lời chưa được lưu. Vui lòng thử lại trước khi nộp."); setSubmitConfirm(false); return; }
       await examApi.submit(attemptId, token);
       navigate(`/exam/${attemptId}/result`);
-    } catch { setError("Không thể nộp bài. Vui lòng thử lại."); }
+    } catch { setError("Không thể nộp bài. Vui lòng thử lại."); setSubmitConfirm(false); }
     finally { setPending(false); }
   }
-  return <SiteLayout><div className="site-container exam-page">
+  return <SiteLayout><div className={`site-container exam-page${placement ? " placement-exam" : ""}`}>
     {error && <p className="exam-error" role="alert">{error}</p>}
     {!attempt ? !error && <p>Đang tải bài thi…</p> : <>
-      <div className="exam-top"><div><h1>{attempt.examName || "Thi thử TOEIC"}</h1><p>Part {currentPart} · Đã trả lời {answered}/{attempt.totalQuestions}</p></div>
-        <div className="exam-top-actions"><strong aria-live="polite">{remaining === null ? "--:--:--" : clock(remaining)}</strong>
-          <button className="primary-button" disabled={pending} onClick={submit}>Nộp bài</button></div></div>
+      <div className="exam-top"><div><h1>{attempt.examName || "Thi thử TOEIC"}</h1><p>Part {currentPart} · Đã trả lời {answered}/{attempt.totalQuestions}</p>
+        {placement && <div className="placement-exam-progress" role="progressbar" aria-label="Tiến độ trả lời"
+          aria-valuemin="0" aria-valuemax={attempt.totalQuestions} aria-valuenow={answered}>
+          <span style={{ width: `${attempt.totalQuestions ? 100 * answered / attempt.totalQuestions : 0}%` }} /></div>}</div>
+        <div className="exam-top-actions"><strong aria-live="polite">{placement && <PlacementIcon name="clock" size={19} />}{remaining === null ? "--:--:--" : clock(remaining)}</strong>
+          <button className="primary-button" disabled={pending} onClick={placement ? () => setSubmitConfirm(true) : submit}>Nộp bài</button></div></div>
       <p className="exam-card-note" role="status">Đồng hồ chạy khi bạn ở trong bài thi. Câu trả lời được tự động lưu.</p>
       <div className="exam-navigation">
         {backDestination !== rootDestination && <button className="outline-button" type="button" disabled={pending}
@@ -228,7 +236,7 @@ export default function ExamPage() {
           <span><i className="unanswered" />Chưa trả lời</span><span><i className="answered" />Đã trả lời</span>
           <span><i className="current" />Đang xem</span><span><i className="flagged" />Đánh dấu</span>
         </div>
-        {parts.filter(part => questions.some(q => q.part === part)).map(part => <div key={part}><h3>Part {part}</h3><div className="exam-number-grid">
+        {parts.filter(part => questions.some(q => q.part === part)).map(part => <div key={part}><h3>{placement && <PlacementIcon name={part <= 4 ? "headphones" : "book"} size={15} />}Part {part}</h3><div className="exam-number-grid">
           {questions.filter(q => q.part === part).map(q => <button type="button" key={q.attemptQuestionId}
             className={[q.order === current && "current", q.selectedOption ? "answered" : "unanswered",
               q.flagged && "flagged"].filter(Boolean).join(" ")}
@@ -238,6 +246,17 @@ export default function ExamPage() {
               requestAnimationFrame(() => document.getElementById("question-" + q.attemptQuestionId)?.focus()); }}>{q.order}</button>)}</div></div>)}
       </details></aside></div>
     </>}
+    {submitConfirm && placement && <div className="exam-confirm-backdrop" role="presentation"><div className="exam-confirm placement-submit-confirm" role="dialog" aria-modal="true" aria-labelledby="placement-submit-title">
+      <span className="placement-icon-tile"><PlacementIcon name="check" size={28} /></span>
+      <h2 id="placement-submit-title">Xác nhận nộp bài</h2>
+      <p>Kiểm tra lại tiến độ trước khi hoàn thành bài kiểm tra đầu vào.</p>
+      <div className="placement-submit-kpis"><span><strong>{answered}</strong><small>Đã làm</small></span>
+        <span><strong>{attempt.totalQuestions - answered}</strong><small>Chưa làm</small></span>
+        <span><strong>{flagged}</strong><small>Đánh dấu</small></span></div>
+      {answered < attempt.totalQuestions && <p className="placement-submit-warning"><PlacementIcon name="alert" size={19} /> Bạn còn {attempt.totalQuestions - answered} câu chưa trả lời.</p>}
+      <div className="exam-navigation"><button className="outline-button" type="button" disabled={pending} onClick={() => setSubmitConfirm(false)}>Tiếp tục làm bài</button>
+        <button className="primary-button" type="button" disabled={pending} onClick={submit}>{pending ? "Đang nộp…" : "Nộp bài"}</button></div>
+    </div></div>}
     {exitTarget && <div className="exam-confirm-backdrop" role="presentation"><div className="exam-confirm" role="dialog" aria-modal="true" aria-labelledby="exam-exit-title">
       <h2 id="exam-exit-title">Bạn có chắc muốn rời khỏi bài?</h2>
       <p>Tiến độ chưa nộp có thể bị mất.</p>

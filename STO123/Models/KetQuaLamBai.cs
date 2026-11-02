@@ -17,6 +17,8 @@ public partial class KetQuaLamBai
 
     public int? MaDeThi { get; set; }
 
+    public int? MaPhienBanDeThi { get; set; }
+
     public int MaHocVien { get; set; }
 
     public Guid MaLuotLam { get; set; }

@@ -13,6 +13,9 @@ const managementItems = [
 ];
 
 const contentItems = [
+  ["/admin/content/questions", "Ngân hàng câu hỏi", "lectures"],
+  ["/admin/content/exams", "Quản lý đề thi", "lectures"],
+  ["/admin/content/exam-criteria", "Cấu hình sinh đề", "lectures"],
   ["/admin/content", "Tổng quan nội dung", "overview", true],
   ["/admin/courses", "Khóa học & lộ trình", "courses"],
   ["/admin/vocabulary", "Quản lý từ vựng", "courses"],

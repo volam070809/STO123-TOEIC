@@ -51,6 +51,10 @@ const AdminPaymentDetailPage = lazy(adminRouteModules.paymentDetail);
 const AdminDashboardPage = lazy(adminRouteModules.dashboard);
 const AdminReportsPage = lazy(adminRouteModules.reports);
 const AdminContentDashboardPage = lazy(adminRouteModules.contentDashboard);
+const AdminExamManagementPage = lazy(adminRouteModules.exams);
+const AdminQuestionBankPage = lazy(adminRouteModules.questions);
+const AdminExamCriteriaPage = lazy(adminRouteModules.examCriteria);
+const AdminManualExamPage = lazy(adminRouteModules.manualExam);
 const AdminCurriculumPage = lazy(adminRouteModules.curriculum);
 const AdminVocabularyPage = lazy(adminRouteModules.vocabulary);
 const CourseStepPage = lazy(() => import("../pages/exam/CourseStepPage"));
@@ -158,6 +162,18 @@ export default function AppRoutes() {
       <Route path="courses/:courseId" element={<AdminCourseDetailPage />} />
       <Route path="courses/:courseId/content" element={<AdminCurriculumPage />} />
       <Route path="content" element={<AdminContentDashboardPage />} />
+      <Route path="content/exams" element={<AdminExamManagementPage />} />
+      <Route path="content/exams/new" element={<AdminManualExamPage />} />
+      <Route path="content/questions" element={<Navigate to="/admin/content/questions/exams" replace />} />
+      <Route path="content/questions/exams" element={<AdminQuestionBankPage bank="DE_THI" />} />
+      <Route path="content/questions/exams/new" element={<AdminQuestionBankPage bank="DE_THI" />} />
+      <Route path="content/questions/exams/detail/:questionId" element={<AdminQuestionBankPage bank="DE_THI" />} />
+      <Route path="content/questions/practice" element={<AdminQuestionBankPage bank="LUYEN_TAP" />} />
+      <Route path="content/questions/practice/new" element={<AdminQuestionBankPage bank="LUYEN_TAP" />} />
+      <Route path="content/questions/practice/detail/:questionId" element={<AdminQuestionBankPage bank="LUYEN_TAP" />} />
+      <Route path="content/questions/new" element={<Navigate to="/admin/content/questions/exams/new" replace />} />
+      <Route path="content/media" element={<Navigate to="/admin/content/questions/exams" replace />} />
+      <Route path="content/exam-criteria" element={<AdminExamCriteriaPage />} />
       <Route path="vocabulary" element={<AdminVocabularyPage />} />
       <Route path="packages" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackagesPage /></AdminRoute>} />
       <Route path="packages/new" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackageCreatePage /></AdminRoute>} />

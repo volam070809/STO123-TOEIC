@@ -13,7 +13,7 @@ public sealed record PlacementStartResult(int AttemptId, string Status);
 
 public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate persistedTemplate,
     CompactExamStore compact, IConfiguration configuration, RandomStartProfiler profile,
-    ExamGradingService grading, ExamSnapshotQueryService snapshots,
+    ExamGradingService grading, ExamSnapshotQueryService snapshots, ExamVersionStore versions,
     IToeicScoreCalculator scoring, IKnnClassifier knnClassifier,
     KnnDiagnosticsStore knnDiagnostics, IHostEnvironment environment)
 {
@@ -36,15 +36,15 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             SELECT @held = MaNguoiDung FROM dbo.NguoiDung WITH (UPDLOCK, HOLDLOCK)
             WHERE MaNguoiDung = @learner;
             SELECT e.TrangThai, e.LoaiDe, e.ThoiGianLamBai,
-                   a.MaKetQua, a.TrangThai
-            FROM dbo.DeThi e
+                   a.MaKetQua, a.TrangThai, e.MaPhienBanHienHanh
+            FROM dbo.DeThi e WITH (HOLDLOCK)
             OUTER APPLY (SELECT TOP (1) MaKetQua, TrangThai FROM dbo.KetQuaLamBai
                          WHERE MaHocVien = @learner AND MaDeThi = e.MaDeThi AND LoaiBaiLam = 'MOCK'
                          ORDER BY MaKetQua DESC) a
             WHERE e.MaDeThi = @exam;
             """;
         string? examStatus = null, examType = null, attemptStatus = null;
-        int? previousId = null, duration = null;
+        int? previousId = null, duration = null, versionId = null;
         var connection = db.Database.GetDbConnection();
         var openedForDecision = connection.State != ConnectionState.Open;
         if (openedForDecision) await connection.OpenAsync(ct);
@@ -62,6 +62,7 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             {
                 examStatus = reader.GetString(0); examType = reader.GetString(1); duration = reader.GetInt32(2);
                 if (!reader.IsDBNull(3)) { previousId = reader.GetInt32(3); attemptStatus = reader.GetString(4); }
+                if (!reader.IsDBNull(5)) versionId = reader.GetInt32(5);
             }
         }
         finally { if (openedForDecision) await connection.CloseAsync(); }
@@ -79,6 +80,17 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             }
             if (attemptStatus is not (ExamCore.Submitted or ExamCore.Expired))
                 throw new ExamProblem("ATTEMPT_STATE_INVALID", "Trạng thái lượt thi không hợp lệ.", 409);
+        }
+        if (versionId is { } currentVersionId)
+        {
+            var version = await db.PhienBanDeThi.AsNoTracking().SingleOrDefaultAsync(
+                v => v.MaPhienBanDeThi == currentVersionId && v.MaDeThi == examId, ct)
+                ?? throw new ExamProblem("EXAM_VERSION_MISSING", "Không tìm thấy phiên bản đề hiện hành.", 503);
+            var snapshot = await versions.ReadAsync(version, ct);
+            var id = await compact.CreateVersionedAsync(learnerId, version, snapshot, ExamCore.Mock, ct);
+            using (profile.Phase("commit")) await tx.CommitAsync(ct);
+            profile.SetInsertedRows(1);
+            return id;
         }
         var templateTime = Stopwatch.StartNew();
         using var templatePhase = profile.Phase("templateRead");
@@ -103,7 +115,7 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
         const string decisionSql = """
             SET NOCOUNT ON;
             SELECT a.MaKetQua, a.TrangThai, a.ThoiGianConLaiGiay, a.BatDauPhienLuc,
-                   e.TrangThai, e.LoaiDe, e.ThoiGianLamBai
+                   e.TrangThai, e.LoaiDe, e.ThoiGianLamBai, e.MaPhienBanHienHanh
             FROM dbo.NguoiDung u WITH (UPDLOCK, HOLDLOCK)
             OUTER APPLY (
                 SELECT TOP (1) MaKetQua, TrangThai, ThoiGianConLaiGiay, BatDauPhienLuc
@@ -113,13 +125,14 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
                 ORDER BY NgayLamBai DESC, MaKetQua DESC
             ) a
             OUTER APPLY (
-                SELECT TrangThai, LoaiDe, ThoiGianLamBai FROM dbo.DeThi WHERE MaDeThi = @exam
+                SELECT TrangThai, LoaiDe, ThoiGianLamBai, MaPhienBanHienHanh
+                FROM dbo.DeThi WITH (HOLDLOCK) WHERE MaDeThi = @exam
             ) e
             WHERE u.MaNguoiDung = @learner;
             """;
         KetQuaLamBai? existing = null;
         string? examStatus = null, examType = null;
-        int? duration = null;
+        int? duration = null, versionId = null;
         using (profile.Phase("startDecision"))
         {
             var connection = db.Database.GetDbConnection();
@@ -149,6 +162,7 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
                     examStatus = reader.IsDBNull(4) ? null : reader.GetString(4);
                     examType = reader.IsDBNull(5) ? null : reader.GetString(5);
                     duration = reader.IsDBNull(6) ? null : reader.GetInt32(6);
+                    versionId = reader.IsDBNull(7) ? null : reader.GetInt32(7);
                 }
                 finally { watch.Stop(); profile.CountManualSqlCommand("startDecision/placementLookup", 2, watch.Elapsed); }
             }
@@ -169,6 +183,17 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
         if (examStatus != "OPEN" || examType != "DE_THI" || duration != ExamCore.DurationMinutes)
             throw new ExamProblem("PLACEMENT_EXAM_UNAVAILABLE", "Đề kiểm tra đầu vào đã cấu hình không hợp lệ hoặc chưa mở.", 409);
 
+        if (versionId is { } currentVersionId)
+        {
+            var version = await db.PhienBanDeThi.AsNoTracking().SingleOrDefaultAsync(
+                v => v.MaPhienBanDeThi == currentVersionId && v.MaDeThi == examId, ct)
+                ?? throw new ExamProblem("EXAM_VERSION_MISSING", "Không tìm thấy phiên bản đề hiện hành.", 503);
+            var snapshot = await versions.ReadAsync(version, ct);
+            var id = await compact.CreateVersionedAsync(learnerId, version, snapshot, ExamCore.Placement, ct);
+            using (profile.Phase("commit")) await tx.CommitAsync(ct);
+            profile.SetInsertedRows(1);
+            return new PlacementStartResult(id, ExamCore.Active);
+        }
         IReadOnlyList<PlannedUnit> plan;
         using (profile.Phase("templateRead")) plan = await persistedTemplate.LoadAsync(examId, ct);
         if (!ExamGenerationService.ValidPlan(plan) || !ExamGenerationService.ValidGeneratedPlan(plan))
@@ -473,7 +498,10 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
                 classification = await ClassifyPlacementAsync(attempt, learnerId,
                     ComposeResult(attempt, questions, answers, compactSnapshot?.ExamName), ct);
             await db.SaveChangesAsync(ct);
-            await PruneOlderCompletedAsync(attempt, ct);
+            // MOCK keeps every completed result in SQL for audit and versioned attempts.
+            // The learner history endpoint chooses the latest completed row for display.
+            if (attempt.LoaiBaiLam != ExamCore.Mock)
+                await PruneOlderCompletedAsync(attempt, ct);
         }
         await tx.CommitAsync(ct);
         await tx.DisposeAsync();
@@ -510,7 +538,7 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
 
     private async Task PruneOlderCompletedAsync(KetQuaLamBai attempt, CancellationToken ct)
     {
-        if (!db.Database.IsSqlServer() || attempt.LoaiBaiLam == ExamCore.Mock && attempt.MaDeThi is null)
+        if (!db.Database.IsSqlServer() || attempt.LoaiBaiLam == ExamCore.Mock)
             return;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             SET NOCOUNT ON;
@@ -609,7 +637,9 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             a.LoaiBaiLam == row.LoaiBaiLam &&
             (a.TrangThai == ExamCore.Submitted || a.TrangThai == ExamCore.Expired));
         if (row.LoaiBaiLam == ExamCore.Mock) latest = latest.Where(a => a.MaDeThi == row.MaDeThi);
-        if (await latest.MaxAsync(a => a.MaKetQua, ct) != id)
+        if (await latest.OrderByDescending(a => a.NgayNopBai)
+                .ThenByDescending(a => a.MaKetQua)
+                .Select(a => a.MaKetQua).FirstAsync(ct) != id)
             throw new ExamProblem("RESULT_REPLACED", "Kết quả này đã được thay bằng lần thi gần nhất.", 404);
     }
 

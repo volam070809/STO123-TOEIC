@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480" fill="none">
+  <defs>
+    <linearGradient id="panel" x1="72" y1="44" x2="537" y2="430" gradientUnits="userSpaceOnUse"><stop stop-color="#E5F2FF"/><stop offset="1" stop-color="#C9E9EA"/></linearGradient>
+    <linearGradient id="shirt" x1="281" y1="180" x2="414" y2="378" gradientUnits="userSpaceOnUse"><stop stop-color="#2476DF"/><stop offset="1" stop-color="#164AA4"/></linearGradient>
+    <linearGradient id="screen" x1="239" y1="268" x2="451" y2="399" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#EAF4FF"/></linearGradient>
+    <filter id="shadow" x="0" y="0" width="640" height="480" filterUnits="userSpaceOnUse"><feGaussianBlur stdDeviation="11"/></filter>
+  </defs>
+  <rect x="30" y="31" width="580" height="418" rx="48" fill="url(#panel)"/>
+  <circle cx="493" cy="134" r="81" fill="#fff" opacity=".48"/>
+  <circle cx="143" cy="341" r="69" fill="#A5DBDF" opacity=".55"/>
+  <path d="M76 372c99-15 172-11 261 20 87 30 146 34 227-6" stroke="#fff" stroke-width="2" stroke-dasharray="7 10" opacity=".8"/>
+  <g filter="url(#shadow)" opacity=".18"><rect x="60" y="91" width="151" height="92" rx="18" fill="#1746A2"/><rect x="421" y="89" width="147" height="99" rx="18" fill="#1746A2"/></g>
+  <rect x="59" y="83" width="151" height="92" rx="18" fill="#fff" stroke="#D5E6F5"/>
+  <rect x="74" y="100" width="37" height="37" rx="11" fill="#E2F2F3"/>
+  <path d="M81 123v-6a11 11 0 0 1 22 0v6M81 122h5v11h-5a3 3 0 0 1-3-3v-5a3 3 0 0 1 3-3Zm22 0h-5v11h5a3 3 0 0 0 3-3v-5a3 3 0 0 0-3-3Z" stroke="#0D9488" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="121" y="115" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#172B4D">Listening</text>
+  <rect x="121" y="125" width="71" height="6" rx="3" fill="#E2EAF5"/>
+  <rect x="121" y="125" width="48" height="6" rx="3" fill="#0D9488"/>
+  <text x="74" y="157" font-family="Arial,sans-serif" font-size="11" fill="#64748B">Nghe · hiểu · phản hồi</text>
+  <rect x="421" y="80" width="147" height="99" rx="18" fill="#fff" stroke="#D5E6F5"/>
+  <rect x="437" y="97" width="37" height="37" rx="11" fill="#E8EFFF"/>
+  <path d="M443 105c5-2 8-1 12 1 4-2 7-3 12-1v21c-5-2-8-1-12 1-4-2-7-3-12-1v-21Zm12 1v21" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="484" y="113" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#172B4D">Reading</text>
+  <rect x="484" y="125" width="69" height="6" rx="3" fill="#E2EAF5"/>
+  <rect x="484" y="125" width="39" height="6" rx="3" fill="#2563EB"/>
+  <text x="437" y="158" font-family="Arial,sans-serif" font-size="11" fill="#64748B">Đọc · phân tích · lựa chọn</text>
+  <ellipse cx="324" cy="415" rx="190" ry="19" fill="#39739B" opacity=".13"/>
+  <path d="M203 403c1-83 40-146 114-156 90-12 161 38 166 156" fill="url(#shirt)"/>
+  <path d="M270 251c14 19 34 26 55 26 25 0 49-9 64-27l20 43-87 36-75-37 23-41Z" fill="#D2E8FF"/>
+  <path d="M300 236v38c0 14 45 16 48 0v-38" fill="#C98B67"/>
+  <ellipse cx="323" cy="173" rx="71" ry="82" fill="#DFA581"/>
+  <path d="M252 179c-14-57 9-102 66-104 32-1 61 12 73 42 9 23 6 48-1 63-1-21-8-35-19-45-17 10-53 9-72-3-9 24-28 39-47 47Z" fill="#213C67"/>
+  <path d="M262 148c-13 4-19 20-16 37 2 13 9 21 20 24M384 149c14 3 20 19 17 36-2 13-9 21-20 24" stroke="#183E70" stroke-width="13" stroke-linecap="round"/>
+  <path d="M255 152c-3-54 20-86 67-86 48 0 71 31 67 86" stroke="#1D4F8E" stroke-width="15" stroke-linecap="round"/>
+  <rect x="238" y="161" width="21" height="49" rx="10" fill="#0D9488"/>
+  <rect x="385" y="161" width="21" height="49" rx="10" fill="#0D9488"/>
+  <path d="M384 204c-10 20-26 27-47 27" stroke="#0D9488" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="333" cy="231" r="5" fill="#0D9488"/>
+  <path d="M293 185h2m54 0h2" stroke="#294365" stroke-width="5" stroke-linecap="round"/>
+  <path d="M308 212c9 7 21 7 30 0" stroke="#A05B4B" stroke-width="3" stroke-linecap="round"/>
+  <path d="M208 340c-16 24-20 41-17 63h92l8-67-83 4ZM445 340c19 24 24 43 22 63h-91l-9-67 78 4Z" fill="#1D59B3"/>
+  <path d="M186 400h286" stroke="#39769B" stroke-width="11" stroke-linecap="round"/>
+  <rect x="230" y="289" width="208" height="111" rx="10" fill="url(#screen)" stroke="#95B5D4" stroke-width="3"/>
+  <path d="M225 400h218l14 10H211l14-10Z" fill="#9BB9D5"/>
+  <path d="M291 319h71M291 331h94M291 343h76" stroke="#B9D3EA" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="267" cy="331" r="15" fill="#D9F2ED"/>
+  <path d="m260 331 5 5 10-11" stroke="#0D9488" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="409" y="212" width="139" height="64" rx="16" fill="#fff" stroke="#D5E6F5"/>
+  <circle cx="435" cy="244" r="13" fill="#E8EFFF"/>
+  <path d="M428 244h14m-7-7v14" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/>
+  <text x="456" y="240" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#172B4D">Tiến độ</text>
+  <text x="456" y="257" font-family="Arial,sans-serif" font-size="11" fill="#64748B">7 Part TOEIC</text>
+</svg>

@@ -62,12 +62,12 @@ public sealed class MockTestsController(ToeicDbContext db, ExamAttemptService at
         var query = db.KetQuaLamBai.AsNoTracking().Where(x => x.MaHocVien == learnerId &&
             x.LoaiBaiLam == ExamCore.Mock &&
             (x.TrangThai == ExamCore.Submitted || x.TrangThai == ExamCore.Expired));
-        var latestIds = query.Where(x => x.MaDeThi != null).GroupBy(x => x.MaDeThi)
-            .Select(group => group.Max(x => x.MaKetQua));
-        var latestLegacyId = await query.Where(x => x.MaDeThi == null)
-            .MaxAsync(x => (int?)x.MaKetQua, ct);
-        var rows = await query.Where(x => latestIds.Contains(x.MaKetQua) ||
-                latestLegacyId.HasValue && x.MaKetQua == latestLegacyId.Value)
+        // Only the completed result shown to the learner is reduced to one per exam.
+        // Older rows remain intact for course progress, audit and versioned review.
+        var rows = await query.Where(x => !query.Any(other =>
+                other.MaDeThi == x.MaDeThi &&
+                (other.NgayNopBai > x.NgayNopBai ||
+                 other.NgayNopBai == x.NgayNopBai && other.MaKetQua > x.MaKetQua)))
             .OrderByDescending(x => x.NgayNopBai).ThenByDescending(x => x.MaKetQua)
             .Skip((page - 1) * pageSize).Take(pageSize + 1)
             .Select(x => new { AttemptId = x.MaKetQua, x.TrangThai, x.NgayLamBai,

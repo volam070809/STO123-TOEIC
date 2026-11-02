@@ -1,9 +1,22 @@
 const validStage = stage => [1, 2, 3].includes(stage);
 const average = values => Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 100) / 100;
 
+export const verifiedCurrentStage = outcome =>
+  outcome?.classification === "AVAILABLE" && validStage(outcome.stage) ? outcome.stage : null;
+
 export function coursesForKnnStage(courses, stage) {
   if (!validStage(stage)) return [];
   return courses.filter(course => course.stage === stage && Number.isInteger(course.courseId) && course.courseId > 0);
+}
+
+export function coursesForPlacementPath(courses, stage, targetScore, current = true) {
+  const stageCourses = coursesForKnnStage(courses, stage);
+  if (!current || targetScore == null) return stageCourses;
+  const recommended = courses.filter(course => course.recommended === true &&
+    validStage(course.stage) && Number.isInteger(course.courseId) && course.courseId > 0);
+  return recommended.length ? recommended.sort((a, b) =>
+    (a.recommendationOrder ?? 99) - (b.recommendationOrder ?? 99) ||
+    a.stage - b.stage || a.courseId - b.courseId) : stageCourses;
 }
 
 export const shouldLoadPlacementAnalysis = (result, attemptId) =>

@@ -70,6 +70,7 @@ public partial class ToeicDbContext : DbContext
     public virtual DbSet<NhomLuotLam> NhomLuotLam { get; set; }
 
     public virtual DbSet<PartTOEIC> PartTOEIC { get; set; }
+    public virtual DbSet<PhienBanDeThi> PhienBanDeThi { get; set; }
 
     public virtual DbSet<PhanLoaiCauHoi> PhanLoaiCauHoi { get; set; }
 
@@ -291,7 +292,14 @@ public partial class ToeicDbContext : DbContext
         {
             entity.HasKey(e => e.MaDeThi).HasName("PK__DeThi__9F9645B008EF4088");
 
+            entity.Property(e => e.MaDeThi).ValueGeneratedOnAdd().UseIdentityColumn();
             entity.Property(e => e.TrangThai).HasDefaultValue("CLOSE");
+
+            entity.HasOne<PhienBanDeThi>().WithMany()
+                .HasForeignKey(e => new { e.MaDeThi, e.MaPhienBanHienHanh })
+                .HasPrincipalKey(v => new { v.MaDeThi, v.MaPhienBanDeThi })
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_DeThi_PhienBanHienHanh");
 
             entity.HasOne(d => d.MaNguoiDuocGiaoNavigation).WithMany(p => p.DeThiMaNguoiDuocGiaoNavigation).HasConstraintName("FK__DeThi__MaNguoiDu__57DD0BE4");
 
@@ -355,6 +363,12 @@ public partial class ToeicDbContext : DbContext
             entity.Property(e => e.TrangThai).HasDefaultValue("DANG_LAM");
 
             entity.HasOne(d => d.MaDeThiNavigation).WithMany(p => p.KetQuaLamBai).HasConstraintName("FK_KetQuaLamBai_DeThi");
+
+            entity.HasOne<PhienBanDeThi>().WithMany()
+                .HasForeignKey(e => new { e.MaDeThi, e.MaPhienBanDeThi })
+                .HasPrincipalKey(v => new { v.MaDeThi, v.MaPhienBanDeThi })
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_KetQuaLamBai_PhienBanDeThi");
 
             entity.HasOne(d => d.MaHocVienNavigation).WithMany(p => p.KetQuaLamBai)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -463,6 +477,15 @@ public partial class ToeicDbContext : DbContext
         modelBuilder.Entity<PartTOEIC>(entity =>
         {
             entity.HasKey(e => e.MaPart).HasName("PK__PartTOEI__4CF160AD2DB0EEB5");
+        });
+
+        modelBuilder.Entity<PhienBanDeThi>(entity =>
+        {
+            entity.HasOne(v => v.DeThi).WithMany()
+                .HasForeignKey(v => v.MaDeThi)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_PhienBanDeThi_DeThi");
+            entity.Property(v => v.NgayXuatBan).HasDefaultValueSql("sysutcdatetime()");
         });
 
         modelBuilder.Entity<PhanLoaiCauHoi>(entity =>

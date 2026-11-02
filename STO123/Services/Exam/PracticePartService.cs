@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
+using System.Data;
 using STO123.Models;
 
 namespace STO123.Services.Exam;
@@ -64,6 +65,13 @@ public sealed class PracticePartService(ToeicDbContext db)
     {
         if (difficulty is < 1 or > 3 || !PracticeQuestionBank.TryTarget(part, preset, out var target))
             throw new ExamProblem("INVALID_REQUEST", "Part, độ khó hoặc mức luyện tập không hợp lệ.");
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await LockResourceAsync($"practice-start:{learnerId}", ct);
+        var unfinished = await db.KetQuaLamBai.AsNoTracking().AnyAsync(a =>
+            a.MaHocVien == learnerId && a.LoaiBaiLam == PracticeQuestionBank.AttemptType &&
+            a.TrangThai == ExamCore.Active, ct);
+        if (unfinished)
+            throw new ExamProblem("PRACTICE_ACTIVE_EXISTS", "Bạn có bài luyện đang làm. Hãy Tiếp tục hoặc hoàn thành bài đó trước khi bắt đầu bài mới.", 409);
         var units = await LoadUnitsAsync(part, difficulty, ct);
         if (units.Count == 0)
             throw new ExamProblem("NO_DATA", "Chưa có câu hỏi hoặc nhóm hợp lệ cho Part và độ khó đã chọn.", 409);
@@ -100,13 +108,6 @@ public sealed class PracticePartService(ToeicDbContext db)
                     PhuongAnA = q.PhuongAnA, PhuongAnB = q.PhuongAnB, PhuongAnC = q.PhuongAnC,
                     PhuongAnD = q.PhuongAnD, PhuongAnDung = q.PhuongAnDung, GiaiThich = q.GiaiThich });
         }
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await LockResourceAsync($"practice-start:{learnerId}", ct);
-        var unfinished = await db.KetQuaLamBai.AsNoTracking().AnyAsync(a =>
-            a.MaHocVien == learnerId && a.LoaiBaiLam == PracticeQuestionBank.AttemptType &&
-            a.TrangThai == ExamCore.Active, ct);
-        if (unfinished)
-            throw new ExamProblem("PRACTICE_ACTIVE_EXISTS", "Bạn có bài luyện đang làm. Hãy Tiếp tục hoặc hoàn thành bài đó trước khi bắt đầu bài mới.", 409);
         db.KetQuaLamBai.Add(attempt);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);

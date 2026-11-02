@@ -23,7 +23,9 @@ public sealed class PublicMockTestsController(ToeicDbContext db, IConfiguration 
                 exam.MaDeThi,
                 exam.TenDe,
                 exam.ThoiGianLamBai,
-                QuestionCount = exam.CauHoiDeThi.Count
+                QuestionCount = exam.MaPhienBanHienHanh == null ? exam.CauHoiDeThi.Count :
+                    db.PhienBanDeThi.Where(v => v.MaPhienBanDeThi == exam.MaPhienBanHienHanh)
+                        .Select(v => v.SoCau).FirstOrDefault()
             })
             .ToListAsync(ct);
 

@@ -1,6 +1,10 @@
 export const adminRouteModules = {
   layout: () => import("../layouts/AdminLayout"),
   contentDashboard: () => import("../pages/admin/AdminContentDashboardPage"),
+  exams: () => import("../pages/admin/AdminExamManagementPage"),
+  questions: () => import("../pages/admin/AdminQuestionBankPage"),
+  examCriteria: () => import("../pages/admin/AdminExamCriteriaPage"),
+  manualExam: () => import("../pages/admin/AdminManualExamPage"),
   curriculum: () => import("../pages/admin/AdminCurriculumPage"),
   vocabulary: () => import("../pages/admin/AdminVocabularyPage"),
   dashboard: () => import("../pages/admin/AdminDashboardPage"),
@@ -42,6 +46,11 @@ export function routeKey(path) {
   const pathname = path.split("?")[0];
   if (pathname === "/admin") return "dashboard";
   if (pathname === "/admin/content") return "contentDashboard";
+  if (pathname === "/admin/content/exams") return "exams";
+  if (pathname === "/admin/content/exams/new") return "manualExam";
+  if (pathname.startsWith("/admin/content/questions")) return "questions";
+  if (pathname === "/admin/content/media") return "questions";
+  if (pathname === "/admin/content/exam-criteria") return "examCriteria";
   if (pathname === "/admin/vocabulary") return "vocabulary";
   if (/^\/admin\/courses\/\d+\/content$/.test(pathname)) return "curriculum";
   if (pathname === "/admin/reports") return "reports";

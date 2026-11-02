@@ -349,4 +349,22 @@
 .placement-next-steps p { max-width: 55ch; color: var(--text-muted); }
 .placement-course-list { display: grid; gap: .5rem; }
 .placement-course-list a { display: flex; justify-content: space-between; gap: .8rem; padding: .8rem 1rem; border: 1px solid var(--sto-border); border-radius: 9px; }
-@media (max-width: 650px) { .placement-result-hero, .placement-next-steps { flex-direction: column; align-items: stretch; } .placement-result-hero-score { text-align: left; } .placement-skill-grid { grid-template-columns: 1fr; } .placement-latest-actions > * { width: 100%; } }
+.placement-note { color: var(--text-muted); font-size: .9rem; line-height: 1.6; }
+.placement-priority-list { display: grid; gap: .7rem; margin: 0; padding: 0; list-style: none; }
+.placement-priority-card { display: flex; align-items: center; gap: .9rem; padding: .9rem 1rem; border: 1px solid var(--sto-border); border-radius: 12px; background: #fff; }
+.placement-priority-card > div { display: grid; gap: .2rem; }
+.placement-priority-card > div span { color: var(--text-muted); font-size: .9rem; }
+.placement-priority-card .outline-button { margin-left: auto; flex: none; }
+.placement-priority-badge { flex: none; padding: .35rem .7rem; border-radius: 999px; color: #fff; font-size: .78rem; font-weight: 700; }
+.placement-priority-badge.priority-1 { background: #b34840; }
+.placement-priority-badge.priority-2 { background: #b87418; }
+.placement-priority-badge.priority-3 { background: var(--primary); }
+.placement-strength-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.placement-strength-card { display: grid; gap: .35rem; padding: 1rem; border: 1px solid var(--sto-border); border-radius: 12px; background: #fff; }
+.placement-strength-card strong { color: var(--sto-navy); }
+.placement-strength-card p { margin: 0; font-weight: 700; }
+.placement-strength-card small { color: var(--text-muted); }
+.placement-strength-card.is-strong { border-color: #bfe0d1; background: var(--color-green-light); }
+.placement-strength-card.is-weak { border-color: #f0c9c2; background: #fff4f1; }
+.placement-course-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
+@media (max-width: 650px) { .placement-result-hero, .placement-next-steps { flex-direction: column; align-items: stretch; } .placement-result-hero-score { text-align: left; } .placement-skill-grid { grid-template-columns: 1fr; } .placement-latest-actions > * { width: 100%; } .placement-strength-grid { grid-template-columns: 1fr; } .placement-priority-card { flex-wrap: wrap; } .placement-priority-card .outline-button { width: 100%; } }

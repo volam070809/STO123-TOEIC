@@ -39,6 +39,8 @@ public partial class DeThi
 
     public int? MaSinhDe { get; set; }
 
+    public int? MaPhienBanHienHanh { get; set; }
+
     [InverseProperty("MaDeThiNavigation")]
     public virtual ICollection<BuocLoTrinh> BuocLoTrinh { get; set; } = new List<BuocLoTrinh>();
 
