@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using STO123.Models;
 using STO123.Middleware;
 using STO123.Services.Admin;
+using STO123.Services.Ai;
 using STO123.Services.Auth;
 using STO123.Services.Exam;
 using STO123.Services.Knn;
@@ -156,6 +157,9 @@ builder.Services.AddScoped<ExamGradingService>();
 builder.Services.AddSingleton<IKnnClassifier, KnnClassifier>();
 builder.Services.AddSingleton<KnnDiagnosticsStore>();
 builder.Services.AddSingleton<IToeicScoreCalculator, EstimatedLinearToeicScoreCalculator>();
+builder.Services.AddSingleton<SupportContactStore>();
+builder.Services.AddHttpClient<AiToeicService>(client => client.Timeout = TimeSpan.FromSeconds(35));
+builder.Services.AddScoped<AiLearningContextService>();
 
 builder.Services.AddDbContext<ToeicDbContext>((services, options) =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("ToeicDb"))

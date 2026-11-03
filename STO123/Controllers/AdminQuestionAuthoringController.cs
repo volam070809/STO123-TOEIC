@@ -15,7 +15,7 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
     BlobServiceClient blobs, IConfiguration configuration, ExamVersionStore versions) : ControllerBase
 {
     public sealed record QuestionInput(string? Text, string A, string B, string C,
-        string? D, string Correct, byte Difficulty, string? Explanation);
+        string? D, string Correct, byte Difficulty, string? Explanation, string? Translation = null);
     public sealed record DocumentInput(string Type, string? Content, string? ImagePath);
     public sealed record UnitInput(int Part, string Bank, string? Text, string? Translation,
         string? AudioPath, string? ImagePath, List<DocumentInput> Documents,
@@ -30,9 +30,16 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
                 text = q.NoiDung, a = q.PhuongAnA, b = q.PhuongAnB, c = q.PhuongAnC,
                 d = q.PhuongAnD, correct = q.PhuongAnDung,
                 difficulty = q.DoKho, explanation = q.GiaiThich,
+                translation = q.MaPartNavigation.SoPart == 2 ? q.NhomCauHoi!.MaNguLieuNavigation.NoiDungDich :
+                    q.MaPartNavigation.SoPart == 6 ? q.NhomCauHoi!.MaNguLieuNavigation.NoiDungDich : null,
+                groupOrder = q.NhomCauHoi == null ? (int?)null : q.NhomCauHoi.ThuTu,
                 examCount = q.CauHoiDeThi.Count }).SingleOrDefaultAsync(ct);
-        return row is null ? NotFound(new { code = "QUESTION_NOT_FOUND",
-            message = "Không tìm thấy câu hỏi." }) : Ok(row);
+        if (row is null) return NotFound(new { code = "QUESTION_NOT_FOUND",
+            message = "Không tìm thấy câu hỏi." });
+        return Ok(new { row.id, row.part, row.bank, row.groupId, row.text,
+            row.a, row.b, row.c, row.d, row.correct, row.difficulty, row.explanation,
+            translation = row.part == 6 ? QuestionContentRules.Part6Translation(row.translation, row.groupOrder ?? 0) : row.translation,
+            row.examCount });
     }
 
     [HttpPut("{id:int}")]
@@ -63,6 +70,10 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
                 question.PhuongAnDung = input.Correct?.Trim().ToUpperInvariant();
                 question.DoKho = input.Difficulty;
                 question.GiaiThich = input.Explanation?.Trim();
+                var invalidField = QuestionContentRules.InvalidField(part,
+                    question.NoiDung, question.GiaiThich, input.Translation);
+                if (invalidField is not null)
+                    throw new ExamProblem("QUESTION_FIELD_REQUIRED", $"{invalidField} của câu #{id} không được để trống.");
                 if (question.DoKho is < 1 or > 3 ||
                     question.PhuongAnA?.Length is < 1 or > 512 ||
                     question.PhuongAnB?.Length is < 1 or > 512 ||
@@ -70,6 +81,25 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
                     question.PhuongAnD?.Length > 512 || !ExamSourceValidator.ValidQuestion(question, part))
                     throw new ExamProblem("INVALID_QUESTION",
                         "Nội dung, độ khó hoặc đáp án không hợp lệ.");
+                if (part is 2 or 6)
+                {
+                    var membership = await db.NhomCauHoi.AsNoTracking()
+                        .Where(x => x.MaCauHoi == id).Select(x => new { x.MaNguLieu, x.ThuTu })
+                        .SingleOrDefaultAsync(token) ?? throw new ExamProblem("GROUP_NOT_FOUND", "Câu hỏi thiếu ngữ liệu nhóm.", 409);
+                    var resource = await db.NguLieu.FromSqlInterpolated(
+                        $"SELECT * FROM dbo.NguLieu WITH (UPDLOCK, HOLDLOCK) WHERE MaNguLieu = {membership.MaNguLieu}")
+                        .SingleAsync(token);
+                    if (part == 2)
+                    {
+                        if (input.Translation is not null)
+                            resource.NoiDungDich = string.IsNullOrWhiteSpace(input.Translation) ? null : input.Translation.Trim();
+                    }
+                    else
+                        resource.NoiDungDich = QuestionContentRules.ReplacePart6(
+                            resource.NoiDungDich, membership.ThuTu, input.Translation) ??
+                            throw new ExamProblem("PART6_TRANSLATION_REQUIRED",
+                                "Cần nhập bản dịch cho cả bốn câu Part 6 trước khi lưu.");
+                }
             }, editorId, ct);
             return Ok(new { id, updated = true, affectedExamIds = affected });
         }
@@ -91,6 +121,8 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
         if (input.Bank is not ("DE_THI" or "LUYEN_TAP") || input.Part is < 1 or > 7 ||
             input.Questions is null || input.Documents is null)
             return BadRequest(new { code = "INVALID_UNIT", message = "Part hoặc ngân hàng câu hỏi không hợp lệ." });
+        if (input.Questions.Any(q => q is null) || input.Documents.Any(d => d is null))
+            return BadRequest(new { code = "INVALID_UNIT", message = "Danh sách câu hỏi hoặc tài liệu có mục không hợp lệ." });
         var partId = await db.PartTOEIC.AsNoTracking().Where(p => p.SoPart == input.Part)
             .Select(p => (int?)p.MaPart).SingleOrDefaultAsync(ct);
         if (partId is null) return BadRequest(new { code = "INVALID_PART", message = "Part không tồn tại." });
@@ -99,6 +131,16 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
         if (expectedCount == 0 || input.Questions.Count != expectedCount)
             return BadRequest(new { code = "INVALID_GROUP_COUNT",
                 message = "Số câu trong nhóm không đúng cấu trúc Part." });
+        for (var index = 0; index < input.Questions.Count; index++)
+        {
+            var item = input.Questions[index];
+            var invalidField = QuestionContentRules.InvalidField(input.Part,
+                item.Text, item.Explanation, item.Translation);
+            if (invalidField is not null)
+                return BadRequest(new { code = "QUESTION_FIELD_REQUIRED",
+                    question = index + 1, field = invalidField,
+                    message = $"Câu {index + 1}: {invalidField} không được để trống." });
+        }
         if (input.Part != 7 && input.Documents.Count > 0 || input.Part == 7 &&
             input.Documents.Count is < 1 or > 3)
             return BadRequest(new { code = "INVALID_DOCUMENT_COUNT",
@@ -118,7 +160,10 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
             return BadRequest(new { code = "INVALID_QUESTION",
                 message = "Nội dung, độ khó hoặc đáp án của câu hỏi không hợp lệ." });
         var resource = input.Part == 5 ? null : new NguLieu {
-            NoiDungNguLieu = input.Text?.Trim(), NoiDungDich = input.Translation?.Trim(),
+            NoiDungNguLieu = input.Text?.Trim(),
+            NoiDungDich = input.Part == 6 ? QuestionContentRules.FormatPart6(
+                input.Questions.Select(q => q.Translation).ToArray()) :
+                input.Part == 2 ? (input.Questions[0].Translation ?? input.Translation)?.Trim() : input.Translation?.Trim(),
             DuongDanAudio = input.AudioPath?.Trim(), DuongDanAnh = input.ImagePath?.Trim()
         };
         var docs = input.Documents.Select((d, index) => new NguLieuTaiLieu {

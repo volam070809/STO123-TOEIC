@@ -1,11 +1,20 @@
 import { Component, useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthState";
 import { apiRequest, API_BASE_URL } from "../../services/api";
+import AdminSectionStats from "../../components/admin/AdminSectionStats";
 import "../../styles/admin-vocabulary.css";
 
 const root = "/api/admin/vocabulary";
 const blankTopic = { tenChuDe: "", moTa: "", trangThai: "DANG_MO" };
 const blankWord = { word: "", nghia: "", phienAm: "", loaiTu: "", viDu: "", dichViDu: "", topicIds: [] };
+const partsOfSpeech = [
+  ["noun", "Danh từ"], ["verb", "Động từ"], ["adjective", "Tính từ"],
+  ["adverb", "Trạng từ"], ["pronoun", "Đại từ"], ["preposition", "Giới từ"],
+  ["conjunction", "Liên từ"], ["interjection", "Thán từ"],
+  ["determiner", "Từ hạn định"], ["article", "Mạo từ"],
+  ["modal verb", "Động từ khuyết thiếu"], ["phrasal verb", "Cụm động từ"],
+  ["phrase", "Cụm từ"], ["idiom", "Thành ngữ"]
+];
 const informationFields = [["word", "Từ vựng"], ["nghia", "Nghĩa tiếng Việt"], ["phienAm", "Phiên âm"],
   ["loaiTu", "Loại từ"], ["viDu", "Ví dụ"], ["dichViDu", "Dịch ví dụ"]];
 const missingInfo = word => ["phienAm", "loaiTu", "viDu", "dichViDu"].some(key => !word[key]?.trim());
@@ -41,6 +50,7 @@ function AdminVocabularyContent() {
   const [removeCover, setRemoveCover] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [coverVersion, setCoverVersion] = useState(0);
+  const [statsRevision, setStatsRevision] = useState(0);
   const [audioVersion, setAudioVersion] = useState(0);
   const [existingQuery, setExistingQuery] = useState("");
   const [existingWords, setExistingWords] = useState([]);
@@ -129,6 +139,7 @@ function AdminVocabularyContent() {
   }
   async function afterSaved(message) {
     setNotice(message);
+    setStatsRevision(value => value + 1);
     try { await updateLists(); }
     catch (e) { setError(`${message} Không tải lại được danh sách: ${e.message}`); }
   }
@@ -182,6 +193,10 @@ function AdminVocabularyContent() {
     if (!form.word?.trim() || !form.nghia?.trim() || !form.topicIds.length) {
       setError("Nhập từ, nghĩa và chọn ít nhất một chủ đề."); return;
     }
+    if (form.loaiTu && !partsOfSpeech.some(([value]) => value === form.loaiTu) &&
+        form.loaiTu !== drawer.item?.loaiTu) {
+      setError("Loại từ không hợp lệ. Hãy chọn một mục trong danh sách."); return;
+    }
     setBusy(true); setError(""); setNotice("");
     try {
       const id = drawer.item?.maTuVung;
@@ -208,6 +223,7 @@ function AdminVocabularyContent() {
       change("topicIds", [...form.topicIds, created.maChuDe]);
       setNewTopicName("");
       await loadOptions();
+      setStatsRevision(value => value + 1);
       setNotice("Đã tạo chủ đề. Nhấn Lưu để liên kết với từ này.");
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
@@ -250,6 +266,7 @@ function AdminVocabularyContent() {
       <p>{topic ? "Chọn từ để xem thông tin và quản lý âm thanh." : "Chọn một chủ đề để quản lý từ vựng."}</p>
     </div><button className="av-primary" type="button" onClick={() => topic ? editWord() : editTopic()}>+ Thêm {topic ? "từ vựng" : "chủ đề"}</button></header>
 
+    <AdminSectionStats endpoint={topic ? `vocabulary/topics/${topic.maChuDe}` : "vocabulary"} title={topic ? "Thống kê chủ đề" : "Thống kê từ vựng"} revision={statsRevision} />
     {error && <div className="av-alert" role="alert"><span>{error}</span><button type="button" onClick={retryLoad}>Thử tải lại</button><button type="button" onClick={() => setError("")}>Đóng</button></div>}
     {notice && <div className="av-success" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice("")}>Đóng</button></div>}
 
@@ -277,7 +294,7 @@ function AdminVocabularyContent() {
       </> : <>
         {!drawer.item && <section className="av-existing"><h3>Thêm từ đã có</h3><input type="search" placeholder="Tìm từ trong kho..." value={existingQuery} onChange={event => setExistingQuery(event.target.value)} />{existingWords.map(word => <button type="button" disabled={busy} key={word.maTuVung} onClick={() => linkExisting(word)}>{word.word} — {word.nghia}</button>)}<p>Hoặc nhập từ mới bên dưới.</p></section>}
         {drawer.item && <details className="av-section" open={sections.audio} onToggle={event => sectionToggle("audio", event)}><summary>Âm thanh <span>{form.hasAudio && form.hasExampleAudio ? "Đã đủ" : "Cần bổ sung"}</span></summary>{[["word", "Âm thanh từ", form.hasAudio], ["example", "Âm thanh ví dụ", form.hasExampleAudio]].map(([kind, label, exists]) => <div className="av-audio" key={kind}><div><strong>{label}</strong><span className={exists ? "av-ok" : "av-missing"}>{exists ? "Đã có MP3" : "Chưa có MP3"}</span></div>{exists && <AuthorizedAudio token={token} url={`${API_BASE_URL}${root}/words/${form.maTuVung}/audio/${kind}`} version={audioVersion} />}<div className="av-audio-actions"><label className="av-file-button">{exists ? "Thay MP3" : "Thêm MP3"}<input type="file" accept="audio/mpeg,.mp3" disabled={busy} onChange={event => { const file = event.target.files?.[0]; if (file) audioAction(kind, file); event.target.value = ""; }} /></label>{exists && <button className="av-text-button" type="button" disabled={busy} onClick={() => audioAction(kind, null)}>Xóa</button>}</div></div>)}</details>}
-        <details className="av-section" open={sections.info} onToggle={event => sectionToggle("info", event)}><summary>Thông tin từ vựng <span>{missingInfo(form) ? "Thiếu thông tin" : "Đầy đủ"}</span></summary><div className="av-section-body">{informationFields.map(([key, label]) => <label key={key}>{label}<input value={form[key] || ""} maxLength={key === "nghia" ? 256 : key === "viDu" || key === "dichViDu" ? 512 : key === "loaiTu" ? 32 : 128} onChange={event => change(key, event.target.value)} /></label>)}</div></details>
+        <details className="av-section" open={sections.info} onToggle={event => sectionToggle("info", event)}><summary>Thông tin từ vựng <span>{missingInfo(form) ? "Thiếu thông tin" : "Đầy đủ"}</span></summary><div className="av-section-body">{informationFields.map(([key, label]) => <label key={key}>{label}{key === "loaiTu" ? <select value={form.loaiTu || ""} onChange={event => change(key, event.target.value)}><option value="">Chọn loại từ</option>{form.loaiTu && !partsOfSpeech.some(([value]) => value === form.loaiTu) && <option value={form.loaiTu}>{form.loaiTu} (dữ liệu hiện có)</option>}{partsOfSpeech.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select> : <input value={form[key] || ""} maxLength={key === "nghia" ? 256 : key === "viDu" || key === "dichViDu" ? 512 : 128} onChange={event => change(key, event.target.value)} />}</label>)}</div></details>
         <details className="av-section" open={sections.topics} onToggle={event => sectionToggle("topics", event)}><summary>Chủ đề liên kết <span>{form.topicIds.length} chủ đề</span></summary><div className="av-section-body">{topicOptions.map(option => <label className="av-check" key={option.maChuDe}><input type="checkbox" checked={form.topicIds.includes(option.maChuDe)} onChange={event => change("topicIds", event.target.checked ? [...form.topicIds, option.maChuDe] : form.topicIds.filter(id => id !== option.maChuDe))} />{option.tenChuDe}</label>)}<div className="av-inline-create"><input placeholder="Tên chủ đề mới" value={newTopicName} maxLength={128} onChange={event => setNewTopicName(event.target.value)} /><button type="button" disabled={busy || !newTopicName.trim()} onClick={createLinkedTopic}>Thêm</button></div>{drawer.item && <button className="av-text-button" type="button" disabled={busy} onClick={unlink}>Gỡ khỏi chủ đề đang xem</button>}</div></details>
       </>}</div>
       <footer className="av-actions"><button type="button" onClick={() => close()}>Hủy</button><button className="av-primary" type="button" disabled={busy} onClick={drawer.type === "topic" ? saveTopic : saveWord}>{busy ? "Đang lưu..." : "Lưu"}</button></footer>

@@ -74,6 +74,8 @@
 .exam-author-form label { display: grid; gap: 6px; margin-bottom: 12px; font-weight: 600; }
 .exam-author-form input, .exam-author-form select, .exam-author-form textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font: inherit; background: white; }
 .exam-author-form textarea { resize: vertical; }
+.exam-author-form [aria-invalid="true"] { border-color: #c83b32; background: #fffafa; }
+.exam-field-error { display: block; color: #b42318; font-size: 12px; line-height: 1.4; font-weight: 600; }
 .exam-author-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
 .exam-author-file { border: 1px dashed #b9c9dc; border-radius: 9px; padding: 10px; }
 .exam-author-file small { font-weight: 400; color: #64748b; overflow-wrap: anywhere; }

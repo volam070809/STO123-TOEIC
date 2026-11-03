@@ -192,7 +192,7 @@ export const adminContentApi = {
 
 export const learningApi = {
   step: (courseId, stepId, token) => apiRequest(`/api/learning/courses/${courseId}/steps/${stepId}`, { token }),
-  complete: (courseId, stepId, token) => apiRequest(`/api/learning/courses/${courseId}/steps/${stepId}/completion`, { method: "PUT", token }),
+  complete: (courseId, stepId, token, resourceId = null, completionEvent = null) => apiRequest(`/api/learning/courses/${courseId}/steps/${stepId}/completion`, { method: "PUT", token, body: { resourceId, completionEvent } }),
   exercise: (courseId, stepId, token) => apiRequest(`/api/learning/courses/${courseId}/steps/${stepId}/exercise`, { token }),
   exerciseHistory: (courseId, stepId, token) => apiRequest(`/api/learning/courses/${courseId}/steps/${stepId}/exercise/attempts`, { token }),
   startExercise: (courseId, stepId, restartFromAttemptId, token) => apiRequest(`/api/learning/courses/${courseId}/steps/${stepId}/exercise/attempts`, { method: "POST", body: { restartFromAttemptId }, token }),

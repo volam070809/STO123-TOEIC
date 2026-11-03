@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import { adminCourseApi } from "../../services/adminCourseApi";
+import AdminSectionStats from "../../components/admin/AdminSectionStats";
 import { AdminMessage } from "./AdminLearnersPage";
 import { formatDate, formatMoney, statusLabel, statusTone } from "./adminFormat";
 
@@ -85,6 +86,7 @@ export default function AdminCourseDetailPage() {
 
     <nav className="admin-course-workflow" aria-label="Quy trình quản lý khóa học"><div><span>01</span><strong>Tổng quan</strong><small>Thông tin và trạng thái</small></div><Link to={`/admin/courses/${courseId}/content`}><span>02</span><strong>Biên soạn Studio →</strong><small>Unit, Lesson, hoạt động và tài nguyên</small></Link><Link to={`/courses/${courseId}`}><span>03</span><strong>Xem trang khóa học →</strong><small>Kiểm tra hành trình học viên</small></Link></nav>
 
+    <AdminSectionStats endpoint={`courses/${courseId}`} title="Tiến độ và kết quả khóa học" revision={revision} />
     <div className="admin-stat-grid"><Stat label="Đơn vị" value={course.units.length} note="unit trong khóa học" />
       <Stat label="Bài học" value={lessonCount} note="lesson đã cấu hình" />
       <Stat label="Bước lộ trình" value={stepCount} note="nội dung học tập" />

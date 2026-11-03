@@ -56,7 +56,8 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
         }).ToArray();
         if (!ExamSourceValidator.ValidMedia(resource, part) ||
             !ExamSourceValidator.ValidDocuments(part, docs) ||
-            part != 7 && docs.Length > 0)
+            part != 7 && docs.Length > 0 ||
+            part == 6 && !QuestionContentRules.ValidPart6(resource.NoiDungDich))
             return BadRequest(new { code = "INVALID_RESOURCE", message = "Ngữ liệu không đúng cấu trúc Part." });
         var paths = new[] { resource.DuongDanAudio, resource.DuongDanAnh }
             .Concat(docs.Select(d => d.DuongDanAnh)).Where(x => !string.IsNullOrWhiteSpace(x))
@@ -172,6 +173,9 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
                     .Select(q => q.MaPartNavigation.SoPart).FirstOrDefaultAsync(token);
                 group.NoiDungNguLieu = request.Text?.Trim();
                 group.NoiDungDich = request.Translation?.Trim();
+                if (part == 6 && !QuestionContentRules.ValidPart6(group.NoiDungDich))
+                    throw new ExamProblem("PART6_TRANSLATION_REQUIRED",
+                        "Cần bản dịch cho đủ bốn câu Part 6 theo thứ tự [1]–[4].");
                 if (!ExamSourceValidator.ValidMedia(group, part))
                     throw new ExamProblem("INVALID_GROUP_CONTENT",
                         "Ngữ liệu chưa đủ nội dung bắt buộc cho Part này.");

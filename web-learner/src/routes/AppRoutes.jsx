@@ -57,6 +57,7 @@ const AdminExamCriteriaPage = lazy(adminRouteModules.examCriteria);
 const AdminManualExamPage = lazy(adminRouteModules.manualExam);
 const AdminCurriculumPage = lazy(adminRouteModules.curriculum);
 const AdminVocabularyPage = lazy(adminRouteModules.vocabulary);
+const AdminContactSettingsPage = lazy(adminRouteModules.contactSettings);
 const CourseStepPage = lazy(() => import("../pages/exam/CourseStepPage"));
 
 const MANAGEMENT_ROLES = ["ADMIN_QUAN_LY"];
@@ -175,6 +176,7 @@ export default function AppRoutes() {
       <Route path="content/media" element={<Navigate to="/admin/content/questions/exams" replace />} />
       <Route path="content/exam-criteria" element={<AdminExamCriteriaPage />} />
       <Route path="vocabulary" element={<AdminVocabularyPage />} />
+      <Route path="contact-support" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminContactSettingsPage /></AdminRoute>} />
       <Route path="packages" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackagesPage /></AdminRoute>} />
       <Route path="packages/new" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackageCreatePage /></AdminRoute>} />
       <Route path="packages/:packageId/edit" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackageEditPage /></AdminRoute>} />

@@ -8,6 +8,8 @@ import "../../styles/admin-content.css";
 
 function Resource({ courseId, stepId, item, token, onReady }) {
   const [state, setState] = useState({ loading: true, url: "", error: "" });
+  const [pdfUrl, setPdfUrl] = useState("");
+  const [documentDownloaded, setDocumentDownloaded] = useState(false);
   const videoRef = useRef(null); const resumeRef = useRef(null);
   useEffect(() => {
     let alive = true; let timer;
@@ -23,6 +25,21 @@ function Resource({ courseId, stepId, item, token, onReady }) {
     }
     refresh(); return () => { alive = false; clearTimeout(timer); };
   }, [courseId, stepId, item.id, token]);
+  useEffect(() => {
+    if (item.kind !== "PDF" || !state.url) return undefined;
+    let active = true;
+    let objectUrl = "";
+    setPdfUrl("");
+    fetch(state.url).then(response => {
+      if (!response.ok) throw new Error("Không mở được tài liệu PDF.");
+      return response.blob();
+    }).then(blob => {
+      if (!active) return;
+      objectUrl = URL.createObjectURL(blob);
+      setPdfUrl(objectUrl);
+    }).catch(() => { if (active) setState(current => ({ ...current, error: "Không hiển thị được tài liệu PDF. Vui lòng thử lại." })); });
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [item.kind, state.url]);
   function resumeVideo() {
     if (!videoRef.current || !resumeRef.current) return;
     videoRef.current.currentTime = resumeRef.current.time;
@@ -38,22 +55,26 @@ function Resource({ courseId, stepId, item, token, onReady }) {
       link.href = blobUrl; link.download = item.name;
       document.body.append(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-      onReady();
+      setDocumentDownloaded(true);
     } catch { setState(x => ({ ...x, error: "Không tải được tài liệu. Vui lòng thử lại." })); }
   }
   const office = item.kind === "WORD" || item.kind === "POWERPOINT" || item.kind === "EXCEL";
   return <li className="course-resource"><div><strong>{item.name}</strong><small>{item.kind}</small></div>
     {state.loading && <p role="status">Đang chuẩn bị tài nguyên…</p>}
+    {item.kind === "PDF" && state.url && !pdfUrl && !state.error && <p role="status">Đang mở tài liệu PDF…</p>}
     {state.error && <p role="alert">{state.error}</p>}
     {state.url && <div className="course-resource-preview">
-      {item.kind === "HINH_ANH" ? <img src={state.url} alt={item.name} onLoad={onReady}/> :
-        item.kind === "AUDIO" ? <audio src={state.url} controls preload="metadata" onLoadedMetadata={onReady}/> :
+      {item.kind === "HINH_ANH" ? <img src={state.url} alt={item.name} onLoad={() => onReady(item.id, "DISPLAYED")}/> :
+        item.kind === "AUDIO" ? <audio src={state.url} controls preload="metadata" onEnded={() => onReady(item.id, "ENDED")}/> :
           item.kind === "VIDEO" ? <video ref={videoRef} src={state.url} controls playsInline preload="metadata"
-            onLoadedMetadata={() => { resumeVideo(); onReady(); }} onError={() => setState(x => ({ ...x, error: "Không phát được video. Vui lòng tải lại bài học." }))}/> :
-            item.kind === "PDF" ? <iframe src={state.url} title={`Xem PDF: ${item.name}`} onLoad={onReady}/> : null}
+            onLoadedMetadata={resumeVideo} onEnded={() => onReady(item.id, "ENDED")}
+            onError={() => setState(x => ({ ...x, error: "Không phát được video. Vui lòng tải lại bài học." }))}/> :
+            item.kind === "PDF" && pdfUrl ? <iframe src={pdfUrl} title={`Xem PDF: ${item.name}`} onLoad={() => onReady(item.id, "DISPLAYED")}/> : null}
       {office && <p>Tài liệu Office chưa có bản xem trước trong ứng dụng. Tải tệp để mở bằng phần mềm phù hợp.</p>}
       {office ? <button type="button" onClick={openDocument}>Tải tệp {item.name}</button> :
-        <a href={`${state.url}&download=true`} download={item.name}>Tải tệp {item.name}</a>}</div>}
+        <a href={`${state.url}&download=true`} download={item.name}>Tải tệp {item.name}</a>}
+      {office && documentDownloaded && <button type="button" onClick={() => onReady(item.id, "DISPLAYED")}>
+        Tôi đã mở tài liệu</button>}</div>}
   </li>;
 }
 
@@ -76,8 +97,32 @@ function ExercisePlayer({ courseId, stepId, token, onComplete }) {
   async function check() { if (!choice || busy || !data?.attemptId) return; setBusy(true); setError("");
     try { const result = await learningApi.checkExercise(courseId, stepId, data.attemptId,
       { questionId: question.id, choice, requestKey: crypto.randomUUID() }, token);
-      setFeedback(result); setData(await learningApi.exercise(courseId, stepId, token)); if (result.completed) onComplete(); }
+      setFeedback(result); setData(await learningApi.exercise(courseId, stepId, token)); }
     catch (e) { setError(e.data?.message || e.message); } finally { setBusy(false); } }
+  async function finish() {
+    if (busy || !data?.attemptId || data.completed) return;
+    setBusy(true); setError("");
+    try {
+      await learningApi.finishExercise(courseId, stepId, data.attemptId, token);
+      setData(current => ({ ...current, completed: true }));
+      onComplete();
+      try {
+        const [latest, attempts] = await Promise.all([
+          learningApi.exercise(courseId, stepId, token),
+          learningApi.exerciseHistory(courseId, stepId, token)
+        ]);
+        setData(latest); setHistory(attempts);
+      } catch { setError("Bài đã nộp thành công. Không tải lại được chi tiết; hãy mở lại bài học để xem."); }
+    } catch (e) {
+      try {
+        const latest = await learningApi.exercise(courseId, stepId, token);
+        setData(latest);
+        if (latest.completed) { onComplete(); setError("Bài đã nộp thành công; kết nối bị gián đoạn khi xác nhận."); }
+        else setError(e.data?.message || e.message || "Chưa nộp được bài. Hãy thử lại.");
+      } catch { setError("Chưa xác minh được trạng thái nộp bài. Mở lại bài học để kiểm tra trước khi thử tiếp."); }
+    }
+    finally { setBusy(false); }
+  }
   async function seeAnswer() { try { setAnswer(await learningApi.exerciseAnswer(courseId, stepId, data.attemptId, question.id, token)); }
     catch (e) { setError(e.data?.message || e.message); } }
   function navigate(next) { const id = data.questions[next]?.id;
@@ -87,15 +132,20 @@ function ExercisePlayer({ courseId, stepId, token, onComplete }) {
   if (error && !data) return <p role="alert">{error}</p>;
   if (!data) return <p role="status">Đang tải bài tập…</p>;
   const checkedCount = new Set(data.checks.map(x => x.questionId)).size;
+  const progressPercent = data.completed ? 100 : data.questions.length ?
+    Math.min(99, Math.round(100 * checkedCount / data.questions.length)) : 0;
   return <section className="course-exercise"><div className="course-exercise-head"><div><span className="course-player-eyebrow">LUYỆN TẬP TƯƠNG TÁC</span><h2>Trả lời từng câu hỏi</h2></div><span>{checkedCount}/{data.questions.length} câu đã kiểm tra</span></div><details><summary>Lịch sử làm bài ({history.length})</summary>
     <ul>{history.map(x => <li key={x.id}>Lượt {x.number} · phiên bản {x.versionId} · {x.status === "HOAN_THANH" ? "Đã hoàn thành" : "Đang làm"}</li>)}</ul></details>
-    <p role="status">Đã kiểm tra {checkedCount}/{data.questions.length} câu · {data.questions.length ? Math.round(100 * checkedCount / data.questions.length) : 0}%</p>
-    <progress max={data.questions.length || 1} value={checkedCount}/>
+    <p role="status">Đã kiểm tra {checkedCount}/{data.questions.length} câu · {progressPercent}%{!data.completed && checkedCount === data.questions.length && checkedCount > 0 ? " · Hãy nộp bài để hoàn thành" : ""}</p>
+    <progress max={100} value={progressPercent}/>
     <nav aria-label="Câu hỏi">{data.questions.map((q, i) => <button key={q.id}
     className={`${index === i ? "is-current" : ""} ${data.checks.filter(c => c.questionId === q.id).at(-1)?.correct === true ? "is-correct" :
       data.checks.some(c => c.questionId === q.id) ? "is-incorrect" : ""}`} onClick={() => navigate(i)}>{i + 1}</button>)}</nav>
     {data.completed && <p role="status">Đã hoàn thành. Bạn có thể xem lại hoặc làm lượt mới.</p>}
     {!data.attemptId || data.completed ? <button className="primary-button" disabled={busy} onClick={start}>Làm lượt mới</button> : null}
+    {!data.completed && data.attemptId && <button className="primary-button" type="button"
+      disabled={busy || checkedCount !== data.questions.length || !checkedCount} onClick={finish}>
+      {busy ? "Đang xử lý…" : "Nộp bài để hoàn thành"}</button>}
     {question && <div className={question.passage ? "course-exercise-columns" : "course-exercise-single"}>
       {question.passage && <div className="course-exercise-passage"><span className="course-player-eyebrow">NGỮ LIỆU</span><p>{question.passage}</p></div>}
       <div className="course-question-panel"><span className="course-player-eyebrow">CÂU HỎI {index + 1} / {data.questions.length}</span><h2>{question.content}</h2>{["a", "b", "c", "d"].map(letter => <label className={`course-exercise-option ${choice === letter.toUpperCase() ? "is-selected" : ""} ${feedback && choice === letter.toUpperCase() ? feedback.correct ? "is-correct" : "is-incorrect" : ""}`} key={letter}>
@@ -118,6 +168,7 @@ export default function CourseStepPage() {
   const [neighbors, setNeighbors] = useState({ previous: null, next: null });
   const [completion, setCompletion] = useState({ done: false, busy: false, error: "" });
   const completionRef = useRef({ key: "", status: "idle" });
+  const lastCompletionEvent = useRef({ resourceId: null, completionEvent: null });
   useEffect(() => { let live = true;
     learningApi.step(courseId, stepId, token).then(data => live && setState({ courseId, stepId, loading: false, data, error: "" }))
       .catch(e => live && setState({ courseId, stepId, loading: false, data: null,
@@ -136,14 +187,18 @@ export default function CourseStepPage() {
   const currentState = state.courseId === courseId && state.stepId === stepId ? state : { loading: true, data: null, error: "" };
   const item = currentState.data;
   const courseReturnPath = item?.unitId ? `/courses/${courseId}?unit=${item.unitId}&lesson=${item.lessonId}` : `/courses/${courseId}`;
-  async function complete() {
+  async function complete(resourceId = null, completionEvent = null) {
     const key = `${courseId}:${stepId}`;
-    if (completionRef.current.key !== key) completionRef.current = { key, status: "idle" };
+    if (completionRef.current.key !== key) {
+      completionRef.current = { key, status: "idle" };
+      lastCompletionEvent.current = { resourceId: null, completionEvent: null };
+    }
     if (completionRef.current.status === "pending" || completionRef.current.status === "done") return;
+    lastCompletionEvent.current = { resourceId, completionEvent };
     completionRef.current.status = "pending";
     setCompletion({ done: false, busy: true, error: "" });
     try {
-      await learningApi.complete(courseId, stepId, token);
+      await learningApi.complete(courseId, stepId, token, resourceId, completionEvent);
       if (completionRef.current.key !== key) return;
       completionRef.current = { key, status: "done" };
       setCompletion({ done: true, busy: false, error: "" });
@@ -156,7 +211,7 @@ export default function CourseStepPage() {
   useEffect(() => {
     if (item?.type === "VOCABULARY" || item?.type === "LECTURE" && !item.lecture?.resources?.length) complete();
   }, [item, courseId, stepId, token]);
-  return <SiteLayout><main className="site-container course-step-page"><Link className="course-player-back" to={courseReturnPath}>← Trở về lộ trình khóa học</Link>
+  return <SiteLayout aiContext={item ? { type: "LESSON", courseId: Number(courseId), stepId: Number(stepId) } : null}><main className="site-container course-step-page"><Link className="course-player-back" to={courseReturnPath}>← Trở về lộ trình khóa học</Link>
     {currentState.loading ? <p role="status">Đang tải bài học…</p> : currentState.error ? <p role="alert">{currentState.error}</p> : <article>
       <header className="course-player-header"><p className="course-step-breadcrumb">{item.unitName} <span>›</span> {item.lessonName} <span>›</span> {item.title}</p><span className="course-player-eyebrow">{item.type === "EXERCISE" ? "BÀI TẬP" : "NỘI DUNG HỌC"}</span><h1>{item.title}</h1></header>
       <div className="course-player-workspace"><aside className="course-player-context"><span className="course-player-eyebrow">BẠN ĐANG HỌC</span><strong>{item.unitName}</strong><p>{item.lessonName}</p><div className="course-player-context-current">{item.title}</div><nav aria-label="Chuyển hoạt động">{neighbors.previous && <Link to={`/courses/${courseId}/steps/${neighbors.previous.id}`}>← {neighbors.previous.title}</Link>}{neighbors.next && <Link to={`/courses/${courseId}/steps/${neighbors.next.id}`}>{neighbors.next.title} →</Link>}</nav><Link className="course-player-context-return" to={courseReturnPath}>Xem toàn bộ lộ trình ↗</Link></aside><div className="course-player-content">
@@ -175,7 +230,8 @@ export default function CourseStepPage() {
       </div></div>
     </article>}
     {item && item.type !== "EXERCISE" && <div className="course-completion">
-      {completion.error && <p role="alert">{completion.error} <button type="button" onClick={complete}>Thử lại</button></p>}{completion.done && <p role="status">Tiến độ đã lưu. Quay về khóa học để xem cập nhật.</p>}</div>}
+      {completion.error && <p role="alert">{completion.error} <button type="button" onClick={() => complete(
+        lastCompletionEvent.current.resourceId, lastCompletionEvent.current.completionEvent)}>Thử lưu lại</button></p>}{completion.done && <p role="status">Tiến độ đã lưu. Quay về khóa học để xem cập nhật.</p>}</div>}
     {item && <nav className="course-player-navigation" aria-label="Điều hướng hoạt động">
       {neighbors.previous ? <Link to={`/courses/${courseId}/steps/${neighbors.previous.id}`}>← {neighbors.previous.title}</Link> : <span/>}
       {neighbors.next ? <Link to={`/courses/${courseId}/steps/${neighbors.next.id}`}>{neighbors.next.title} →</Link> : <Link to={courseReturnPath}>Về khóa học</Link>}

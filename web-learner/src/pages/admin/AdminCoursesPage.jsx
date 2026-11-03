@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import { adminCourseApi } from "../../services/adminCourseApi";
+import AdminSectionStats from "../../components/admin/AdminSectionStats";
 import { AdminMessage } from "./AdminLearnersPage";
 import { courseStatuses, formatDate, formatMoney, statusLabel, statusTone } from "./adminFormat";
 
@@ -48,6 +49,7 @@ export default function AdminCoursesPage() {
         {canManage && <Link className="admin-button" to="/admin/courses/new">+ Thêm khóa học</Link>}</div>
     </div>
 
+    <AdminSectionStats endpoint="courses" title="Thống kê khóa học" revision={revision} />
     {location.state?.notice && <div className="admin-feedback is-success" role="status">{location.state.notice}</div>}
     {!canManage && <div className="admin-feedback is-info">Admin Nội dung có quyền xem cấu trúc khóa học. Các thao tác thay đổi khóa học chỉ dành cho Admin Quản lý.</div>}
 

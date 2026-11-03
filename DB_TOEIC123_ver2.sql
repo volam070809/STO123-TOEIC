@@ -38,6 +38,37 @@ CREATE TABLE dbo.NguoiDung(
 );
 GO
 
+CREATE TABLE dbo.AiHoiThoai(
+    MaHoiThoai bigint identity(1,1) not null constraint PK_AiHoiThoai primary key,
+    MaHocVien int not null,
+    TieuDe nvarchar(120) not null,
+    TaoLuc datetime2(3) not null constraint DF_AiHoiThoai_TaoLuc default SYSUTCDATETIME(),
+    CapNhatLuc datetime2(3) not null constraint DF_AiHoiThoai_CapNhatLuc default SYSUTCDATETIME(),
+    constraint FK_AiHoiThoai_NguoiDung foreign key (MaHocVien) references dbo.NguoiDung(MaNguoiDung)
+);
+GO
+CREATE INDEX IX_AiHoiThoai_HocVien_CapNhat ON dbo.AiHoiThoai(MaHocVien, CapNhatLuc DESC, MaHoiThoai DESC);
+GO
+
+CREATE TABLE dbo.AiTinNhan(
+    MaTinNhan bigint identity(1,1) not null constraint PK_AiTinNhan primary key,
+    MaHoiThoai bigint not null,
+    ThuTu int not null,
+    VaiTro varchar(8) not null,
+    NoiDung nvarchar(max) not null,
+    MaYeuCau uniqueidentifier null,
+    TaoLuc datetime2(3) not null constraint DF_AiTinNhan_TaoLuc default SYSUTCDATETIME(),
+    constraint FK_AiTinNhan_HoiThoai foreign key (MaHoiThoai) references dbo.AiHoiThoai(MaHoiThoai) on delete cascade,
+    constraint CK_AiTinNhan_ThuTu check (ThuTu > 0),
+    constraint CK_AiTinNhan_VaiTro check ((VaiTro = 'USER' and MaYeuCau is not null) or (VaiTro = 'MODEL' and MaYeuCau is null)),
+    constraint CK_AiTinNhan_NoiDung check (len(ltrim(rtrim(NoiDung))) between 1 and 12000)
+);
+GO
+CREATE UNIQUE INDEX UX_AiTinNhan_HoiThoai_ThuTu ON dbo.AiTinNhan(MaHoiThoai, ThuTu);
+GO
+CREATE UNIQUE INDEX UX_AiTinNhan_HoiThoai_YeuCau ON dbo.AiTinNhan(MaHoiThoai, MaYeuCau) WHERE MaYeuCau IS NOT NULL;
+GO
+
 CREATE TABLE dbo.XacThucDangNhap(
     MaXacThuc int primary key identity(1,1),
     MaNguoiDung int not null unique foreign key references NguoiDung(MaNguoiDung),

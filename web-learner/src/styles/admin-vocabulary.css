@@ -20,7 +20,7 @@
 .av-card-open{width:100%;display:block;text-align:left;padding:0;border:0;background:transparent;color:inherit}
 .av-card-open:hover h2{color:#175cd3}
 .av-cover{height:150px;display:grid;place-items:center;background:#e6eef8;color:#496e9c;font-size:20px;font-weight:800}
-.av-cover img,.av-topic-image img,.av-image-preview img{width:100%;height:100%;object-fit:cover}
+.av-cover img,.av-topic-image img,.av-image-preview img{display:block;width:100%;height:100%;max-width:100%;max-height:100%;min-width:0;min-height:0;object-fit:contain}
 .av-card-body{padding:16px 16px 12px}
 .av-card h2{min-height:45px;margin:0 0 6px;font-size:17px;line-height:1.35}
 .av-card-body .av-badge{margin-top:12px}
@@ -62,7 +62,7 @@
 .av-drawer-body>label,.av-section-body>label:not(.av-check),.av-field{display:flex;flex-direction:column;gap:7px;margin-bottom:16px;font-size:13px;font-weight:700}
 .av-drawer textarea{resize:vertical;min-height:80px}
 .av-field>small,.av-danger-zone small{color:#667085;font-weight:400;line-height:1.4}
-.av-image-preview{width:100%;height:155px;overflow:hidden;display:grid;place-items:center;border-radius:9px;background:#edf2f8;color:#667085;font-weight:500}
+.av-image-preview{width:100%;max-width:100%;height:155px;min-width:0;overflow:hidden;display:grid;place-items:center;border-radius:9px;background:#edf2f8;color:#667085;font-weight:500}
 .av-file-button{position:relative;width:max-content;cursor:pointer}
 .av-file-button input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 .av-field .av-text-button{align-self:flex-start}

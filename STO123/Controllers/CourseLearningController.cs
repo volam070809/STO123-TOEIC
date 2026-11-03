@@ -12,6 +12,7 @@ namespace STO123.Controllers;
 
 public sealed record ExerciseCheckRequest(int QuestionId, string Choice, Guid RequestKey);
 public sealed record StartExerciseRequest(long? RestartFromAttemptId);
+public sealed record ResourceCompletionRequest(int? ResourceId, string? CompletionEvent);
 
 [ApiController]
 [Authorize(Roles = "HOC_VIEN")]
@@ -219,22 +220,18 @@ public sealed class CourseLearningController(ToeicDbContext db, LectureResourceS
         var total = await db.CauHoiBaiTapKhoaHoc.CountAsync(q => q.MaPhienBan == attempt.MaPhienBan, ct);
         var checkedQuestions = await db.LanKiemTraBaiTapKhoaHoc.Where(x => x.MaLuot == attemptId)
             .Select(x => x.MaCauHoi).Distinct().CountAsync(ct);
-        if (total > 0 && checkedQuestions == total)
+        if (db.Database.IsSqlServer())
         {
-            attempt.TrangThai = "HOAN_THANH";
-            attempt.HoanThanhLuc = DateTime.UtcNow;
-            await db.SaveChangesAsync(ct);
             var now = clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime;
-            if (db.Database.IsSqlServer())
-            {
-                await db.Database.ExecuteSqlInterpolatedAsync($@"IF EXISTS(SELECT 1 FROM dbo.TienDoBuocLoTrinh WITH(UPDLOCK,HOLDLOCK) WHERE MaDangKy={enrollment} AND MaBuoc={stepId})
-                    UPDATE dbo.TienDoBuocLoTrinh SET TrangThai='HOAN_THANH',TyLeHoanThanh=100,CapNhatLuc={now} WHERE MaDangKy={enrollment} AND MaBuoc={stepId} AND MaNguoiDung={LearnerId};
-                    ELSE INSERT dbo.TienDoBuocLoTrinh(MaNguoiDung,MaDangKy,MaBuoc,TrangThai,TyLeHoanThanh,CapNhatLuc)
-                    VALUES({LearnerId},{enrollment},{stepId},'HOAN_THANH',100,{now});", ct);
-            }
+            var percent = total > 0 ? (byte)Math.Min(99, checkedQuestions * 100 / total) : (byte)0;
+            await db.Database.ExecuteSqlInterpolatedAsync($@"IF EXISTS(SELECT 1 FROM dbo.TienDoBuocLoTrinh WITH(UPDLOCK,HOLDLOCK) WHERE MaDangKy={enrollment} AND MaBuoc={stepId})
+                UPDATE dbo.TienDoBuocLoTrinh SET TrangThai='DANG_LAM',TyLeHoanThanh={percent},CapNhatLuc={now}
+                WHERE MaDangKy={enrollment} AND MaBuoc={stepId} AND MaNguoiDung={LearnerId} AND TrangThai<>'HOAN_THANH';
+                ELSE INSERT dbo.TienDoBuocLoTrinh(MaNguoiDung,MaDangKy,MaBuoc,TrangThai,TyLeHoanThanh,CapNhatLuc)
+                VALUES({LearnerId},{enrollment},{stepId},'DANG_LAM',{percent},{now});", ct);
         }
         await tx.CommitAsync(ct);
-        return Ok(new { correct, choice = request.Choice, checkedCount = checkedQuestions, total, completed = total > 0 && checkedQuestions == total });
+        return Ok(new { correct, choice = request.Choice, checkedCount = checkedQuestions, total, completed = false });
     }
 
     [HttpGet("{stepId:int}/exercise/attempts/{attemptId:long}/questions/{questionId:int}/answer")]
@@ -272,7 +269,8 @@ public sealed class CourseLearningController(ToeicDbContext db, LectureResourceS
     }
 
     [HttpPut("{stepId:int}/completion")]
-    public async Task<IActionResult> Complete(int courseId, int stepId, CancellationToken ct)
+    public async Task<IActionResult> Complete(int courseId, int stepId, CancellationToken ct,
+        [FromBody] ResourceCompletionRequest? request = null)
     {
         if (LearnerId <= 0 || !await HasAccess(courseId, ct)) return Forbid();
         var step = await db.BuocLoTrinh.AsNoTracking().Where(x => x.MaBuoc == stepId && !x.IsArchived &&
@@ -288,6 +286,26 @@ public sealed class CourseLearningController(ToeicDbContext db, LectureResourceS
             (x.MaDanhMuc == null || x.MaDanhMucNavigation!.TrangThai == "DANG_MO"), ct)) return NotFound();
         if (step.MaChuDe is { } topicId && !await db.ChuDe.AsNoTracking().AnyAsync(x =>
             x.MaChuDe == topicId && x.TrangThai == "DANG_MO", ct)) return NotFound();
+        if (step.MaBaiGiang is { } resourceLectureId)
+        {
+            var resourceCount = await db.TaiNguyenBaiGiang.AsNoTracking().CountAsync(x =>
+                x.MaBaiGiang == resourceLectureId && !x.IsArchived, ct);
+            if (resourceCount > 0)
+            {
+                if (request?.ResourceId is not { } resourceId)
+                    return Conflict(new { code = "RESOURCE_EVENT_REQUIRED", message = "Hãy mở tài nguyên để hoàn thành nội dung học." });
+                var kind = await db.TaiNguyenBaiGiang.AsNoTracking().Where(x =>
+                    x.MaTaiNguyen == resourceId && x.MaBaiGiang == resourceLectureId && !x.IsArchived)
+                    .Select(x => x.LoaiTaiNguyen).FirstOrDefaultAsync(ct);
+                if (kind is null) return NotFound(new { code = "RESOURCE_NOT_FOUND", message = "Không tìm thấy tài nguyên trong bài học." });
+                var requiredEvent = kind is "VIDEO" or "AUDIO" ? "ENDED" : "DISPLAYED";
+                if (request.CompletionEvent != requiredEvent)
+                    return Conflict(new { code = "RESOURCE_NOT_COMPLETED", message = kind == "VIDEO" ?
+                        "Video chỉ hoàn thành khi phát đến hết." : kind == "AUDIO" ?
+                        "Âm thanh chỉ hoàn thành khi phát đến hết." :
+                        "Tài liệu chỉ hoàn thành sau khi mở thành công." });
+            }
+        }
         var now = clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime;
         var enrollment = await db.DangKyGoiHoc.AsNoTracking().Where(e => e.MaNguoiDung == LearnerId &&
             e.TrangThai == "DANG_SU_DUNG" && e.NgayBatDau <= now && e.NgayKetThuc > now &&

@@ -6,6 +6,7 @@ import ExamQuestionForm from "./ExamQuestionForm";
 import ExamQuestionEdit from "./ExamQuestionEdit";
 import ExamGroupEdit from "./ExamGroupEdit";
 import QuestionContentPreview from "./QuestionContentPreview";
+import AdminSectionStats from "../../components/admin/AdminSectionStats";
 import "../../styles/admin-exams.css";
 import "../../styles/admin-question-demo.css";
 
@@ -97,6 +98,7 @@ export default function AdminQuestionBankPage({ bank }) {
         <Link to={`${base}/new`} className="admin-button">Thêm câu hỏi</Link>}</div>
     {noticeText && <p role="status" className="exam-alert exam-alert-success">{noticeText}</p>}
     {error && <p role="alert" className="exam-alert exam-alert-error">{error} <button type="button" onClick={reload}>Thử lại</button></p>}
+    <AdminSectionStats endpoint={`questions?bank=${bank}`} title={`Thống kê ${title.toLowerCase()}`} revision={revision} questionIds={detail?.questions?.map(question => question.id)} />
     {adding ? <ExamQuestionForm token={token} inline fixedBank={bank}
       onClose={() => navigate(base)} onSaved={result => navigate(`${base}/detail/${result.questionIds[0]}`,
         { state: { notice: "Đã lưu câu hỏi vào ngân hàng." } })} /> : questionId ? <>

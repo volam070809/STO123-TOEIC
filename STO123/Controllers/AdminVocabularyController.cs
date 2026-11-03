@@ -17,6 +17,12 @@ public sealed class AdminVocabularyController(ToeicDbContext db, BlobServiceClie
     public sealed record TopicInput(string TenChuDe, string? MoTa, string? TrangThai);
     public sealed record WordInput(string Word, string Nghia, string? PhienAm, string? LoaiTu, string? ViDu, string? DichViDu, int[] TopicIds);
     private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+    private static readonly HashSet<string> PartsOfSpeech = new(StringComparer.Ordinal) {
+        "noun", "verb", "adjective", "adverb", "pronoun", "preposition", "conjunction",
+        "interjection", "determiner", "article", "modal verb", "phrasal verb", "phrase", "idiom"
+    };
+    private static bool ValidPartOfSpeech(string? value, string? previous = null) =>
+        Clean(value) is not { } selected || PartsOfSpeech.Contains(selected) || selected == previous;
     private static IActionResult Error(string message) => new BadRequestObjectResult(new { message });
     private static string SafeName(string name) => Regex.Replace(name.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD), "[^a-z0-9]+", "-").Trim('-') is { Length: > 0 } s ? s : "word";
     private async Task<string> Upload(IFormFile file, string path, string mime, CancellationToken ct)
@@ -115,7 +121,7 @@ public sealed class AdminVocabularyController(ToeicDbContext db, BlobServiceClie
     [HttpPost("words")]
     public async Task<IActionResult> CreateWord(WordInput input, CancellationToken ct)
     {
-        if (!Valid(input) || !await ValidTopics(input.TopicIds, ct)) return Error("Thông tin từ vựng hoặc chủ đề không hợp lệ.");
+        if (!Valid(input) || !ValidPartOfSpeech(input.LoaiTu) || !await ValidTopics(input.TopicIds, ct)) return Error("Loại từ, thông tin từ vựng hoặc chủ đề không hợp lệ.");
         var word = new TuVung { TuVung1 = input.Word.Trim(), Nghia = input.Nghia.Trim(), PhienAm = Clean(input.PhienAm), LoaiTu = Clean(input.LoaiTu), ViDu = Clean(input.ViDu), DichViDu = Clean(input.DichViDu) };
         foreach (var id in input.TopicIds) word.TuVungChuDe.Add(new TuVungChuDe { MaChuDe = id });
         db.TuVung.Add(word); await db.SaveChangesAsync(ct); return Ok(new { word.MaTuVung });
@@ -126,8 +132,8 @@ public sealed class AdminVocabularyController(ToeicDbContext db, BlobServiceClie
     [HttpPut("words/{id:int}")]
     public async Task<IActionResult> EditWord(int id, WordInput input, CancellationToken ct)
     {
-        if (!Valid(input) || !await ValidTopics(input.TopicIds, ct)) return Error("Thông tin từ vựng hoặc chủ đề không hợp lệ.");
         var word = await db.TuVung.Include(x => x.TuVungChuDe).FirstOrDefaultAsync(x => x.MaTuVung == id, ct); if (word == null) return NotFound();
+        if (!Valid(input) || !ValidPartOfSpeech(input.LoaiTu, word.LoaiTu) || !await ValidTopics(input.TopicIds, ct)) return Error("Loại từ, thông tin từ vựng hoặc chủ đề không hợp lệ.");
         var removed = word.TuVungChuDe.Where(x => !input.TopicIds.Contains(x.MaChuDe)).ToList();
         if (removed.Count > 0 && await db.ChiTietLuyenTuVung.AnyAsync(x => x.MaTuVung == id && removed.Select(r => r.MaChuDe).Contains(x.MaChuDe), ct)) return Conflict(new { message = "Không thể gỡ chủ đề đã có lịch sử luyện tập." });
         word.TuVung1 = input.Word.Trim(); word.Nghia = input.Nghia.Trim(); word.PhienAm = Clean(input.PhienAm); word.LoaiTu = Clean(input.LoaiTu); word.ViDu = Clean(input.ViDu); word.DichViDu = Clean(input.DichViDu);

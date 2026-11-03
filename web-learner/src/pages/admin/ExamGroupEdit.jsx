@@ -3,6 +3,11 @@ import { apiRequest } from "../../services/api";
 import PartSevenDocumentForm from "./PartSevenDocumentForm";
 import { documentPayload, fromDocument, newDocument } from "./partSevenDocumentData";
 
+const part6Translation = (value, order) => value?.replace(/\r/g, "").split("\n")
+  .find(line => line.trim().startsWith(`[${order}]`))?.trim().slice(3).trim() || "";
+const withPart6Translation = (value, order, translation) =>
+  Array.from({ length: 4 }, (_, index) => `[${index + 1}] ${index + 1 === order ? translation : part6Translation(value, index + 1)}`).join("\n");
+
 export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
   const [value, setValue] = useState(() => ({
     text: unit.resource?.text || "", translation: unit.resource?.translation || "",
@@ -119,8 +124,14 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
       {[3, 4, 6, 7].includes(unit.part) && <details className="exam-optional-fields"><summary>Thông tin bổ sung</summary>
         {unit.part === 7 && <label>Ngữ liệu chung nếu có<textarea rows={3}
           value={value.text} onChange={event => change("text", event.target.value)} /></label>}
-        <label>Bản dịch nếu có<textarea rows={3}
-          value={value.translation} onChange={event => change("translation", event.target.value)} /></label>
+        {unit.part === 6 && value.translation && !part6Translation(value.translation, 1) &&
+          <p className="exam-alert">Bản dịch cũ: {value.translation}. Hãy nhập bản dịch riêng cho bốn câu trước khi lưu.</p>}
+        {unit.part === 6 ? Array.from({ length: 4 }, (_, index) => <label key={index}>Bản dịch câu {index + 1}
+          <textarea rows={2} value={part6Translation(value.translation, index + 1)}
+            onChange={event => change("translation", withPart6Translation(value.translation, index + 1, event.target.value))} />
+          {!part6Translation(value.translation, index + 1) && <small className="exam-field-error">Cần nhập bản dịch câu {index + 1}.</small>}
+        </label>) : <label>Bản dịch nếu có<textarea rows={3}
+          value={value.translation} onChange={event => change("translation", event.target.value)} /></label>}
       </details>}
       <div className="exam-editor-actions"><button type="button" onClick={cancel} disabled={busy}>Hủy sửa</button>
         <button className="admin-button" type="submit" disabled={busy || !dirty}>{busy ? "Đang lưu…" : "Lưu ngữ liệu"}</button></div>

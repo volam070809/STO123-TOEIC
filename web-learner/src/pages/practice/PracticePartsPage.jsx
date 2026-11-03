@@ -166,7 +166,7 @@ export default function PracticePartsPage() {
   const currentUnlocked = activeQuestion && (checked(activeQuestion, feedback) ||
     feedback[activeQuestion.questionOccurrenceId]?.viewed);
   const leave = () => { setAttempt(null); setSummary(null); setSearchParams({}); };
-  return <SiteLayout className="vocab-page"><SessionBoundary><div className="site-container practice-page practice-parts">
+  return <SiteLayout className="vocab-page" aiContext={attempt && activeQuestion ? { type: "PRACTICE", attemptId: attempt.attemptId, questionId: activeQuestion.questionOccurrenceId } : null}><SessionBoundary><div className="site-container practice-page practice-parts">
     <div className="page-heading"><span><Link to="/practice">Luyện tập</Link> / TOEIC theo Part</span>
       <h1>Luyện tập TOEIC theo Part</h1><p>Luyện không giới hạn thời gian, kiểm tra từng câu và xem lại lời giải.</p>
       <Link className="outline-button" to="/practice">← Quay lại chọn hình thức</Link></div>

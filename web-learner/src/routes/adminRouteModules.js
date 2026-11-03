@@ -7,6 +7,7 @@ export const adminRouteModules = {
   manualExam: () => import("../pages/admin/AdminManualExamPage"),
   curriculum: () => import("../pages/admin/AdminCurriculumPage"),
   vocabulary: () => import("../pages/admin/AdminVocabularyPage"),
+  contactSettings: () => import("../pages/admin/AdminContactSettingsPage"),
   dashboard: () => import("../pages/admin/AdminDashboardPage"),
   reports: () => import("../pages/admin/AdminReportsPage"),
   learners: () => import("../pages/admin/AdminLearnersPage"),
@@ -52,6 +53,7 @@ export function routeKey(path) {
   if (pathname === "/admin/content/media") return "questions";
   if (pathname === "/admin/content/exam-criteria") return "examCriteria";
   if (pathname === "/admin/vocabulary") return "vocabulary";
+  if (pathname === "/admin/contact-support") return "contactSettings";
   if (/^\/admin\/courses\/\d+\/content$/.test(pathname)) return "curriculum";
   if (pathname === "/admin/reports") return "reports";
   if (pathname === "/admin/learners") return "learners";

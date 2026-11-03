@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import { adminContentApi as api } from "../../services/adminContentApi";
 import { CourseCover } from "../exam/coursePresentation";
+import AdminSectionStats from "../../components/admin/AdminSectionStats";
 import "../../styles/admin-content.css";
 
 const emptyQuestion = () => ({ content: "", passage: "", a: "", b: "", c: "", d: "", correct: "A", explanation: "" });
@@ -69,6 +70,7 @@ export default function AdminCurriculumPage() {
   const [nameDialog, setNameDialog] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [studioTab, setStudioTab] = useState("curriculum");
+  const [statsRevision, setStatsRevision] = useState(0);
   const [editorTab, setEditorTab] = useState("info");
   const [editorDirty, setEditorDirty] = useState(false);
   const [search, setSearch] = useState("");
@@ -79,7 +81,7 @@ export default function AdminCurriculumPage() {
   const lesson = unit?.lessons.find(x => x.id === selected?.lessonId);
   const activity = lesson?.steps.find(x => x.id === selected?.stepId);
 
-  async function refresh() { const data = await api.outline(courseId, token); setOutline(data); setLoading(false); return data; }
+  async function refresh() { const data = await api.outline(courseId, token); setOutline(data); setLoading(false); setStatsRevision(value => value + 1); return data; }
   useEffect(() => { let live = true; Promise.all([api.outline(courseId, token), api.resourceCapabilities(token)])
     .then(([data, caps]) => { if (live) { setOutline(data); setCapabilities(caps); setLoading(false);
       if (data.units[0]) { const first = data.units.find(u => !u.isArchived) || data.units[0];
@@ -300,6 +302,7 @@ export default function AdminCurriculumPage() {
       u.lessons.some(l => l.name.toLocaleLowerCase("vi-VN").includes(query) || l.steps.some(s => s.title.toLocaleLowerCase("vi-VN").includes(query)))) || [];
   return <div className="admin-page builder-page"><div className="studio-breadcrumb"><Link to="/admin/courses">Khóa học</Link><span>›</span><span>{outline?.course.name || "Nội dung khóa học"}</span><span>›</span><strong>Nội dung khóa học</strong></div>
     {outline && <div className="studio-course-hero"><div className="studio-cover"><CourseCover course={outline.course}/></div><div className="studio-course-info"><div className="studio-title-line"><h1>{outline.course.name}</h1><span className="studio-status">{outline.course.status === "DANG_MO" ? "Đang mở" : "Đã đóng"}</span></div><p>{outline.course.description || "Nội dung và lộ trình học của khóa học."}</p><div className="studio-meta"><span>{outline.units.filter(u => !u.isArchived).length} Unit</span><span>{outline.units.reduce((sum, u) => sum + u.lessons.filter(l => !l.isArchived).length, 0)} Lesson</span><span>{outline.units.reduce((sum, u) => sum + u.lessons.reduce((n, l) => n + l.steps.filter(s => !s.isArchived).length, 0), 0)} hoạt động</span></div></div><button className="studio-hero-preview" onClick={() => showPreview(outline.units.filter(u => !u.isArchived).flatMap(u => u.lessons.filter(l => !l.isArchived).flatMap(s => s.steps.filter(step => !step.isArchived))), outline.course.name)}>◎ Xem như học viên</button></div>}
+    <AdminSectionStats endpoint={`lectures?courseId=${courseId}`} title="Thống kê bài giảng và tài nguyên" revision={statsRevision} />
     <nav className="studio-tabs" aria-label="Nội dung khóa học">{[["curriculum","Chương trình học"],["resources","Thư viện tài nguyên"],["exercises","Bài tập"],["progress","Tiến độ học viên"],["archived","Đã lưu trữ"]].map(([key,label]) => <button key={key} className={studioTab === key ? "is-active" : ""} onClick={() => { if ((!editorDirty && !files.length) || window.confirm("Bạn có thông tin hoặc tệp chưa lưu. Chuyển mục?")) setStudioTab(key); }}>{label}</button>)}</nav>
     {error && <p className="admin-feedback is-error" role="alert">{error}</p>}
     {notice && !error && <p className="admin-feedback is-success" role="status">{notice}</p>}

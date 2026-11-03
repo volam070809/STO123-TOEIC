@@ -183,7 +183,7 @@ export default function VocabularyPage() {
   const previewHasMore = !isLearner && guestPreviewHasMore(topic, words);
   const authReturnTo = vocabularyReturnTo(topic?.maChuDe);
 
-  return <SiteLayout className="vocab-page"><SessionBoundary><div className={"site-container" + (stage === "topics" ? " vocabulary-topics-page" : "")}>
+  return <SiteLayout className="vocab-page" aiContext={stage === "cards" && word ? { type: "VOCABULARY", wordId: word.maTuVung } : null}><SessionBoundary><div className={"site-container" + (stage === "topics" ? " vocabulary-topics-page" : "")}>
     <div className="page-heading">
       <span>Web / {isLearner ? "Học viên" : "Khách vãng lai"} / Từ vựng</span>
       <h1>{stage === "topics" ? "Từ vựng theo chủ đề" :

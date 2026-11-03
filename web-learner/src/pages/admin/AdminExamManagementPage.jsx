@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthState";
 import { Link, useNavigate } from "react-router-dom";
 import { apiRequest } from "../../services/api";
+import AdminSectionStats from "../../components/admin/AdminSectionStats";
 import QuestionContentPreview from "./QuestionContentPreview";
 import ExamQuestionEdit from "./ExamQuestionEdit";
 import ExamGroupEdit from "./ExamGroupEdit";
+import ExamQuestionForm from "./ExamQuestionForm";
 import "../../styles/admin-exams.css";
 
 const root = "/api/admin/content/exams";
@@ -203,6 +205,7 @@ export default function AdminExamManagementPage() {
 
   return <div className={detail ? "admin-page admin-exams exam-show-detail" : "admin-page admin-exams"}>
     <div className="admin-page-header"><div><h1>Quản lý đề thi</h1><p>Xem nội dung hiện hành và tiếp tục biên soạn đề chưa xuất bản.</p></div><div className="exam-unit-actions"><Link className="admin-button" to="/admin/content/exams/new">Soạn đề thủ công</Link><Link className="admin-button admin-button-secondary" to="/admin/content/exam-criteria">Cấu hình sinh đề</Link></div></div>
+    <AdminSectionStats endpoint={selectedId ? `exams/${selectedId}` : "exams"} title={selectedId ? "Thống kê đề thi" : "Thống kê các đề thi"} revision={revision} />
     {notice && <p className="exam-alert exam-alert-success" role="status">{notice}</p>}
     {error && <p className="exam-alert exam-alert-error" role="alert">{error} <button type="button" onClick={() => setRevision(v => v + 1)}>Thử lại</button></p>}
     {busy && <p className="exam-working" role="status">{busy}</p>}

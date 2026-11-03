@@ -125,6 +125,15 @@ public sealed class AdminCurriculumIntegrationTests
             INSERT INTO TaiNguyenBaiGiang (MaTaiNguyen,MaBaiGiang,LoaiTaiNguyen,TenTaiNguyen,DuongDanTep,ThuTu)
             VALUES (81,10,'PDF','Bài học','lecture-resources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pdf',1);
             """);
+        Assert.IsType<ConflictObjectResult>(await learner.Complete(1, stepId, default));
+        Assert.IsType<ConflictObjectResult>(await learner.Complete(1, stepId, default,
+            new ResourceCompletionRequest(81, "ENDED")));
+        await db.Database.ExecuteSqlRawAsync("""
+            INSERT INTO TaiNguyenBaiGiang (MaTaiNguyen,MaBaiGiang,LoaiTaiNguyen,TenTaiNguyen,DuongDanTep,ThuTu)
+            VALUES (83,10,'VIDEO','Video','lecture-resources/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.mp4',2);
+            """);
+        Assert.IsType<ConflictObjectResult>(await learner.Complete(1, stepId, default,
+            new ResourceCompletionRequest(83, "DISPLAYED")));
         var issued = Assert.IsType<OkObjectResult>(await learner.ResourceTicket(1, stepId, 81, default));
         var ticketUrl = JsonDocument.Parse(JsonSerializer.Serialize(issued.Value)).RootElement.GetProperty("url").GetString()!;
         var ticket = ticketUrl.Split("ticket=", 2)[1];
@@ -189,7 +198,9 @@ public sealed class AdminCurriculumIntegrationTests
             new ExerciseCheckRequest(questionId, "A", key), default));
         var repeatedJson = JsonDocument.Parse(JsonSerializer.Serialize(repeatedCheck.Value)).RootElement;
         Assert.Equal(1, repeatedJson.GetProperty("checkedCount").GetInt32());
-        Assert.True(repeatedJson.GetProperty("completed").GetBoolean());
+        Assert.False(repeatedJson.GetProperty("completed").GetBoolean());
+        Assert.Equal("DANG_LAM", await db.LuotBaiTapKhoaHoc.Where(x => x.MaLuot == attemptId)
+            .Select(x => x.TrangThai).SingleAsync());
         Assert.Equal(1, await db.LanKiemTraBaiTapKhoaHoc.CountAsync());
         Assert.IsType<ConflictObjectResult>(await learner.CheckExercise(1, exerciseStep.MaBuoc, attemptId,
             new ExerciseCheckRequest(questionId, "B", key), default));

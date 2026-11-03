@@ -10,6 +10,7 @@ const managementItems = [
   ["/admin/enrollments", "Đăng ký", "enrollments"],
   ["/admin/payments", "Thanh toán", "payments"],
   ["/admin/reports", "Báo cáo", "reports"],
+  ["/admin/contact-support", "Cài đặt liên hệ hỗ trợ", "reports"],
 ];
 
 const contentItems = [

@@ -88,6 +88,8 @@ public sealed class CurrentExamSourceEditLocalTests
             {
                 NguLieu? resource = part == 5 ? null : new NguLieu {
                     NoiDungNguLieu = part == 6 ? "[1] [2] [3] [4]" : $"Resource Part {part}",
+                    NoiDungDich = part == 6 ? QuestionContentRules.FormatPart6(
+                        ["Dịch câu 1", "Dịch câu 2", "Dịch câu 3", "Dịch câu 4"]) : null,
                     DuongDanAudio = part is 1 or 2 or 3 or 4 ? "test/audio.mp3" : null,
                     DuongDanAnh = part == 1 ? "test/image.png" : null
                 };
@@ -224,7 +226,8 @@ public sealed class CurrentExamSourceEditLocalTests
                 .Select(x => x.MaNguLieu).SingleAsync();
             Assert.IsType<OkObjectResult>(await resourceController.UpdateUnit(part6Group,
                 new AdminExamSourceMediaController.UnitResourceRequest(
-                    "Passage [1] then [2], [3], [4]", null, null, null, []), CancellationToken.None));
+                    "Passage [1] then [2], [3], [4]", QuestionContentRules.FormatPart6(
+                        ["Dịch câu 1", "Dịch câu 2", "Dịch câu 3", "Dịch câu 4"]), null, null, []), CancellationToken.None));
             db.ChangeTracker.Clear();
             var part7Id = ordered.First(q => q.MaPart == partIds[7]).MaCauHoi;
             var part7Group = await db.NhomCauHoi.AsNoTracking().Where(x => x.MaCauHoi == part7Id)
@@ -393,6 +396,46 @@ public sealed class CurrentExamSourceEditLocalTests
                 .Select(e => new { e.MaPhienBanHienHanh, e.TrangThai }).SingleAsync();
             Assert.NotNull(complete.MaPhienBanHienHanh);
             Assert.Equal("CLOSE", complete.TrangThai);
+
+            var part2Created = Assert.IsType<OkObjectResult>(await questionController.Create(
+                new AdminQuestionAuthoringController.UnitInput(2, "DE_THI", null, null,
+                    "test/audio.mp3", null, [],
+                    [new(null, "A", "B", "C", null, "A", 2, null, "Bản dịch ban đầu")]),
+                CancellationToken.None));
+            var part2Id = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(part2Created.Value))
+                .RootElement.GetProperty("questionIds")[0].GetInt32();
+            var part2Detail = Assert.IsType<OkObjectResult>(await questionController.Detail(part2Id, CancellationToken.None));
+            Assert.Equal("Bản dịch ban đầu", System.Text.Json.JsonDocument.Parse(
+                System.Text.Json.JsonSerializer.Serialize(part2Detail.Value)).RootElement.GetProperty("translation").GetString());
+            Assert.IsType<OkObjectResult>(await questionController.Update(part2Id,
+                new AdminQuestionAuthoringController.QuestionInput(null, "A", "B", "C", null,
+                    "A", 2, null, "Bản dịch đã sửa"), CancellationToken.None));
+            db.ChangeTracker.Clear();
+            Assert.Equal("Bản dịch đã sửa", await db.NhomCauHoi.AsNoTracking()
+                .Where(x => x.MaCauHoi == part2Id).Select(x => x.MaNguLieuNavigation.NoiDungDich).SingleAsync());
+
+            var questionsBefore = await db.CauHoi.CountAsync();
+            var invalidPart6 = await questionController.Create(new AdminQuestionAuthoringController.UnitInput(
+                6, "DE_THI", "[1] [2] [3] [4]", null, null, null, [],
+                [new(null, "A", "B", "C", "D", "A", 2, null, ""),
+                 new(null, "A", "B", "C", "D", "A", 2, null, "Hai"),
+                 new(null, "A", "B", "C", "D", "A", 2, null, "Ba"),
+                 new(null, "A", "B", "C", "D", "A", 2, null, "Bốn")]), CancellationToken.None);
+            Assert.IsType<BadRequestObjectResult>(invalidPart6);
+            AdminQuestionAuthoringController.QuestionInput Q(string? text, string? explanation = "Giải thích") =>
+                new(text, "A", "B", "C", "D", "A", 2, explanation);
+            foreach (var invalid in new[] {
+                new AdminQuestionAuthoringController.UnitInput(3, "DE_THI", "Hội thoại", null,
+                    "test/audio.mp3", null, [], [Q(" "), Q("Câu 2"), Q("Câu 3")]),
+                new AdminQuestionAuthoringController.UnitInput(4, "DE_THI", "Bài nói", null,
+                    "test/audio.mp3", null, [], [Q("Câu 1"), Q(null), Q("Câu 3")]),
+                new AdminQuestionAuthoringController.UnitInput(5, "DE_THI", null, null,
+                    null, null, [], [Q("Câu 1", " ")]),
+                new AdminQuestionAuthoringController.UnitInput(7, "DE_THI", null, null,
+                    null, null, [new("TEXT", "Tài liệu", null)], [Q("Câu 1"), Q(" ")])
+            })
+                Assert.IsType<BadRequestObjectResult>(await questionController.Create(invalid, CancellationToken.None));
+            Assert.Equal(questionsBefore, await db.CauHoi.CountAsync());
         }
         finally
         {

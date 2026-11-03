@@ -3,11 +3,11 @@ import { apiRequest } from "../../services/api";
 import PartSevenDocumentForm from "./PartSevenDocumentForm";
 import { documentPayload, newDocument } from "./partSevenDocumentData";
 
-const emptyQuestion = () => ({ text: "", a: "", b: "", c: "", d: "", correct: "A", difficulty: 2, explanation: "" });
+const emptyQuestion = () => ({ text: "", translation: "", a: "", b: "", c: "", d: "", correct: "A", difficulty: 2, explanation: "" });
 const questionCount = part => ({ 1: 1, 2: 1, 3: 3, 4: 3, 5: 1, 6: 4, 7: 2 })[Number(part)] || 1;
 
 export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, initialPart = 1, initialCount = null, examId = null, inline = false, fixedPart = false }) {
-  const [part, setPart] = useState(initialPart);
+  const [part, setPart] = useState(Number(initialPart));
   const [bank, setBank] = useState(fixedBank || "DE_THI");
   const [text, setText] = useState("");
   const [translation, setTranslation] = useState("");
@@ -18,6 +18,7 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
     Array.from({ length: initialCount || questionCount(initialPart) }, emptyQuestion));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [dirty, setDirty] = useState(false);
   const [previews, setPreviews] = useState({});
   const previewUrls = useRef([]);
@@ -50,6 +51,7 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
     if (next === part) return;
     if (dirty && !window.confirm("Đổi Part sẽ đặt lại ngữ liệu và số câu theo cấu trúc mới. Tiếp tục?")) return;
     setPart(next); setDirty(true); setError("");
+    setFieldErrors({});
     setQuestions(Array.from({ length: questionCount(next) }, emptyQuestion));
     setDocuments(next === 7 ? [newDocument()] : []);
     setText(""); setTranslation(""); setAudioPath(""); setImagePath("");
@@ -58,6 +60,7 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
 
   function changeQuestion(index, key, value) {
     setQuestions(old => old.map((item, at) => at === index ? { ...item, [key]: value } : item));
+    setFieldErrors(old => ({ ...old, [`${index}-${key}`]: "" }));
     setDirty(true);
   }
 
@@ -86,6 +89,17 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
   async function save(event) {
     event.preventDefault();
     setError("");
+    const invalid = {};
+    questions.forEach((question, index) => {
+      if ([3, 4, 5, 7].includes(Number(part)) && !question.text.trim())
+        invalid[`${index}-text`] = `Câu ${index + 1}: cần nhập nội dung câu hỏi.`;
+      if (Number(part) === 5 && !question.explanation.trim())
+        invalid[`${index}-explanation`] = `Câu ${index + 1}: cần nhập giải thích.`;
+      if (Number(part) === 6 && !question.translation.trim())
+        invalid[`${index}-translation`] = `Câu ${index + 1}: cần nhập bản dịch câu hỏi.`;
+    });
+    setFieldErrors(invalid);
+    if (Object.keys(invalid).length) { setError("Kiểm tra các trường được đánh dấu bên dưới."); return; }
     if ([1, 2, 3, 4].includes(Number(part)) && !audioPath) {
       setError(`Part ${part} cần tệp audio MP3.`); return;
     }
@@ -112,7 +126,8 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
         questions: questions.map(item => ({
           text: item.text || null, a: item.a, b: item.b, c: item.c,
           d: part === 2 ? null : item.d, correct: item.correct,
-          difficulty: Number(item.difficulty), explanation: item.explanation || null
+          difficulty: Number(item.difficulty), explanation: item.explanation || null,
+          translation: [2, 6].includes(Number(part)) ? item.translation || null : null
         }))
       };
       const result = await apiRequest(examId ? `/api/admin/content/question-authoring/exam/${examId}` : "/api/admin/content/question-authoring", {
@@ -143,14 +158,15 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
               onChange={next => { setDocuments(old => old.map((item, at) => at === index ? next : item)); setDirty(true); }}/>)}</div>}
           {[3, 4, 6, 7].includes(Number(part)) && <details className="exam-optional-fields"><summary>Thông tin bổ sung</summary>
             {Number(part) === 7 && <label>Ngữ liệu chung nếu có<textarea value={text} onChange={event => { setText(event.target.value); setDirty(true); }} rows={3}/></label>}
-            <label>Bản dịch nếu có<textarea value={translation} onChange={event => { setTranslation(event.target.value); setDirty(true); }} rows={2}/></label>
+            {Number(part) !== 6 && <label>Bản dịch nếu có<textarea value={translation} onChange={event => { setTranslation(event.target.value); setDirty(true); }} rows={2}/></label>}
           </details>}
         </section>}
-        <section><h3>Câu hỏi và đáp án</h3>{questions.map((item, index) => <div className="exam-author-question" key={index}><h4>Câu {index + 1}</h4><label>Nội dung câu hỏi<textarea value={item.text} rows={2} onChange={event => changeQuestion(index, "text", event.target.value)}/></label>
+        <section><h3>Câu hỏi và đáp án</h3>{questions.map((item, index) => <div className="exam-author-question" key={index}><h4>Câu {index + 1}</h4><label>Nội dung câu hỏi<textarea value={item.text} rows={2} aria-invalid={!!fieldErrors[`${index}-text`]} onChange={event => changeQuestion(index, "text", event.target.value)}/>{fieldErrors[`${index}-text`] && <small className="exam-field-error" role="alert">{fieldErrors[`${index}-text`]}</small>}</label>
+          {[2, 6].includes(Number(part)) && <label>Bản dịch câu hỏi{Number(part) === 2 ? " (nếu có)" : ""}<textarea value={item.translation} rows={2} aria-invalid={!!fieldErrors[`${index}-translation`]} onChange={event => changeQuestion(index, "translation", event.target.value)}/>{fieldErrors[`${index}-translation`] && <small className="exam-field-error" role="alert">{fieldErrors[`${index}-translation`]}</small>}</label>}
           <div className="exam-author-two">{["a", "b", "c", ...(part === 2 ? [] : ["d"])].map(key => <label key={key}>Đáp án {key.toUpperCase()}<input required maxLength={512} value={item[key]} onChange={event => changeQuestion(index, key, event.target.value)}/></label>)}</div>
           <div className="exam-author-two"><label>Đáp án đúng<select value={item.correct} onChange={event => changeQuestion(index, "correct", event.target.value)}>{["A", "B", "C", ...(part === 2 ? [] : ["D"])].map(value => <option key={value}>{value}</option>)}</select></label>
             <label>Độ khó<select value={item.difficulty} onChange={event => changeQuestion(index, "difficulty", event.target.value)}><option value={1}>Dễ</option><option value={2}>Trung bình</option><option value={3}>Khó</option></select></label></div>
-          <label>Giải thích<textarea value={item.explanation} rows={2} onChange={event => changeQuestion(index, "explanation", event.target.value)}/></label></div>)}
+          <label>Giải thích<textarea value={item.explanation} rows={2} aria-invalid={!!fieldErrors[`${index}-explanation`]} onChange={event => changeQuestion(index, "explanation", event.target.value)}/>{fieldErrors[`${index}-explanation`] && <small className="exam-field-error" role="alert">{fieldErrors[`${index}-explanation`]}</small>}</label></div>)}
           {part === 7 && <button type="button" disabled={questions.length >= 5} onClick={() => { setQuestions(old => [...old, emptyQuestion()]); setDirty(true); }}>Thêm câu Part 7</button>}
           {part === 7 && questions.length > 2 && <button type="button" onClick={() => { setQuestions(old => old.slice(0, -1)); setDirty(true); }}>Bớt một câu</button>}
         </section>
