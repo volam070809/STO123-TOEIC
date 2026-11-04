@@ -15,6 +15,7 @@ export default function MockHomePage() {
   const navigate = useNavigate();
   const contentRevision = useContentRevision("EXAMS");
   const [catalog, setCatalog] = useState({ key: null, exams: null, error: "" });
+  const [catalogRefresh, setCatalogRefresh] = useState(0);
   const [actionError, setActionError] = useState("");
   const [pending, setPending] = useState(null);
   const starting = useRef(false);
@@ -29,7 +30,7 @@ export default function MockHomePage() {
       .catch(() => { if (live) setCatalog({ key: catalogKey, exams: null,
         error: "Không thể tải danh sách đề thi thử." }); });
     return () => { live = false; };
-  }, [token, isAuthenticated, loading, sessionError, catalogKey, contentRevision]);
+  }, [token, isAuthenticated, loading, sessionError, catalogKey, contentRevision, catalogRefresh]);
   async function start(examId) {
     if (!isAuthenticated) {
       requireAuthentication("/mock-test");
@@ -48,11 +49,18 @@ export default function MockHomePage() {
     finally { starting.current = false; setPending(null); }
   }
   return <SiteLayout><SessionBoundary><div className="site-container exam-home">
-    <div className="page-heading"><span>Học tập</span><h1>Thi thử TOEIC</h1>
-      <p>Bạn có thể làm lại mỗi đề. Lịch sử chỉ hiển thị kết quả hoàn thành gần nhất của từng đề.</p></div>
-    <div className="exam-navigation"><Link className="outline-button" to="/">← Quay lại</Link>
-      {isAuthenticated && <Link className="outline-button" to="/mock-test/history">Lịch sử thi</Link>}</div>
+    <header className="mock-catalog-hero"><div>
+      <div className="page-heading"><span>Học tập / Thi thử</span><h1>Thi thử TOEIC</h1>
+        <p>Chọn đề phù hợp để kiểm tra năng lực. Bạn có thể làm lại mỗi đề; hệ thống hiển thị kết quả hoàn thành gần nhất.</p></div>
+      <div className="exam-navigation"><Link className="outline-button" to="/">← Quay lại</Link>
+        {isAuthenticated && <Link className="outline-button" to="/mock-test/history">Lịch sử thi</Link>}</div>
+    </div><div className="mock-catalog-art" aria-hidden="true"><span>STO123 · TOEIC</span>
+      <div className="mock-art-sheet"><i /><i /><i /><i /><b>✓</b></div><strong>Luyện tập để tiến bộ</strong></div></header>
     {(catalogError || actionError) && <p className="exam-error" role="alert">{catalogError || actionError}</p>}
+    {catalogError && <button className="outline-button mock-catalog-retry" type="button" onClick={() => {
+      setCatalog({ key: catalogKey, exams: null, error: "" });
+      setCatalogRefresh(value => value + 1);
+    }}>Thử tải lại danh sách đề</button>}
     {!exams && !catalogError && <p role="status">Đang tải danh sách đề…</p>}
     {exams?.length === 0 && <p>Chưa có đề thi thử đang mở.</p>}
     <div className="exam-card-list">{exams?.map(exam => <article className="exam-card fixed-exam-card" key={exam.examId}>

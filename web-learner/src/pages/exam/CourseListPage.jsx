@@ -15,7 +15,11 @@ import { loadCourseCatalog, requestGuestCoursePurchase } from "./coursePublicAcc
 import "../../styles/course.css";
 
 const money = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" });
-const date = value => value ? new Date(value).toLocaleDateString("vi-VN") : "";
+const date = value => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleDateString("vi-VN");
+};
 const accessLabels = {
   NOT_PURCHASED: "Chưa mua", PAYMENT_PENDING: "Đang chờ thanh toán",
   ACTIVE: "Đang có quyền học", EXPIRED: "Đã hết hạn", PAYMENT_FAILED: "Thanh toán thất bại",
@@ -169,10 +173,10 @@ export default function CourseListPage() {
                 <strong>{courseTargetLabel(course.maxTargetScore)}</strong>
               </div>
               <p className="course-description">{course.description || "Thông tin khóa học đang được cập nhật."}</p>
-              <div className="course-card-bottom"><p className="course-access">{isGuest ? "Thông tin khóa học" : accessLabels[course.accessStatus]}
-                {course.accessStatus === "ACTIVE" && course.accessExpiresAt ? ` · Đến ${date(course.accessExpiresAt)}` : ""}</p>
-                <div className="course-offer"><span>{course.retailPrice > 0 ? money.format(course.retailPrice) :
-                  "Chưa có giá bán"} · {course.accessDays} ngày</span>
+              <div className="course-card-bottom">{!isGuest && <p className="course-access">{accessLabels[course.accessStatus]}
+                {course.accessStatus === "ACTIVE" && course.accessExpiresAt ? ` · Đến ${date(course.accessExpiresAt)}` : ""}</p>}
+                <div className="course-offer"><div className="course-price"><strong>{course.retailPrice > 0 ? money.format(course.retailPrice) :
+                  "Chưa có giá bán"}</strong><span>{course.accessDays} ngày truy cập</span></div>
                   {!isGuest && purchasable && <label className="course-select"><input type="checkbox"
                     checked={selected.includes(course.courseId)} disabled={checkout.busy}
                     onChange={() => toggle(course.courseId)} /> Chọn khóa học</label>}</div>
@@ -203,13 +207,20 @@ export default function CourseListPage() {
           {course.accessStatus === "ACTIVE" && <Link to={`/courses/${course.courseId}`}>Vào học</Link>}
         </div>)}</div> : <p>Chưa có khóa học đã thanh toán.</p>}
       </section>}
-      {!isGuest && <section className="course-section"><details><summary>Lịch sử thanh toán ({history?.length ?? 0})</summary>
-        {history?.length ? <div className="course-history">{history.map(item => <div key={item.maGiaoDich}>
-          <strong>#{item.maGiaoDich} · {item.tenGoiHoc}</strong><span>{money.format(item.soTien)}</span>
-          <span>{paymentLabels[item.trangThai] || item.trangThai}</span><time>{date(item.ngayTao)}</time>
-          {["QUA_HAN", "THAT_BAI"].includes(item.trangThai) && item.courseIds?.length > 0 &&
-            <button type="button" onClick={() => prepareRetry(item.courseIds)}>Thanh toán lại</button>}
-        </div>)}</div> : <p>Chưa có giao dịch.</p>}</details></section>}
+      {!isGuest && <section className="course-section course-payment-history" aria-label="Lịch sử thanh toán">
+        <details><summary className="course-history-toggle"><span className="course-history-heading"><small>GIAO DỊCH CỦA BẠN</small>
+          <strong>Lịch sử thanh toán</strong><span>{history?.length ? `${history.length} giao dịch` : "Chưa có giao dịch"}</span></span>
+          <span className="course-history-open"><span className="course-history-open-closed">Xem chi tiết</span><span className="course-history-open-expanded">Thu gọn</span><span aria-hidden="true">⌄</span></span></summary>
+          {history?.length ? <div className="course-history-list">{history.map(item => <article className="course-history-item" key={item.maGiaoDich}>
+            <div className="course-history-item-head"><div><strong>Giao dịch #{item.maGiaoDich}</strong>
+              <span>{item.tenGoiHoc || "Khóa học đã chọn"}</span></div>
+              <span className="course-payment-status" data-status={item.trangThai}>{paymentLabels[item.trangThai] || item.trangThai || "Chưa xác định"}</span></div>
+            <dl className="course-history-facts"><div><dt>Số tiền</dt><dd>{item.soTien != null && Number.isFinite(Number(item.soTien)) ? money.format(item.soTien) : "Chưa có dữ liệu"}</dd></div>
+              <div><dt>Ngày tạo</dt><dd>{date(item.ngayTao) || "Chưa có dữ liệu"}</dd></div></dl>
+            {["QUA_HAN", "THAT_BAI"].includes(item.trangThai) && item.courseIds?.length > 0 &&
+              <button type="button" className="outline-button course-history-retry" onClick={() => prepareRetry(item.courseIds)}>Chọn lại khóa để thanh toán</button>}
+          </article>)}</div> : <p className="course-history-empty">Bạn chưa có giao dịch thanh toán nào.</p>}
+        </details></section>}
     </>}
   </main></SiteLayout>;
 }

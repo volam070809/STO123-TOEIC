@@ -31,7 +31,7 @@ function HomeFeatureGrid({ learner = false, placement, mock }) {
       ? `${mock.filter(exam => exam.state === "COMPLETED").length} đề đã hoàn thành` : "Chọn một đề thi thử để bắt đầu.";
     if (learner && feature.key === "practice")
       description = "Luyện từ vựng, luyện TOEIC theo Part và xem lại các lượt luyện đã lưu.";
-    return <article className="access-card home-learner-card" key={feature.key}>
+    return <article className={`access-card home-learner-card home-feature-${feature.key}`} key={feature.key}>
       <div className="home-access-photo"><img src={!learner && feature.guestImage ? feature.guestImage : feature.image} alt="" loading="lazy" /></div>
       <div className="home-learner-card-body"><h3>{feature.title}</h3><p>{description}</p>
         <Link className={feature.primary ? "primary-button" : "outline-button"} to={feature.route}>{feature.action}</Link></div>
@@ -54,7 +54,8 @@ function LearnerHome({ user }) {
     <div className="page-heading"><span>Học viên / Tổng quan</span><h1>Chào mừng, {user.hoTen}</h1>
       <p>Chọn hoạt động học tiếp theo.</p></div>
     <section className="home-hero home-learner-hero">
-      <div className="home-lesson-photo"><img src="/images/home/learner-study.webp" alt="" width="1000" height="667" /><span>Học đúng trọng tâm</span></div>
+      <div className="home-lesson-photo"><img src="/images/home/learner-study.webp" alt="" width="1000" height="667" /><span>Học đúng trọng tâm</span>
+        <div className="home-photo-note" aria-hidden="true"><i />Hành trình TOEIC của bạn <strong>{placement?.currentStage ? `Giai đoạn ${placement.currentStage}` : "Tiếp tục khám phá"}</strong></div></div>
       <div className="home-hero-content"><span className="small-badge">HỌC TOEIC CÙNG STO123</span>
       <h2>Tiếp tục hành trình học của bạn</h2>
       <p>Luyện theo chủ đề, kiểm tra năng lực và theo dõi từng lượt thi đã hoàn thành.</p>
@@ -78,13 +79,24 @@ function GuestHome() {
   return <div className="site-container home-content home-guest">
     <div className="page-heading"><span>STO123 / Tổng quan</span><h1>Học TOEIC cùng STO123</h1>
       <p>Khám phá lộ trình, nội dung học và các hình thức luyện tập hiện có.</p></div>
-    <section className="home-hero home-guest-hero"><div className="home-hero-content"><span className="small-badge">HỌC TOEIC HIỆU QUẢ HƠN MỖI NGÀY</span>
-      <h1>Chinh phục TOEIC<br />theo cách của bạn</h1>
+    <section className="home-hero home-guest-hero"><div className="home-hero-content"><span className="small-badge"><span className="home-badge-spark" aria-hidden="true">✦</span> HỌC TOEIC HIỆU QUẢ HƠN MỖI NGÀY</span>
+      <h1>Chinh phục TOEIC<br /><em>theo cách của bạn</em></h1>
       <p>Bạn được học thử một danh sách từ vựng và xem cách hệ thống luyện TOEIC hoạt động.</p>
       <div className="action-row"><Link className="primary-button" to="/vocabulary">Học thử từ vựng</Link>
         <Link className="outline-button" to="/login">Đăng nhập</Link><Link className="home-register-link" to="/register">Đăng ký<HomeIcon kind="arrow" /></Link></div>
       <div className="home-benefits"><span><HomeIcon kind="book" />Học theo chủ đề</span><span><HomeIcon kind="practice" />Luyện tập đa dạng</span><span><HomeIcon kind="path" />Theo dõi tiến độ</span></div>
-      </div><div className="home-hero-photo"><img src="/images/home/hero-study.webp" alt="" width="1200" height="800" fetchPriority="high" /><span className="home-photo-badge">HỌC HÔM NAY · VỮNG TƯƠNG LAI</span><p>Good English<br />Brighter opportunities</p></div>
+      </div><div className="home-hero-photo" onPointerMove={event => {
+        if (event.pointerType !== "mouse" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        event.currentTarget.style.setProperty("--hero-x", `${((event.clientX - rect.left) / rect.width - .5) * 14}px`);
+        event.currentTarget.style.setProperty("--hero-y", `${((event.clientY - rect.top) / rect.height - .5) * 14}px`);
+      }} onPointerLeave={event => {
+        event.currentTarget.style.removeProperty("--hero-x"); event.currentTarget.style.removeProperty("--hero-y");
+      }}><img src="/images/home/hero-study.webp" alt="" width="1200" height="800" fetchPriority="high" />
+        <span className="home-photo-badge">HỌC HÔM NAY · VỮNG TƯƠNG LAI</span>
+        <div className="home-floating-plan" aria-hidden="true"><span className="home-plan-icon"><HomeIcon kind="path" /></span><small>LỘ TRÌNH HỌC</small><strong>Từng bước tiến bộ</strong><div className="home-plan-track"><i /><i /><i /><i /></div></div>
+        <div className="home-floating-parts" aria-hidden="true"><span>Listening</span><b>01 — 04</b><span>Reading</span><b>05 — 07</b></div>
+        <p>Good English<br />Brighter opportunities</p></div>
     </section>
     <section className="home-progress-card"><div><span className="small-badge">LỘ TRÌNH HỌC TOEIC</span>
       <h2>Xây dựng hành trình học phù hợp</h2><p>Đăng nhập để kiểm tra đầu vào, nhận giai đoạn đề xuất và lưu tiến độ học của bạn.</p></div>
