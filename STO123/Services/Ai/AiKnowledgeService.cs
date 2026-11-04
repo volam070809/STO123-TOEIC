@@ -1,14 +1,22 @@
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using STO123.Models;
+using STO123.Services;
 using STO123.Services.Exam;
 
 namespace STO123.Services.Ai;
 
 public sealed class AiKnowledgeService(ToeicDbContext db, TimeProvider clock,
-    AiLearningContextService learning, AiPdfTextService pdf)
+    AiLearningContextService learning, AiPdfTextService pdf,
+    IMemoryCache? cache = null, ContentRevisionStore? revisions = null,
+    ILogger<AiKnowledgeService>? logger = null,
+    Func<CancellationToken, Task<long>>? revisionVersion = null,
+    AiToeicService? intentModel = null, PracticePartService? practiceService = null)
 {
+    private sealed record PublicGrounding(string[] Lines, AiSource[] Sources);
     private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "what", "where", "how", "why", "find", "show", "explain", "about", "lesson", "course",
@@ -18,71 +26,365 @@ public sealed class AiKnowledgeService(ToeicDbContext db, TimeProvider clock,
     };
 
     public async Task<AiGrounding> ResolveAsync(int learnerId, string question,
-        AiLearningContext? page, CancellationToken ct)
+        AiLearningContext? page, CancellationToken ct,
+        IReadOnlyList<AiPromptMessage>? history = null, string? route = null)
     {
+        var started = Stopwatch.GetTimestamp();
+        var contextMs = 0.0; var personalMs = 0.0; var lessonsMs = 0.0;
+        var vocabularyMs = 0.0; var practiceMs = 0.0; var pdfMs = 0.0;
         var lines = new List<string>();
         var sources = new List<AiSource>();
         var (website, websiteSources) = AiWebsiteGuide.Resolve(question);
         if (website.Length > 0) { lines.Add(website); sources.AddRange(websiteSources); }
-        var pageContext = await learning.ResolveAsync(learnerId, page, ct);
+        var currentFeature = AiWebsiteGuide.ForRoute(route);
+        if (currentFeature is not null)
+            lines.Add($"Route trình duyệt báo thuộc chức năng {currentFeature.Label}: {currentFeature.Workflow}. " +
+                "Route này không chứng minh học viên có quyền xem dữ liệu của trang; chỉ dữ liệu SQL đã kiểm tra quyền mới được dùng làm sự thật cá nhân.");
+        var websiteNavigation = AiQuestionIntent.IsWebsiteNavigation(question);
+        if (websiteNavigation && website.Length == 0)
+            lines.Add("Chức năng website đã xác minh (chỉ hướng dẫn chức năng có trong danh sách):\n" +
+                AiWebsiteGuide.VerifiedCatalog(question));
+        var priorQuestion = AiQuestionIntent.IsFollowUp(question) ?
+            history?.LastOrDefault(message => message.Role == "USER")?.Text : null;
+        var effectiveQuestion = priorQuestion is null ? question : priorQuestion + " " + question;
+        var phase = Stopwatch.GetTimestamp();
+        AiContextResolution pageContext;
+        try { pageContext = await learning.ResolveAsync(learnerId, page, ct); }
+        catch (AiChatException error) when (error.Code == "AI_CONTEXT_UNAVAILABLE" &&
+            page?.Type is "PRACTICE" or "COURSE_EXERCISE" &&
+            !AiQuestionIntent.ReferencesCurrentQuestion(question))
+        {
+            // The page may still hold an old question after a check, navigation, or expiry.
+            // An unrelated chat question uses no question data and remains available.
+            pageContext = new("");
+        }
+        contextMs = Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
         if (pageContext.Text.Length > 0) lines.Add("Ngữ cảnh trang hiện tại đã xác minh: " + pageContext.Text);
         if (pageContext.Source is not null) sources.Add(pageContext.Source);
-        if (pageContext.UncheckedPractice)
+        if (pageContext.UncheckedPractice && AiQuestionIntent.IsProtectedAnswerRequest(question))
             return new AiGrounding(string.Join("\n", lines), sources, true, pageContext.Part);
 
-        var normalized = AiWebsiteGuide.Normalize(question);
+        AiRetrievalPlan? plan = AiQuestionIntent.FastPlan(effectiveQuestion);
+        var planMs = 0.0;
+        if (plan is null && intentModel is not null && AiQuestionIntent.NeedsSemanticPlan(question,
+            website.Length > 0, currentFeature is not null))
+        {
+            phase = Stopwatch.GetTimestamp();
+            var planKey = history is null || history.Count == 0 ?
+                "ai-plan:" + AiWebsiteGuide.Normalize(question) + "|" + currentFeature?.Route : null;
+            if (planKey is not null && cache?.TryGetValue<AiRetrievalPlan>(planKey, out plan) == true)
+            { }
+            else
+            {
+                plan = await intentModel.PlanAsync(question, history, currentFeature?.Label, ct);
+                if (planKey is not null && plan is not null)
+                    cache?.Set(planKey, plan, TimeSpan.FromMinutes(15));
+            }
+            planMs = Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
+        }
+        if (plan?.Includes("WEBSITE") == true && website.Length == 0 && !websiteNavigation)
+            lines.Add("Chức năng website đã xác minh:\n" + AiWebsiteGuide.VerifiedCatalog(question));
+        var normalized = AiWebsiteGuide.Normalize(effectiveQuestion);
         var now = clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime;
+        var practiceHubQuestion = currentFeature?.Route == "/practice" &&
+            Has(normalized, "luyen", "tap", "thong ke", "ket qua", "trang nay", "co gi");
         var personal = Has(normalized, "toi", "cua minh", "my ", "tiep theo", "tien do", "trang thai",
             "da mua", "da hoc", "ket qua", "phan lop", "knn", "thanh toan", "payment", "access",
             "recommend", "goi y", "luyen tap cua", "diem", "what should i study");
-        if (personal)
-            await AddPersonalAsync(learnerId, normalized, now, lines, sources, ct);
-
-        var searchContent = website.Length == 0 || Has(normalized, "tim", "find", "ngu phap",
-            "present", "perfect", "tu vung", "vocabulary", "nghia", "giai thich", "explain",
-            "bai hoc", "bai giang", "lesson", "tai lieu", "document", "pdf");
-        if (searchContent && !pageContext.UncheckedPractice)
+        if (personal || plan?.Includes("PROGRESS") == true || plan?.Includes("PRACTICE_STATS") == true ||
+            plan?.Includes("EXAM_RESULTS") == true || plan?.Includes("PAYMENT") == true ||
+            plan?.Includes("COURSES") == true)
         {
-            var terms = Terms(question);
-            if (terms.Length > 0)
+            phase = Stopwatch.GetTimestamp();
+            await AddPersonalAsync(learnerId, normalized, now, lines, sources, ct, plan);
+            personalMs = Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
+        }
+        if (plan?.Includes("PROFILE") == true)
+            await AddProfileAsync(learnerId, normalized, lines, sources, ct);
+        if (practiceHubQuestion && plan?.Includes("PRACTICE_STATS") != true &&
+            !Has(normalized, "luyen part", "thong ke", "do chinh xac", "accuracy", "yeu part"))
+            await AddPartStatsAsync(learnerId, lines, sources, ct);
+
+        string? exactAnswer = null;
+        if (AiQuestionIntent.WantsVocabularyCatalog(effectiveQuestion) || plan?.Includes("TOPICS") == true ||
+            plan?.Includes("VOCABULARY") == true && AiQuestionIntent.IsPublicCountQuestion(question) ||
+            practiceHubQuestion)
+        {
+            var (topicCount, wordCount, namedTopic, namedWordCount) =
+                await AddVocabularyCatalogAsync(effectiveQuestion, lines, sources, ct);
+            if (AiQuestionIntent.IsPublicCountQuestion(question))
             {
-                await AddLessonsAsync(learnerId, now, terms, lines, sources, ct);
-                await AddVocabularyAsync(terms, lines, sources, ct);
+                var asksTopics = Has(normalized, "chu de", "topic");
+                var asksWordsInTopic = asksTopics && Has(normalized, "bao nhieu tu", "so tu",
+                    "how many words", "count words");
+                exactAnswer = asksWordsInTopic ? namedTopic is null ? null :
+                    $"Chủ đề {namedTopic} hiện có {namedWordCount} từ vựng." :
+                    asksTopics ? $"Hiện có {topicCount} chủ đề từ vựng đang mở cho học viên." :
+                    $"Hiện có {wordCount} từ vựng riêng biệt thuộc các chủ đề đang mở.";
             }
         }
-        if (page?.Type != "PRACTICE" && Has(normalized, "part", "cau hoi luyen", "practice question"))
-            await AddPracticeExamplesAsync(normalized, lines, sources, ct);
-        if (Has(normalized, "pdf", "tai lieu", "document") && page?.Type == "LESSON" &&
+        if (AiQuestionIntent.WantsCourseCatalog(effectiveQuestion) || plan?.Includes("COURSES") == true)
+        {
+            var courseCount = await AddCourseCatalogAsync(lines, sources, ct);
+            if (AiQuestionIntent.IsPublicCountQuestion(question))
+                exactAnswer = $"Hiện có {courseCount} khóa học đang mở trên STO123.";
+        }
+        if (Has(normalized, "luyen tu", "on tu", "ket qua tu", "trac nghiem tu") ||
+            currentFeature?.Route is "/practice/vocabulary" or "/practice/vocabulary/history")
+            await AddVocabularyPracticeHistoryAsync(learnerId, lines, sources, ct);
+        var searchLessons = !websiteNavigation && (AiQuestionIntent.WantsLessonContent(effectiveQuestion) ||
+            plan?.Includes("LESSONS") == true);
+        var searchVocabulary = !websiteNavigation && !AiQuestionIntent.IsPublicCountQuestion(question) &&
+            (AiQuestionIntent.WantsVocabularyContent(effectiveQuestion) || plan?.Includes("VOCABULARY") == true);
+        if (searchLessons || searchVocabulary)
+        {
+            var part = Regex.Match(normalized, @"\bpart\s*([1-7])\b");
+            var terms = (plan?.Terms ?? []).Concat(part.Success ?
+                    new[] { "Part " + part.Groups[1].Value } : Array.Empty<string>())
+                .Concat(Terms(effectiveQuestion))
+                .Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToArray();
+            if (terms.Length > 0)
+            {
+                if (searchLessons)
+                { phase = Stopwatch.GetTimestamp(); await AddLessonsAsync(learnerId, now, terms, lines, sources, ct);
+                  lessonsMs = Stopwatch.GetElapsedTime(phase).TotalMilliseconds; }
+                if (searchVocabulary)
+                { phase = Stopwatch.GetTimestamp(); await AddCachedPublicAsync("vocabulary:" + string.Join('|', terms),
+                      (entries, links) => AddVocabularyAsync(terms, entries, links, ct), lines, sources, ct);
+                  vocabularyMs = Stopwatch.GetElapsedTime(phase).TotalMilliseconds; }
+            }
+        }
+        if (AiQuestionIntent.IsFollowUp(question) &&
+            Has(AiWebsiteGuide.Normalize(question), "tai lieu", "pdf", "video", "bai do", "noi dung") &&
+            history is not null)
+            await AddPreviousLessonResourcesAsync(learnerId, now, history, lines, sources, ct);
+        if (!websiteNavigation && page?.Type != "PRACTICE" && AiQuestionIntent.WantsPracticeExamples(question))
+        {
+            phase = Stopwatch.GetTimestamp();
+            await AddCachedPublicAsync("practice:" + normalized,
+                (entries, links) => AddPracticeExamplesAsync(normalized, entries, links, ct), lines, sources, ct);
+            practiceMs = Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
+        }
+        if (practiceService is not null && AiQuestionIntent.WantsPracticeAvailability(question))
+            await AddPracticeAvailabilityAsync(question, lines, sources, ct);
+        if (Has(normalized, "thi thu", "mock", "de thi", "ets", "de soan san") ||
+            currentFeature?.Route == "/mock-test")
+            await AddMockExamsAsync(learnerId, lines, sources, ct);
+        if (!websiteNavigation && Has(normalized, "pdf", "tai lieu", "document") && page?.Type == "LESSON" &&
             page.CourseId is > 0 && page.StepId is > 0)
         {
+            phase = Stopwatch.GetTimestamp();
             var document = await pdf.ReadFromAuthorizedStepAsync(learnerId, page.CourseId.Value,
                 page.StepId.Value, ct);
+            pdfMs = Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
             if (document is not null) lines.Add("Văn bản PDF của bài đang mở (chỉ các trang trích được): " + document);
             else lines.Add("Không trích được văn bản từ PDF của bài này; video, audio và PDF dạng ảnh chưa được AI đọc nội dung.");
         }
         if (lines.Count == 0)
             lines.Add("Không tìm thấy dữ liệu STO123 phù hợp đã xác minh. Có thể giải thích kiến thức TOEIC chung, nhưng không được khẳng định đó là nội dung khóa học.");
+        logger?.LogInformation("AI retrieval timing intent_ms={IntentMs:F1} context_ms={ContextMs:F1} personal_ms={PersonalMs:F1} lessons_ms={LessonsMs:F1} vocabulary_ms={VocabularyMs:F1} practice_ms={PracticeMs:F1} pdf_ms={PdfMs:F1} total_ms={TotalMs:F1}",
+            planMs, contextMs, personalMs, lessonsMs, vocabularyMs, practiceMs, pdfMs,
+            Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return new AiGrounding(string.Join("\n", lines).Length > 6500 ?
             string.Join("\n", lines)[..6500] : string.Join("\n", lines),
-            sources.DistinctBy(x => x.Url).Take(6).ToArray());
+            sources.DistinctBy(x => x.Url).Take(6).ToArray(), pageContext.UncheckedPractice,
+            pageContext.Part, exactAnswer);
+    }
+
+    private async Task AddCachedPublicAsync(string key,
+        Func<List<string>, List<AiSource>, Task> load, List<string> lines,
+        List<AiSource> sources, CancellationToken ct)
+    {
+        if (cache is null || revisions is null && revisionVersion is null)
+        { await load(lines, sources); return; }
+        long version;
+        try { version = revisionVersion is null ? (await revisions!.ReadAsync(null, true, ct)).Version :
+            await revisionVersion(ct); }
+        catch (Exception error) when (error is not OperationCanceledException and not OutOfMemoryException)
+        {
+            logger?.LogWarning(error, "AI public-content revision unavailable; reading current published SQL.");
+            await load(lines, sources); return;
+        }
+        var cacheKey = "ai-public:" + version + ":" + key;
+        if (!cache.TryGetValue<PublicGrounding>(cacheKey, out var entry))
+        {
+            var cachedLines = new List<string>(); var cachedSources = new List<AiSource>();
+            await load(cachedLines, cachedSources);
+            entry = new PublicGrounding(cachedLines.ToArray(), cachedSources.ToArray());
+            cache.Set(cacheKey, entry, TimeSpan.FromMinutes(10));
+        }
+        lines.AddRange(entry!.Lines); sources.AddRange(entry.Sources);
+    }
+
+    private async Task<(int TopicCount, int WordCount, string? NamedTopic, int? NamedWordCount)>
+        AddVocabularyCatalogAsync(string question, List<string> lines,
+        List<AiSource> sources, CancellationToken ct)
+    {
+        var openTopics = db.ChuDe.AsNoTracking().Where(topic => topic.TrangThai == "DANG_MO");
+        var topicCount = await openTopics.CountAsync(ct);
+        var wordCount = await db.TuVung.AsNoTracking().CountAsync(word =>
+            word.TuVungChuDe.Any(link => link.MaChuDeNavigation.TrangThai == "DANG_MO"), ct);
+        lines.Add($"Số liệu SQL hiện tại cho học viên: {topicCount} chủ đề từ vựng đang mở; " +
+            $"{wordCount} từ vựng riêng biệt nằm trong ít nhất một chủ đề đang mở. " +
+            "Một từ liên kết nhiều chủ đề chỉ tính một lần ở tổng số từ.");
+        sources.Add(new AiSource("Chủ đề từ vựng", "/vocabulary"));
+        if (!AiQuestionIntent.WantsTopicList(question)) return (topicCount, wordCount, null, null);
+        var topics = await openTopics.OrderBy(topic => topic.TenChuDe).ThenBy(topic => topic.MaChuDe)
+            .Take(100).Select(topic => new { topic.MaChuDe, topic.TenChuDe, topic.MoTa,
+                wordCount = topic.TuVungChuDe.Count }).ToListAsync(ct);
+        var matched = topics.Where(topic => topic.TenChuDe.Length >= 3 &&
+            AiWebsiteGuide.Normalize(question).Contains(AiWebsiteGuide.Normalize(topic.TenChuDe),
+                StringComparison.Ordinal)).OrderByDescending(topic => topic.TenChuDe.Length)
+            .FirstOrDefault();
+        if (matched is not null)
+            lines.Add($"Chủ đề được hỏi: {matched.TenChuDe}; {matched.wordCount} từ vựng; mô tả: {matched.MoTa}.");
+        var displayed = topics.Take(20).ToArray();
+        lines.Add("Chủ đề đang mở" + (topicCount > displayed.Length ? $" (hiển thị {displayed.Length}/{topicCount})" : "") +
+            ": " + (displayed.Length == 0 ? "không có" : string.Join("; ", displayed.Select(topic =>
+                $"{topic.TenChuDe}: {topic.wordCount} từ"))) + ".");
+        foreach (var topic in (matched is null ? displayed.Take(4) : new[] { matched }))
+            sources.Add(new AiSource(topic.TenChuDe, $"/vocabulary?topic={topic.MaChuDe}"));
+        return (topicCount, wordCount, matched?.TenChuDe, matched?.wordCount);
+    }
+
+    private async Task<int> AddCourseCatalogAsync(List<string> lines, List<AiSource> sources,
+        CancellationToken ct)
+    {
+        var published = db.KhoaHoc.AsNoTracking().Where(course => course.TrangThai == "DANG_MO");
+        var count = await published.CountAsync(ct);
+        var courses = await published.OrderBy(course => course.GiaiDoan)
+            .ThenBy(course => course.MaKhoaHoc).Take(12)
+            .Select(course => new { course.MaKhoaHoc, course.TenKhoaHoc, course.GiaiDoan })
+            .ToListAsync(ct);
+        lines.Add($"Khóa học đang mở theo SQL: {count}. " +
+            (courses.Count == 0 ? "Hiện không có khóa đang mở." :
+                "Danh sách" + (count > courses.Count ? $" (hiển thị {courses.Count}/{count})" : "") +
+                ": " + string.Join("; ", courses.Select(course =>
+                    $"{course.TenKhoaHoc} (giai đoạn {course.GiaiDoan})")) + "."));
+        foreach (var course in courses.Take(3))
+            sources.Add(new AiSource(course.TenKhoaHoc, $"/courses/{course.MaKhoaHoc}"));
+        return count;
+    }
+
+    private async Task AddPreviousLessonResourcesAsync(int learnerId, DateTime now,
+        IReadOnlyList<AiPromptMessage> history, List<string> lines,
+        List<AiSource> sources, CancellationToken ct)
+    {
+        var match = history.Where(message => message.Role == "MODEL")
+            .Reverse().Select(message => Regex.Match(message.Text,
+                @"/courses/([1-9]\d*)/steps/([1-9]\d*)"))
+            .FirstOrDefault(found => found.Success);
+        if (match is null || !int.TryParse(match.Groups[1].Value, out var courseId) ||
+            !int.TryParse(match.Groups[2].Value, out var stepId)) return;
+        var step = await db.BuocLoTrinh.AsNoTracking().Where(s => s.MaBuoc == stepId &&
+            s.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc == courseId && !s.IsArchived &&
+            !s.MaLessonNavigation.IsArchived && !s.MaLessonNavigation.MaUnitNavigation.IsArchived &&
+            s.MaLessonNavigation.MaUnitNavigation.MaKhoaHocNavigation.TrangThai == "DANG_MO" &&
+            CourseEntitlement.ActiveCourseIds(db, learnerId, now).Contains(courseId) &&
+            s.MaBaiGiang != null && s.MaBaiGiangNavigation.TrangThai == "DANG_MO")
+            .Select(s => new { s.TieuDe, s.MaBuoc,
+                resources = s.MaBaiGiangNavigation.TaiNguyenBaiGiang
+                    .Where(resource => !resource.IsArchived).OrderBy(resource => resource.ThuTu)
+                    .Take(12).Select(resource => new { resource.TenTaiNguyen,
+                        resource.LoaiTaiNguyen }).ToList() }).FirstOrDefaultAsync(ct);
+        if (step is null) return;
+        lines.Add($"Bài học đã đề xuất trước đó (đã xác minh lại quyền): {step.TieuDe}. " +
+            (step.resources.Count == 0 ? "Chưa có tài nguyên đang mở." :
+                "Tài nguyên: " + string.Join("; ", step.resources.Select(resource =>
+                    $"{resource.TenTaiNguyen} ({resource.LoaiTaiNguyen})")) + "."));
+        sources.Add(new AiSource(step.TieuDe, $"/courses/{courseId}/steps/{step.MaBuoc}"));
+    }
+
+    private async Task AddPracticeAvailabilityAsync(string question, List<string> lines,
+        List<AiSource> sources, CancellationToken ct)
+    {
+        var payload = JsonSerializer.SerializeToElement(await practiceService!.AvailabilityAsync(ct));
+        var requested = Regex.Match(AiWebsiteGuide.Normalize(question), @"\bpart\s*([1-7])\b");
+        var selectedPart = requested.Success ? int.Parse(requested.Groups[1].Value) : 0;
+        var summaries = new List<string>();
+        foreach (var part in payload.GetProperty("parts").EnumerateArray())
+        {
+            var number = part.GetProperty("part").GetInt32();
+            if (selectedPart != 0 && number != selectedPart) continue;
+            foreach (var difficulty in part.GetProperty("difficulties").EnumerateArray())
+            {
+                var level = difficulty.GetProperty("difficulty").GetInt32();
+                var count = difficulty.GetProperty("validUnitCount").GetInt32();
+                var unit = difficulty.GetProperty("unitType").GetString() == "GROUP" ? "nhóm" : "câu";
+                var presets = string.Join(", ", difficulty.GetProperty("presets").EnumerateArray()
+                    .Select(preset => $"{preset.GetProperty("preset").GetString()} " +
+                        (preset.GetProperty("available").GetBoolean() ? "đủ" : "chưa đủ")));
+                summaries.Add($"Part {number} độ khó {level}: {count} {unit} hợp lệ; {presets}");
+            }
+        }
+        lines.Add("Khả dụng thực tế theo cùng bộ kiểm tra nguồn câu hỏi của trang Luyện theo Part: " +
+            string.Join("; ", summaries.Take(selectedPart == 0 ? 21 : 3)) + ".");
+        sources.Add(new AiSource("Luyện tập TOEIC theo Part", "/practice/parts"));
+    }
+
+    private async Task AddMockExamsAsync(int learnerId, List<string> lines,
+        List<AiSource> sources, CancellationToken ct)
+    {
+        var visible = MockExamEligibility.Visible(db.DeThi.AsNoTracking(), 0);
+        var count = await visible.CountAsync(ct);
+        var exams = await visible.OrderBy(exam => exam.MaDeThi).Take(20)
+            .Select(exam => new { exam.MaDeThi, exam.TenDe, exam.ThoiGianLamBai,
+                active = exam.KetQuaLamBai.Any(result => result.MaHocVien == learnerId &&
+                    result.LoaiBaiLam == ExamCore.Mock &&
+                    (result.TrangThai == ExamCore.Active || result.TrangThai == "BO_DO")),
+                completed = exam.KetQuaLamBai.Where(result => result.MaHocVien == learnerId &&
+                    result.LoaiBaiLam == ExamCore.Mock &&
+                    (result.TrangThai == ExamCore.Submitted || result.TrangThai == ExamCore.Expired))
+                    .OrderByDescending(result => result.NgayNopBai)
+                    .ThenByDescending(result => result.MaKetQua)
+                    .Select(result => new { result.DiemTong, result.NgayNopBai }).FirstOrDefault() })
+            .ToListAsync(ct);
+        lines.Add($"Đề thi thử soạn sẵn đang mở theo SQL: {count}. " +
+            (exams.Count == 0 ? "Chưa có đề đang mở." :
+                "Đề" + (count > exams.Count ? $" (hiển thị {exams.Count}/{count})" : "") + ": " +
+                string.Join("; ", exams.Select(exam => $"{exam.TenDe} ({exam.ThoiGianLamBai} phút; " +
+                    (exam.active ? "đang làm" : exam.completed is not null ?
+                        $"kết quả gần nhất {exam.completed.DiemTong?.ToString() ?? "chưa có điểm"} điểm" :
+                        "chưa bắt đầu") + ")")) + "."));
+        sources.Add(new AiSource("Thi thử TOEIC", "/mock-test"));
+        if (exams.Any(exam => exam.completed is not null))
+            sources.Add(new AiSource("Lịch sử thi thử", "/mock-test/history"));
+    }
+
+    private async Task AddVocabularyPracticeHistoryAsync(int learnerId, List<string> lines,
+        List<AiSource> sources, CancellationToken ct)
+    {
+        var completed = db.LanLuyenTuVung.AsNoTracking().Where(attempt =>
+            attempt.MaNguoiDung == learnerId && attempt.NgayNopBai != null);
+        var total = await completed.CountAsync(ct);
+        var recent = await completed.OrderByDescending(attempt => attempt.NgayNopBai)
+            .ThenByDescending(attempt => attempt.MaLanLuyen).Take(5)
+            .Select(attempt => new { attempt.MaLanLuyen, attempt.NgayNopBai,
+                topic = attempt.MaChuDeNavigation.TenChuDe,
+                questions = attempt.ChiTietLuyenTuVung.Count,
+                correct = attempt.ChiTietLuyenTuVung.Count(answer => answer.LaDung == true) })
+            .ToListAsync(ct);
+        lines.Add($"Lượt luyện từ vựng đã nộp của chính học viên: {total}. " +
+            (recent.Count == 0 ? "Chưa có kết quả được lưu." :
+                "Gần nhất: " + string.Join("; ", recent.Select(attempt =>
+                    $"{attempt.topic}: {attempt.correct}/{attempt.questions} đúng, " +
+                    $"nộp {attempt.NgayNopBai:dd/MM/yyyy HH:mm}")) + "."));
+        sources.Add(new AiSource("Luyện từ vựng", "/practice/vocabulary"));
+        if (recent.Count > 0)
+            sources.Add(new AiSource("Lịch sử luyện từ vựng", "/practice/vocabulary/history"));
     }
 
     private async Task AddLessonsAsync(int learnerId, DateTime now, string[] terms,
         List<string> lines, List<AiSource> sources, CancellationToken ct)
     {
         var t1 = terms[0]; var t2 = terms.Length > 1 ? terms[1] : t1;
-        var rows = await db.BuocLoTrinh.AsNoTracking().Where(s => !s.IsArchived &&
+        var published = db.BuocLoTrinh.AsNoTracking().Where(s => !s.IsArchived &&
             s.MaBaiGiang != null && s.MaBaiGiangNavigation.TrangThai == "DANG_MO" &&
             !s.MaLessonNavigation.IsArchived && !s.MaLessonNavigation.MaUnitNavigation.IsArchived &&
             s.MaLessonNavigation.MaUnitNavigation.MaKhoaHocNavigation.TrangThai == "DANG_MO" &&
             CourseEntitlement.ActiveCourseIds(db, learnerId, now)
-                .Contains(s.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc) &&
-            (s.TieuDe.Contains(t1) || s.MaBaiGiangNavigation.TieuDe.Contains(t1) ||
-             s.MaBaiGiangNavigation.NoiDungTomTat.Contains(t1) ||
-             s.MaBaiGiangNavigation.NoiDung.Contains(t1) ||
-             s.TieuDe.Contains(t2) || s.MaBaiGiangNavigation.TieuDe.Contains(t2) ||
-             s.MaBaiGiangNavigation.NoiDungTomTat.Contains(t2) ||
-             s.MaBaiGiangNavigation.NoiDung.Contains(t2)))
+                .Contains(s.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc));
+        var project = (IQueryable<BuocLoTrinh> query) => query
             .OrderBy(s => s.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc)
             .ThenBy(s => s.MaLessonNavigation.MaUnitNavigation.ThuTu)
             .ThenBy(s => s.MaLessonNavigation.ThuTu).ThenBy(s => s.ThuTu)
@@ -94,7 +396,21 @@ public sealed class AiKnowledgeService(ToeicDbContext db, TimeProvider clock,
                     s.MaBaiGiangNavigation.NoiDung.Substring(0, 1600),
                 resources = s.MaBaiGiangNavigation.TaiNguyenBaiGiang.Where(r => !r.IsArchived)
                     .OrderBy(r => r.ThuTu).Take(4)
-                    .Select(r => new { r.TenTaiNguyen, r.LoaiTaiNguyen }).ToList() }).ToListAsync(ct);
+                    .Select(r => new { r.TenTaiNguyen, r.LoaiTaiNguyen }).ToList() });
+        var titleMatches = published.Where(s => s.TieuDe.Contains(t1) ||
+            s.MaBaiGiangNavigation.TieuDe.Contains(t1) ||
+            s.MaBaiGiangNavigation.NoiDungTomTat.Contains(t1) ||
+            s.TieuDe.Contains(t2) || s.MaBaiGiangNavigation.TieuDe.Contains(t2) ||
+            s.MaBaiGiangNavigation.NoiDungTomTat.Contains(t2));
+        var rows = await project(titleMatches).ToListAsync(ct);
+        if (rows.Count == 0 || terms.Length > 1 && rows.All(row =>
+            Score(row.TieuDe + " " + row.lesson + " " + row.summary, terms) < terms.Length))
+        {
+            var bodyMatches = await project(published.Where(s =>
+                s.MaBaiGiangNavigation.NoiDung.Contains(t1) ||
+                s.MaBaiGiangNavigation.NoiDung.Contains(t2))).ToListAsync(ct);
+            rows = rows.Concat(bodyMatches).DistinctBy(row => row.MaBuoc).Take(12).ToList();
+        }
         foreach (var row in rows.OrderByDescending(r => Score(r.TieuDe + " " + r.lesson + " " + r.content, terms)).Take(3))
         {
             var excerpt = row.content ?? row.summary ?? "";
@@ -180,10 +496,16 @@ public sealed class AiKnowledgeService(ToeicDbContext db, TimeProvider clock,
     }
 
     private async Task AddPersonalAsync(int learnerId, string question, DateTime now,
-        List<string> lines, List<AiSource> sources, CancellationToken ct)
+        List<string> lines, List<AiSource> sources, CancellationToken ct,
+        AiRetrievalPlan? plan = null)
     {
+        if (Has(question, "tien do", "da hoc", "chua hoc", "hoan thanh", "con bai nao") ||
+            plan?.Includes("PROGRESS") == true)
+            await AddCourseProgressAsync(learnerId, now, lines, sources, ct);
         if (Has(question, "tiep theo", "tien do", "hoc gi", "study", "lesson", "lo trinh",
-            "recommend", "goi y", "dau vao", "knn", "phan lop"))
+            "recommend", "goi y", "dau vao", "knn", "phan lop") ||
+            plan?.Includes("PROGRESS") == true || plan?.Includes("EXAM_RESULTS") == true ||
+            plan?.Includes("LESSONS") == true)
         {
             var stage = await db.KetQuaPhanLopKNN.AsNoTracking()
                 .Where(x => x.MaKetQuaNavigation.MaHocVien == learnerId)
@@ -202,7 +524,8 @@ public sealed class AiKnowledgeService(ToeicDbContext db, TimeProvider clock,
                     lines.Add("Giai đoạn khóa học đề xuất hiện có: " + string.Join(", ", recommended) + ".");
                 sources.Add(new AiSource("Lộ trình khóa học", "/courses"));
             }
-            if (Has(question, "dau vao", "knn", "phan lop", "ket qua"))
+            if (Has(question, "dau vao", "knn", "phan lop", "ket qua") ||
+                plan?.Includes("EXAM_RESULTS") == true)
             {
                 var placement = await db.KetQuaLamBai.AsNoTracking().Where(a =>
                     a.MaHocVien == learnerId && a.LoaiBaiLam == ExamCore.Placement &&
@@ -215,7 +538,8 @@ public sealed class AiKnowledgeService(ToeicDbContext db, TimeProvider clock,
                 sources.Add(new AiSource("Kiểm tra đầu vào", "/placement"));
             }
             if (Has(question, "tiep theo", "tien do", "hoc gi", "study", "lesson", "lo trinh",
-                "recommend", "goi y"))
+                "recommend", "goi y") || plan?.Includes("PROGRESS") == true ||
+                plan?.Includes("LESSONS") == true)
             {
             var next = await db.BuocLoTrinh.AsNoTracking().Where(s => !s.IsArchived &&
                 !s.MaLessonNavigation.IsArchived && !s.MaLessonNavigation.MaUnitNavigation.IsArchived &&
@@ -244,18 +568,28 @@ public sealed class AiKnowledgeService(ToeicDbContext db, TimeProvider clock,
             }
             }
         }
-        if (Has(question, "truy cap", "da mua", "khoa hoc", "course", "access", "gia han", "het han"))
+        if (Has(question, "truy cap", "da mua", "khoa hoc", "course", "access", "gia han", "het han") ||
+            plan?.Includes("COURSES") == true)
         {
             var activeIds = await CourseEntitlement.ActiveCourseIds(db, learnerId, now).ToArrayAsync(ct);
             var courses = await db.KhoaHoc.AsNoTracking().Where(c => activeIds.Contains(c.MaKhoaHoc))
                 .OrderBy(c => c.MaKhoaHoc).Take(8)
-                .Select(c => new { c.MaKhoaHoc, c.TenKhoaHoc }).ToListAsync(ct);
+                .Select(c => new { c.MaKhoaHoc, c.TenKhoaHoc,
+                    expiresAt = db.DangKyGoiHoc.Where(e => e.MaNguoiDung == learnerId &&
+                        e.TrangThai == "DANG_SU_DUNG" && e.NgayBatDau <= now && e.NgayKetThuc > now &&
+                        e.GiaoDichThanhToan.Any(p => p.TrangThai == "THANH_CONG") &&
+                        (e.MaGoiHoc != null && e.MaGoiHocNavigation.MaKhoaHoc.Any(k =>
+                            k.MaKhoaHoc == c.MaKhoaHoc) || e.ChiTietDangKyKhoaHoc.Any(d =>
+                            d.MaKhoaHoc == c.MaKhoaHoc)))
+                        .Max(e => (DateTime?)e.NgayKetThuc) }).ToListAsync(ct);
             lines.Add(courses.Count == 0 ? "Hiện chưa có khóa học đang có quyền truy cập." :
-                "Khóa đang có quyền truy cập: " + string.Join("; ", courses.Select(c => c.TenKhoaHoc)) + ".");
+                "Khóa đang có quyền truy cập: " + string.Join("; ", courses.Select(c =>
+                    $"{c.TenKhoaHoc} (hết hạn {c.expiresAt:dd/MM/yyyy HH:mm})")) + ".");
             foreach (var course in courses.Take(3))
                 sources.Add(new AiSource(course.TenKhoaHoc, $"/courses/{course.MaKhoaHoc}"));
         }
-        if (Has(question, "thanh toan", "payment", "vnpay", "tra lai", "thu lai"))
+        if (Has(question, "thanh toan", "payment", "vnpay", "tra lai", "thu lai") ||
+            plan?.Includes("PAYMENT") == true)
         {
             var payment = await db.GiaoDichThanhToan.AsNoTracking()
                 .Where(p => p.MaDangKyNavigation.MaNguoiDung == learnerId)
@@ -269,14 +603,20 @@ public sealed class AiKnowledgeService(ToeicDbContext db, TimeProvider clock,
                     DateTimeKind.Unspecified), TimeSpan.FromHours(7))
                     .AddMinutes(Payment.PaymentExpiry.PendingMinutes);
                 lines.Add($"Giao dịch gần nhất #{payment.MaGiaoDich}: {payment.TrangThai}; " +
-                    $"đăng ký: {payment.enrollment}. Nếu còn CHO_XU_LY, trạng thái tự cập nhật; " +
-                    $"có thể thử lại sau {retryAt:dd/MM/yyyy HH:mm} khi giao dịch cũ đã quá hạn và chưa thanh toán. " +
+                    $"đăng ký: {payment.enrollment}. " +
+                    (payment.TrangThai == "CHO_XU_LY" ?
+                        now < retryAt.DateTime ? $"Giao dịch đang chờ; mốc cho phép xử lý quá hạn là {retryAt:dd/MM/yyyy HH:mm}. " :
+                            "Đã qua mốc xử lý quá hạn; mở trang Khóa học để hệ thống làm mới trạng thái trước khi thử lại. " :
+                     payment.TrangThai is "THAT_BAI" or "QUA_HAN" ?
+                        "Có thể chọn Thanh toán lại trên trang Khóa học nếu khóa còn mở và chưa có giao dịch mới đang chờ hoặc quyền học đang hiệu lực. " :
+                        "Không cần thanh toán lại giao dịch đã thành công. ") +
                     "Nếu đã bị trừ tiền mà chưa có quyền học, liên hệ hỗ trợ để đối soát.");
                 sources.Add(new AiSource($"Thanh toán #{payment.MaGiaoDich}",
                     $"/courses?paymentId={payment.MaGiaoDich}"));
             }
         }
-        if (Has(question, "tu vung", "vocabulary", "tien do tu", "da hoc tu"))
+        if (Has(question, "tu vung", "vocabulary", "tien do tu", "da hoc tu") ||
+            plan?.Includes("VOCABULARY") == true)
         {
             var progress = await db.TienDoTuVung.AsNoTracking().Where(p => p.MaNguoiDung == learnerId)
                 .GroupBy(p => p.TrangThai).Select(g => new { status = g.Key, count = g.Count() }).ToListAsync(ct);
@@ -284,16 +624,11 @@ public sealed class AiKnowledgeService(ToeicDbContext db, TimeProvider clock,
                 string.Join("; ", progress.Select(p => $"{p.status}: {p.count}"))) + ".");
             sources.Add(new AiSource("Học từ vựng", "/vocabulary"));
         }
-        if (Has(question, "luyen part", "thong ke", "do chinh xac", "accuracy"))
-        {
-            var stats = await db.ThongKeLuyenPart.AsNoTracking().Where(p => p.MaHocVien == learnerId)
-                .OrderBy(p => p.MaPart).Select(p => new { p.MaPart, p.SoLanLuyen,
-                    p.TongCauDaLam, p.TongCauDung, p.SoCauLanCuoi, p.SoDungLanCuoi }).ToListAsync(ct);
-            lines.Add("Thống kê luyện Part: " + (stats.Count == 0 ? "chưa có" : string.Join("; ",
-                stats.Select(p => $"Part {p.MaPart}: {p.SoLanLuyen} lần, {p.TongCauDung}/{p.TongCauDaLam} đúng tích lũy, lần gần nhất {p.SoDungLanCuoi}/{p.SoCauLanCuoi}"))));
-            sources.Add(new AiSource("Luyện tập theo Part", "/practice/parts"));
-        }
-        if (Has(question, "thi thu", "mock", "diem thi", "ket qua thi"))
+        if (Has(question, "luyen part", "thong ke", "do chinh xac", "accuracy", "yeu part") ||
+            plan?.Includes("PRACTICE_STATS") == true)
+            await AddPartStatsAsync(learnerId, lines, sources, ct);
+        if (Has(question, "thi thu", "mock", "diem thi", "ket qua thi") ||
+            plan?.Includes("EXAM_RESULTS") == true)
         {
             var results = await db.KetQuaLamBai.AsNoTracking().Where(a => a.MaHocVien == learnerId &&
                 a.LoaiBaiLam == ExamCore.Mock &&
@@ -307,6 +642,71 @@ public sealed class AiKnowledgeService(ToeicDbContext db, TimeProvider clock,
                     $"{r.name}: {r.DiemTong?.ToString() ?? "chưa có điểm"} điểm")) + ".");
             sources.Add(new AiSource("Lịch sử thi thử", "/mock-test/history"));
         }
+    }
+
+    private async Task AddPartStatsAsync(int learnerId, List<string> lines,
+        List<AiSource> sources, CancellationToken ct)
+    {
+        var stats = await db.ThongKeLuyenPart.AsNoTracking().Where(p => p.MaHocVien == learnerId)
+            .OrderBy(p => p.MaPart).Select(p => new { p.MaPart, p.SoLanLuyen,
+                p.TongCauDaLam, p.TongCauDung, p.SoCauLanCuoi, p.SoDungLanCuoi,
+                p.LanLuyenGanNhat }).ToListAsync(ct);
+        lines.Add("Thống kê luyện Part của chính học viên: " +
+            (stats.Count == 0 ? "chưa có lượt hoàn thành" : string.Join("; ", stats.Select(p =>
+                $"Part {p.MaPart}: {p.SoLanLuyen} lần, {p.TongCauDung}/{p.TongCauDaLam} đúng tích lũy, " +
+                $"lần gần nhất {p.SoDungLanCuoi}/{p.SoCauLanCuoi}, luyện gần nhất " +
+                $"{p.LanLuyenGanNhat:dd/MM/yyyy HH:mm}"))) + ".");
+        sources.Add(new AiSource("Luyện tập theo Part", "/practice/parts"));
+    }
+
+    private async Task AddProfileAsync(int learnerId, string question, List<string> lines,
+        List<AiSource> sources, CancellationToken ct)
+    {
+        var user = await db.NguoiDung.AsNoTracking().Where(person =>
+            person.MaNguoiDung == learnerId && person.VaiTro == "HOC_VIEN")
+            .Select(person => new { person.HoTen, person.Email, person.SoDienThoai,
+                person.TrangThai }).FirstOrDefaultAsync(ct);
+        if (user is null) { lines.Add("Không xác minh được hồ sơ học viên trong phiên hiện tại."); return; }
+        lines.Add($"Hồ sơ của chính tài khoản đăng nhập: tên {user.HoTen}; trạng thái {user.TrangThai}." +
+            (Has(question, "email", "thu dien tu") ? $" Email {user.Email}." : "") +
+            (Has(question, "dien thoai", "phone") ? $" Số điện thoại {user.SoDienThoai ?? "chưa có"}." : ""));
+        sources.Add(new AiSource("Hồ sơ cá nhân", "/profile"));
+    }
+
+    private async Task AddCourseProgressAsync(int learnerId, DateTime now,
+        List<string> lines, List<AiSource> sources, CancellationToken ct)
+    {
+        var availableSteps = db.BuocLoTrinh.AsNoTracking().Where(step => !step.IsArchived &&
+            !step.MaLessonNavigation.IsArchived && !step.MaLessonNavigation.MaUnitNavigation.IsArchived &&
+            step.MaLessonNavigation.MaUnitNavigation.MaKhoaHocNavigation.TrangThai == "DANG_MO" &&
+            CourseEntitlement.ActiveCourseIds(db, learnerId, now)
+                .Contains(step.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc) &&
+            (step.MaBaiGiang != null && step.MaBaiGiangNavigation.TrangThai == "DANG_MO" ||
+             step.MaChuDe != null && step.MaChuDeNavigation.TrangThai == "DANG_MO" ||
+             step.MaBaiTap != null && db.PhienBanBaiTapKhoaHoc.Any(version =>
+                 version.MaBaiTap == step.MaBaiTap && version.TrangThai == "XUAT_BAN")));
+        var total = await availableSteps.CountAsync(ct);
+        var completed = await db.TienDoBuocLoTrinh.AsNoTracking().Where(progress =>
+            progress.MaNguoiDung == learnerId && progress.TrangThai == "HOAN_THANH" &&
+            availableSteps.Select(step => step.MaBuoc).Contains(progress.MaBuoc))
+            .Select(progress => progress.MaBuoc).Distinct().CountAsync(ct);
+        var pending = await availableSteps.Where(step => !db.TienDoBuocLoTrinh.Any(progress =>
+                progress.MaNguoiDung == learnerId && progress.MaBuoc == step.MaBuoc &&
+                progress.TrangThai == "HOAN_THANH"))
+            .OrderBy(step => step.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc)
+            .ThenBy(step => step.MaLessonNavigation.MaUnitNavigation.ThuTu)
+            .ThenBy(step => step.MaLessonNavigation.ThuTu).ThenBy(step => step.ThuTu).Take(5)
+            .Select(step => new { step.MaBuoc, step.TieuDe,
+                courseId = step.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc,
+                course = step.MaLessonNavigation.MaUnitNavigation.MaKhoaHocNavigation.TenKhoaHoc })
+            .ToListAsync(ct);
+        lines.Add($"Tiến độ trên nội dung đang mở của các khóa hiện có quyền: {completed}/{total} hoạt động hoàn thành. " +
+            (pending.Count == 0 ? "Không có hoạt động chưa hoàn thành đang mở." :
+                "Các hoạt động chưa hoàn thành đầu tiên: " + string.Join("; ", pending.Select(step =>
+                    $"{step.course} / {step.TieuDe}")) + "."));
+        foreach (var step in pending.Take(3))
+            sources.Add(new AiSource($"Học tiếp · {step.TieuDe}",
+                $"/courses/{step.courseId}/steps/{step.MaBuoc}"));
     }
 
     private static string[] Terms(string question) => Regex.Matches(question, @"[\p{L}\p{N}]{2,}")

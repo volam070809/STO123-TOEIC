@@ -31,6 +31,7 @@ import GuestAuthPromptProvider from "../components/auth/GuestAuthPrompt";
 import SessionBoundary from "../components/auth/SessionBoundary";
 import { useAuth } from "../contexts/AuthState";
 import { ContentRevisionWatcher } from "../services/contentRevisions";
+import HelpContextProvider from "../components/layout/HelpContextProvider";
 
 const AdminLayout = lazy(adminRouteModules.layout);
 const AdminLearnersPage = lazy(adminRouteModules.learners);
@@ -120,7 +121,7 @@ function RouteScroll() {
 }
 
 export default function AppRoutes() {
-  return <BrowserRouter><GuestAuthPromptProvider><ContentRevisionWatcher /><RouteScroll /><Routes>
+  return <BrowserRouter><GuestAuthPromptProvider><HelpContextProvider><ContentRevisionWatcher /><RouteScroll /><Routes>
     <Route path="/" element={<HomePage />} />
     <Route path="/toeic/structure" element={<ToeicStructurePage />} />
     <Route path="/vocabulary" element={<VocabularyRoute />} />
@@ -192,5 +193,5 @@ export default function AppRoutes() {
       <Route path="payments/:paymentId" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPaymentDetailPage /></AdminRoute>} />
     </Route>
     <Route path="*" element={<Navigate to="/" replace />} />
-  </Routes></GuestAuthPromptProvider></BrowserRouter>;
+  </Routes></HelpContextProvider></GuestAuthPromptProvider></BrowserRouter>;
 }

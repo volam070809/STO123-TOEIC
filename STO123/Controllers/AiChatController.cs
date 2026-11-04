@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -8,13 +9,14 @@ using STO123.Services.Ai;
 
 namespace STO123.Controllers;
 
-public sealed record AiChatMessageRequest(Guid RequestId, string? Message, AiLearningContext? Context);
+public sealed record AiChatMessageRequest(Guid RequestId, string? Message, AiLearningContext? Context,
+    string? Route = null);
 
 [ApiController]
 [Authorize(Roles = "HOC_VIEN")]
 [Route("api/ai/conversations")]
 public sealed class AiChatController(ToeicDbContext db, AiToeicService ai,
-    AiKnowledgeService knowledge) : ControllerBase
+    AiKnowledgeService knowledge, ILogger<AiChatController>? logger = null) : ControllerBase
 {
     private int LearnerId => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
     private static object View(AiTinNhan item) => new { id = item.MaTinNhan, role = item.VaiTro,
@@ -48,7 +50,6 @@ public sealed class AiChatController(ToeicDbContext db, AiToeicService ai,
     [HttpGet("{id:long}")]
     public async Task<IActionResult> Detail(long id, CancellationToken ct)
     {
-        if (await HasActiveExamAsync(ct)) return ActiveExamConflict();
         var conversation = await db.AiHoiThoai.AsNoTracking()
             .Where(x => x.MaHoiThoai == id && x.MaHocVien == LearnerId)
             .Select(x => new { id = x.MaHoiThoai, title = x.TieuDe, updatedAt = x.CapNhatLuc })
@@ -79,12 +80,16 @@ public sealed class AiChatController(ToeicDbContext db, AiToeicService ai,
         var text = input.Message?.Trim();
         if (input.RequestId == Guid.Empty || string.IsNullOrWhiteSpace(text) || text.Length > 3000)
             return BadRequest(new { code = "AI_INVALID_MESSAGE", message = "Câu hỏi cần có nội dung, tối đa 3.000 ký tự." });
+        var started = Stopwatch.GetTimestamp();
+        var retrievalMs = 0.0;
+        var geminiMs = 0.0;
+        var persistenceMs = 0.0;
         try
         {
+            var phase = Stopwatch.GetTimestamp();
             var conversation = await db.AiHoiThoai.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.MaHoiThoai == id && x.MaHocVien == LearnerId, ct);
             if (conversation is null) return NotFound(new { message = "Không tìm thấy cuộc trò chuyện." });
-            if (await HasActiveExamAsync(ct)) return ActiveExamConflict();
             var previous = await db.AiTinNhan.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.MaHoiThoai == id && x.MaYeuCau == input.RequestId, ct);
             if (previous is not null)
@@ -97,29 +102,32 @@ public sealed class AiChatController(ToeicDbContext db, AiToeicService ai,
                 return Ok(new { conversationId = id, title = conversation.TieuDe,
                     userMessage = View(previous), aiMessage = View(priorAnswer) });
             }
-            if (input.Context?.Type != "PRACTICE" &&
-                await db.KetQuaLamBai.AsNoTracking().AnyAsync(x => x.MaHocVien == LearnerId &&
-                    x.LoaiBaiLam == "PRACTICE" && x.TrangThai == "DANG_LAM", ct))
-                return Conflict(new { code = "AI_PRACTICE_CONTEXT_REQUIRED",
-                    message = "Hãy mở câu luyện tập đang làm để nhận gợi ý theo đúng trạng thái kiểm tra." });
-            var count = await db.AiTinNhan.CountAsync(x => x.MaHoiThoai == id, ct);
-            if (count >= 100) return Conflict(new { code = "AI_MESSAGE_LIMIT",
+            if (await db.AiTinNhan.CountAsync(x => x.MaHoiThoai == id, ct) >= 100)
+                return Conflict(new { code = "AI_MESSAGE_LIMIT",
                 message = "Cuộc trò chuyện đã dài. Hãy tạo cuộc trò chuyện mới." });
             var history = await db.AiTinNhan.AsNoTracking().Where(x => x.MaHoiThoai == id)
-                .OrderByDescending(x => x.ThuTu).Take(12)
+                .OrderByDescending(x => x.ThuTu).Take(8)
                 .Select(x => new AiPromptMessage(x.VaiTro, x.NoiDung)).ToListAsync(ct);
             history.Reverse();
             history.Add(new AiPromptMessage("USER", text));
-            var grounding = await knowledge.ResolveAsync(LearnerId, text, input.Context, ct);
-            var reply = grounding.UncheckedPractice
+            retrievalMs += Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
+            phase = Stopwatch.GetTimestamp();
+            var grounding = await knowledge.ResolveAsync(LearnerId, text, input.Context, ct,
+                history.Take(history.Count - 1).ToArray(), input.Route);
+            retrievalMs += Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
+            phase = Stopwatch.GetTimestamp();
+            var reply = grounding.ExactAnswer is not null
+                ? AiAnswerComposer.Compose(grounding.ExactAnswer, grounding.Sources)
+                : grounding.UncheckedPractice && AiQuestionIntent.IsProtectedAnswerRequest(text)
                 ? AiAnswerComposer.Compose(PracticeHint(grounding.PracticePart), grounding.Sources)
                 : AiAnswerComposer.Compose(await ai.ReplyAsync(history, grounding.Text, ct), grounding.Sources);
+            geminiMs = Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
             // The provider call has completed before acquiring any SQL transaction or conversation lock.
+            phase = Stopwatch.GetTimestamp();
             await using var tx = await db.Database.BeginTransactionAsync(ct);
             await LockAsync(id, ct);
             conversation = await db.AiHoiThoai.FirstOrDefaultAsync(x => x.MaHoiThoai == id && x.MaHocVien == LearnerId, ct);
             if (conversation is null) return NotFound(new { message = "Không tìm thấy cuộc trò chuyện." });
-            if (await HasActiveExamAsync(ct)) return ActiveExamConflict();
             previous = await db.AiTinNhan.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.MaHoiThoai == id && x.MaYeuCau == input.RequestId, ct);
             if (previous is not null)
@@ -132,7 +140,7 @@ public sealed class AiChatController(ToeicDbContext db, AiToeicService ai,
                 return Ok(new { conversationId = id, title = conversation.TieuDe,
                     userMessage = View(previous), aiMessage = View(priorAnswer) });
             }
-            count = await db.AiTinNhan.CountAsync(x => x.MaHoiThoai == id, ct);
+            var count = await db.AiTinNhan.CountAsync(x => x.MaHoiThoai == id, ct);
             if (count >= 100) return Conflict(new { code = "AI_MESSAGE_LIMIT",
                 message = "Cuộc trò chuyện đã dài. Hãy tạo cuộc trò chuyện mới." });
             var now = DateTime.UtcNow;
@@ -145,6 +153,7 @@ public sealed class AiChatController(ToeicDbContext db, AiToeicService ai,
             conversation.CapNhatLuc = now;
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+            persistenceMs = Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
             return Ok(new { conversationId = id, title = conversation.TieuDe,
                 userMessage = View(userMessage), aiMessage = View(aiMessage) });
         }
@@ -152,15 +161,12 @@ public sealed class AiChatController(ToeicDbContext db, AiToeicService ai,
         { return StatusCode(error.Status, new { code = error.Code, message = error.Message }); }
         catch (SqlException error) when (error.Number == 51001)
         { return Conflict(new { code = "AI_BUSY", message = "Cuộc trò chuyện đang xử lý câu hỏi khác. Hãy thử lại." }); }
+        finally
+        {
+            logger?.LogInformation("AI chat timing conversation={ConversationId} retrieval_ms={RetrievalMs:F1} gemini_ms={GeminiMs:F1} persistence_ms={PersistenceMs:F1} total_ms={TotalMs:F1}",
+                id, retrievalMs, geminiMs, persistenceMs, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+        }
     }
-
-    private Task<bool> HasActiveExamAsync(CancellationToken ct) => db.KetQuaLamBai.AsNoTracking()
-        .AnyAsync(x => x.MaHocVien == LearnerId &&
-            (x.LoaiBaiLam == "MOCK" || x.LoaiBaiLam == "PLACEMENT") &&
-            (x.TrangThai == "DANG_LAM" || x.TrangThai == "BO_DO"), ct);
-
-    private ConflictObjectResult ActiveExamConflict() => Conflict(new { code = "AI_EXAM_ACTIVE",
-        message = "Hãy hoàn thành bài thi đang làm trước khi dùng trợ lý AI." });
 
     private async Task LockAsync(long id, CancellationToken ct)
     {

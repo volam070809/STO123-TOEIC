@@ -41,6 +41,21 @@ public sealed class AiToeicServiceTests
         Assert.Equal("AI_MODEL_NOT_ALLOWED", error.Code);
     }
 
+    [Fact]
+    public async Task SelectsOnlyWhitelistedReadOnlyCapabilitiesFromNewQuestion()
+    {
+        var service = Service(HttpStatusCode.OK,
+            """{"candidates":[{"content":{"parts":[{"text":"{\"domains\":[\"PRACTICE_STATS\",\"COURSES\",\"LESSONS\",\"ADMIN\"],\"terms\":[\"Part 7\",\"'; DELETE TABLE\"]}"}]}}]}""");
+        var plan = await service.PlanAsync("Tôi yếu Part 7, trong khóa đã mua nên học bài nào?",
+            [new AiPromptMessage("USER", "Tôi vừa xem kết quả luyện tập")], "Khóa học", default);
+        Assert.NotNull(plan);
+        Assert.True(plan.Includes("PRACTICE_STATS"));
+        Assert.True(plan.Includes("COURSES"));
+        Assert.True(plan.Includes("LESSONS"));
+        Assert.False(plan.Includes("ADMIN"));
+        Assert.Equal(["Part 7"], plan.Terms);
+    }
+
     private static AiToeicService Service(HttpStatusCode status, string body, string model = "gemini-3.5-flash-lite")
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {

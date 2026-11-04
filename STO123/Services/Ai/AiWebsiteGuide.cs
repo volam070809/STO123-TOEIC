@@ -7,7 +7,7 @@ namespace STO123.Services.Ai;
 
 public sealed record AiSource(string Title, string Url);
 public sealed record AiGrounding(string Text, IReadOnlyList<AiSource> Sources,
-    bool UncheckedPractice = false, int? PracticePart = null);
+    bool UncheckedPractice = false, int? PracticePart = null, string? ExactAnswer = null);
 public sealed record AiWebsiteFeature(string Route, string Label, string[] Roles,
     string Workflow, string[] Aliases, string Link);
 
@@ -20,14 +20,50 @@ public static class AiWebsiteGuide
     public static (string Text, IReadOnlyList<AiSource> Sources) Resolve(string question)
     {
         var normalized = Normalize(question);
-        var matches = Features.Where(feature => feature.Aliases.Any(alias =>
-                normalized.Contains(Normalize(alias), StringComparison.Ordinal)))
+        var matches = Features.Select(feature => new { feature,
+                score = feature.Aliases.Where(alias => normalized.Contains(Normalize(alias),
+                    StringComparison.Ordinal)).Select(alias => Normalize(alias).Length).DefaultIfEmpty().Max() })
+            .Where(candidate => candidate.score > 0).OrderByDescending(candidate => candidate.score)
+            .Select(candidate => candidate.feature)
             .Take(4).ToArray();
         if (matches.Length == 0) return ("", []);
         return ("Chức năng website đã xác minh:\n" +
             string.Join("\n", matches.Select(feature => $"{feature.Label}: {feature.Workflow}")),
             matches.Select(feature => new AiSource(feature.Label, feature.Link))
                 .DistinctBy(source => source.Url).ToArray());
+    }
+
+    public static AiWebsiteFeature? ForRoute(string? route)
+    {
+        if (string.IsNullOrWhiteSpace(route) || route.Length > 160 || !route.StartsWith('/') ||
+            route.Contains('?') || route.Contains('#') || route.Contains("..")) return null;
+        var actual = route.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return Features.FirstOrDefault(feature =>
+        {
+            if (!feature.Roles.Contains("HOC_VIEN") && !feature.Roles.Contains("PUBLIC")) return false;
+            var expected = feature.Route.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            return expected.Length == actual.Length && expected.Zip(actual).All(pair =>
+                pair.First.StartsWith(':') ? int.TryParse(pair.Second, out var id) && id > 0 :
+                string.Equals(pair.First, pair.Second, StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
+    public static string VerifiedCatalog(string question)
+    {
+        var published = Features.Where(feature => feature.Aliases.Length > 0 &&
+            !feature.Route.Contains(':')).ToArray();
+        var terms = Regex.Matches(Normalize(question), @"[\p{L}\p{N}]{3,}")
+            .Select(match => match.Value).Where(term => term is not
+                ("toi" or "ban" or "cach" or "lam" or "sao" or "the" or "nao" or "trang" or "cho"))
+            .Distinct().ToArray();
+        var detail = published.Select(feature => new { feature,
+                score = terms.Count(term => Normalize(feature.Label + " " + feature.Workflow + " " +
+                    string.Join(' ', feature.Aliases)).Contains(term, StringComparison.Ordinal)) })
+            .OrderByDescending(candidate => candidate.score).Take(6)
+            .Select(candidate => $"{candidate.feature.Label}: {candidate.feature.Workflow}");
+        return "Các chức năng đã đăng ký: " + string.Join("; ", published.Select(feature =>
+            $"{feature.Label} ({feature.Link})")) + ".\nQuy trình liên quan: " + string.Join("; ", detail) +
+            ". Danh sách tóm tắt không phải bằng chứng rằng tính năng khác không tồn tại.";
     }
 
     public static bool RegisteredLink(string link) => Features.Any(feature =>

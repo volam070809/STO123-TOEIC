@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from "../../contexts/AuthState";
 import { apiRequest } from "../../services/api";
@@ -31,10 +31,9 @@ function Sparkle({ size = 24 }) {
 }
 
 export default function AiToeicChatWidget({ learningContext, embedded = false, active = false, onMinimize }) {
-  const { pathname } = useLocation();
   const { user, token } = useAuth();
   const learnerId = user?.vaiTro === "HOC_VIEN" ? user.maNguoiDung : null;
-  const hidden = !learnerId || /^\/exam\//.test(pathname) || pathname === "/placement";
+  const hidden = !learnerId;
   const [open, setOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [conversations, setConversations] = useState([]);
@@ -42,6 +41,7 @@ export default function AiToeicChatWidget({ learningContext, embedded = false, a
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(null);
+  const [elapsed, setElapsed] = useState(0);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -70,6 +70,11 @@ export default function AiToeicChatWidget({ learningContext, embedded = false, a
 
   const visible = embedded ? active : open;
   useEffect(() => { if (visible) endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" }); }, [visible, messages, pending]);
+  useEffect(() => {
+    if (pending?.status !== "sending") return undefined;
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - pending.startedAt) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [pending]);
 
   function toggle() {
     if (embedded) { onMinimize?.(); return; }
@@ -125,7 +130,8 @@ export default function AiToeicChatWidget({ learningContext, embedded = false, a
   }
   async function send(item) {
     if (busy || !item.text.trim()) return;
-    setBusy(true); setError(""); setPending({ ...item, status: "sending" }); setDraft("");
+    setBusy(true); setError(""); setElapsed(0);
+    setPending({ ...item, status: "sending", startedAt: Date.now() }); setDraft("");
     let id = activeId;
     try {
       if (!id) {
@@ -134,7 +140,8 @@ export default function AiToeicChatWidget({ learningContext, embedded = false, a
       }
       const result = await apiRequest(`${api}/${id}/messages`, {
         method: "POST", token, timeoutMs: 55_000,
-        body: { requestId: item.requestId, message: item.text, context: item.context }
+        body: { requestId: item.requestId, message: item.text, context: item.context,
+          route: item.route }
       });
       setMessages(current => [...current.filter(row => row.id !== result.userMessage.id && row.id !== result.aiMessage.id),
         result.userMessage, result.aiMessage]);
@@ -149,7 +156,8 @@ export default function AiToeicChatWidget({ learningContext, embedded = false, a
     event.preventDefault();
     const text = draft.trim();
     if (!text || busy) return;
-    send({ text, requestId: crypto.randomUUID(), context: learningContext || null });
+    send({ text, requestId: crypto.randomUUID(), context: learningContext || null,
+      route: window.location.pathname });
   }
   async function copy(text, id) {
     try { await navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 1800); }
@@ -174,7 +182,7 @@ export default function AiToeicChatWidget({ learningContext, embedded = false, a
           {!loading && messages.length === 0 && !pending && <div className="ai-chat-welcome"><div className="ai-chat-welcome-icon"><Sparkle size={30} /></div><h2>Hôm nay bạn muốn học gì?</h2><p>Hỏi về bài học, từ vựng, lộ trình hoặc cách dùng STO123.</p><div className="ai-chat-suggestions">{suggestions.map(text => <button type="button" key={text} onClick={() => { setDraft(text); inputRef.current?.focus(); }}>{text} <span>↗</span></button>)}</div></div>}
           {messages.map(row => <article key={row.id} className={`ai-chat-message ${row.role === "MODEL" ? "is-ai" : "is-user"}`}><div className="ai-chat-bubble">{row.role === "MODEL" ? <Markdown text={row.text} /> : <p>{row.text}</p>}</div>{row.role === "MODEL" && <button className="ai-chat-copy" type="button" onClick={() => copy(row.text, row.id)}>{copiedId === row.id ? "Đã sao chép" : "Sao chép"}</button>}</article>)}
           {pending && <article className="ai-chat-message is-user"><div className="ai-chat-bubble"><p>{pending.text}</p></div>{pending.status === "failed" && <button className="ai-chat-retry" type="button" onClick={() => send(pending)}>Thử gửi lại</button>}</article>}
-          {pending?.status === "sending" && <div className="ai-chat-typing" role="status"><span /><span /><span /><small>AI đang suy nghĩ…</small></div>}
+          {pending?.status === "sending" && <div className="ai-chat-typing" role="status"><span /><span /><span /><small>Đang xử lý câu hỏi · {elapsed} giây</small></div>}
           <div ref={endRef} />
         </div>
         {error && <p className="ai-chat-error" role="alert">{error} {!pending && <button type="button" onClick={retryLoad}>Thử lại</button>}</p>}

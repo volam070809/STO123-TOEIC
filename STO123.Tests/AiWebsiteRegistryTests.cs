@@ -42,6 +42,11 @@ public sealed class AiWebsiteRegistryTests
         var (placement, placementLinks) = AiWebsiteGuide.Resolve("KNN phân lớp đầu vào thế nào?");
         Assert.Contains("KNN", placement);
         Assert.Contains(placementLinks, x => x.Url == "/placement");
+        var (vocabularyPractice, practiceLinks) = AiWebsiteGuide.Resolve("Ôn từ ở đâu?");
+        Assert.Contains("Luyện từ vựng", vocabularyPractice);
+        Assert.Contains(practiceLinks, x => x.Url == "/practice/vocabulary");
+        Assert.Equal("Luyện từ vựng", AiWebsiteGuide.ForRoute("/practice/vocabulary")?.Label);
+        Assert.Null(AiWebsiteGuide.ForRoute("/admin/content/questions"));
     }
 
     [Fact]

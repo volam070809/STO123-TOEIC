@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import SiteLayout from "../../layouts/SiteLayout";
+import { isProtectedExamActive } from "../../components/layout/protectedExamActivity";
 import { examApi } from "../../services/examApi";
 import ExamContent from "./ExamContent";
 import PlacementIcon from "./PlacementIcon";
@@ -208,7 +209,7 @@ export default function ExamPage() {
     } catch { setError("Không thể nộp bài. Vui lòng thử lại."); setSubmitConfirm(false); }
     finally { setPending(false); }
   }
-  return <SiteLayout><div className={`site-container exam-page${placement ? " placement-exam" : ""}`}>
+  return <SiteLayout examActive={!error && (!attempt || isProtectedExamActive(attempt))}><div className={`site-container exam-page${placement ? " placement-exam" : ""}`}>
     {error && <p className="exam-error" role="alert">{error}</p>}
     {!attempt ? !error && <p>Đang tải bài thi…</p> : <>
       <div className="exam-top"><div><h1>{attempt.examName || "Thi thử TOEIC"}</h1><p>Part {currentPart} · Đã trả lời {answered}/{attempt.totalQuestions}</p>
