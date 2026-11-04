@@ -313,6 +313,48 @@ public sealed class AiKnowledgeRetrievalTests
             "Tôi yếu Part 7, trong khóa đã mua có bài nào giúp cải thiện?", null, default);
         Assert.DoesNotContain("Part 7 Reading", differentLearner.Text);
         Assert.DoesNotContain("9/30 đúng", differentLearner.Text);
+        var functionHandler = new FunctionCycleGemini(db);
+        var functionAi = new AiToeicService(new HttpClient(functionHandler),
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+                ["Gemini:ApiKey"] = "isolated-test-key", ["Gemini:Model"] = "gemini-3.5-flash-lite"
+            }).Build());
+        var functionResult = await functionAi.ReplyWithToolsAsync(
+            [new AiPromptMessage("USER", "Tôi yếu Part 7, trong khóa đã mua có bài nào nên học?")],
+            "", 8, "/practice", new AiFunctionTools(service), default);
+        Assert.Equal(["get_practice", "get_courses", "get_lessons"], functionResult.ToolCalls);
+        Assert.Equal(2, functionHandler.Requests);
+        Assert.Contains("Part 7 Reading", functionResult.Answer);
+        Assert.DoesNotContain("Private course secret", functionHandler.FunctionResponseBody);
+        Assert.DoesNotContain("20/20 đúng", functionHandler.FunctionResponseBody);
+        Assert.Contains("Part 7: 3 lần, 9/30 đúng", functionHandler.FunctionResponseBody);
+        Assert.Contains("Part 7 Reading", functionHandler.FunctionResponseBody);
+        await db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO AiHoiThoai VALUES (4,8,'Công cụ Gemini','2026-01-01','2026-01-01')");
+        var controllerHandler = new FunctionCycleGemini(db);
+        var functionController = new AiChatController(db,
+            new AiToeicService(new HttpClient(controllerHandler),
+                new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+                    ["Gemini:ApiKey"] = "isolated-test-key", ["Gemini:Model"] = "gemini-3.5-flash-lite"
+                }).Build()), service, functionTools: new AiFunctionTools(service)) {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+        functionController.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity([
+            new Claim(ClaimTypes.NameIdentifier, "8"), new Claim(ClaimTypes.Role, "HOC_VIEN")], "test"));
+        Assert.IsType<OkObjectResult>(await functionController.Send(4,
+            new AiChatMessageRequest(Guid.NewGuid(),
+                "Tôi yếu Part 7, trong khóa đã mua có bài nào nên học?", null), default));
+        Assert.Equal(2, controllerHandler.Requests);
+        Assert.Equal(2, await db.AiTinNhan.CountAsync(x => x.MaHoiThoai == 4));
+        var invalidCountAi = new AiToeicService(new HttpClient(new InvalidCountGemini()),
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+                ["Gemini:ApiKey"] = "isolated-test-key", ["Gemini:Model"] = "gemini-3.5-flash-lite"
+            }).Build());
+        var verifiedCount = await invalidCountAi.ReplyWithToolsAsync(
+            [new AiPromptMessage("USER", "Có bao nhiêu chủ đề từ vựng?")], "", 8, null,
+            new AiFunctionTools(service), default);
+        Assert.Equal("Hiện có 1 chủ đề từ vựng đang mở cho học viên.", verifiedCount.Answer);
+        await Assert.ThrowsAsync<AiChatException>(() => new AiFunctionTools(service)
+            .ExecuteAsync("delete_all", default, 8, "hello", [], null, default));
         Assert.Contains("lịch trình",
             (await service.ResolveAsync(8, "Explain itinerary", null, default)).Text);
 
@@ -368,6 +410,15 @@ public sealed class AiKnowledgeRetrievalTests
         Assert.Equal(1, practiceHandler.Requests);
         Assert.DoesNotContain("Original unchecked explanation", practiceHandler.LastRequestBody);
         Assert.DoesNotContain("đáp án đúng B", practiceHandler.LastRequestBody);
+        var protectedToolsChat = new AiChatController(db,
+            new AiToeicService(new HttpClient(practiceHandler), practiceConfig), service,
+            functionTools: new AiFunctionTools(service)) {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+        protectedToolsChat.HttpContext.User = practiceChat.HttpContext.User;
+        Assert.IsType<OkObjectResult>(await protectedToolsChat.Send(3,
+            new AiChatMessageRequest(Guid.NewGuid(), "Đáp án câu này là gì?", uncheckedContext), default));
+        Assert.Equal(1, practiceHandler.Requests);
         var protectedAnswer = Assert.IsType<OkObjectResult>(await practiceChat.Send(3,
             new AiChatMessageRequest(Guid.NewGuid(), "Đáp án câu này là gì?", uncheckedContext), default));
         Assert.DoesNotContain("đáp án đúng B", JsonDocument.Parse(JsonSerializer.Serialize(protectedAnswer.Value))
@@ -422,6 +473,53 @@ public sealed class AiKnowledgeRetrievalTests
         Assert.IsType<OkObjectResult>(await chat.List(default));
         Assert.IsType<CreatedResult>(await chat.Create(default));
         Assert.Equal(3, handler.Requests);
+
+        // Catalog questions must not silently stop at the old 20-topic/12-course limits.
+        for (var id = 3; id <= 26; id++)
+        {
+            var name = $"T{id}";
+            var status = "DANG_MO";
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"INSERT INTO ChuDe VALUES ({id}, {name}, NULL, {status})");
+        }
+        for (var id = 4; id <= 18; id++)
+        {
+            var name = $"C{id}";
+            var status = "DANG_MO";
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"INSERT INTO KhoaHoc VALUES ({id}, {name}, {status}, {1})");
+        }
+        var fullTopics = await service.ResolveAsync(8, "Liệt kê tất cả chủ đề từ vựng", null, default);
+        Assert.Contains("T26", fullTopics.Text);
+        Assert.DoesNotContain("hiển thị 20/", fullTopics.Text);
+        var fullCourses = await service.ResolveAsync(8, "Danh sách khóa học đang mở", null, default);
+        Assert.Contains("C18", fullCourses.Text);
+        var combinedCounts = await service.ResolveAsync(8,
+            "Có bao nhiêu chủ đề từ vựng và bao nhiêu khóa học đang mở?", null, default);
+        Assert.Contains("25 chủ đề", combinedCounts.ExactAnswer);
+        Assert.Contains("18 khóa học", combinedCounts.ExactAnswer);
+        using var countArgs = JsonDocument.Parse("""{"question":"Có bao nhiêu chủ đề từ vựng và khóa học?"}""");
+        var vocabularyOnly = await new AiFunctionTools(service).ExecuteAsync("get_vocabulary",
+            countArgs.RootElement, 8, "Có bao nhiêu chủ đề từ vựng và khóa học?", [], null, default);
+        Assert.Contains("25 chủ đề", vocabularyOnly.ExactAnswer);
+        Assert.DoesNotContain("18 khóa học", vocabularyOnly.Text);
+        var coursesOnly = await new AiFunctionTools(service).ExecuteAsync("get_courses",
+            countArgs.RootElement, 8, "Có bao nhiêu chủ đề từ vựng và khóa học?", [], null, default);
+        Assert.Contains("18 khóa học", coursesOnly.ExactAnswer);
+        Assert.DoesNotContain("25 chủ đề", coursesOnly.Text);
+        var topicWords = await service.ResolveAsync(8,
+            "Chủ đề Business có những từ nào?", null, default);
+        Assert.Contains("acumen", topicWords.Text);
+        Assert.Contains("itinerary", topicWords.Text);
+        var lessonList = await service.ResolveAsync(8,
+            "Liệt kê tất cả bài học trong khóa đã mua", null, default);
+        Assert.Contains("Present Perfect", lessonList.Text);
+        Assert.Contains("Part 7 Reading", lessonList.Text);
+        Assert.DoesNotContain("Private course secret", lessonList.Text);
+        Assert.DoesNotContain("Future grammar lesson", lessonList.Text);
+        var featureList = await service.ResolveAsync(8,
+            "Website có những chức năng nào?", null, default);
+        Assert.Contains("Các chức năng đã đăng ký", featureList.Text);
     }
 
     [Fact]
@@ -473,6 +571,46 @@ public sealed class AiKnowledgeRetrievalTests
             var body = JsonSerializer.Serialize(new { candidates = new[] { new { content = new {
                 parts = new[] { new { text = """{"domains":["COURSES","LESSONS"],"terms":["Part 7"]}""" } }
             } } } });
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) {
+                Content = new StringContent(body, Encoding.UTF8, "application/json") });
+        }
+    }
+
+    private sealed class FunctionCycleGemini(ToeicDbContext db) : HttpMessageHandler
+    {
+        public int Requests { get; private set; }
+        public string FunctionResponseBody { get; private set; } = "";
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Assert.Null(db.Database.CurrentTransaction);
+            Requests++;
+            var payload = await request.Content!.ReadAsStringAsync(ct);
+            var body = Requests == 1
+                ? """{"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"get_practice","args":{"question":"Tôi yếu Part 7"}}},{"functionCall":{"name":"get_courses","args":{"question":"Khóa đã mua của tôi"}}},{"functionCall":{"name":"get_lessons","args":{"question":"Bài Part 7 trong khóa đã mua"}}}]}}]}"""
+                : """{"candidates":[{"content":{"role":"model","parts":[{"text":"Hãy học Part 7 Reading trong khóa đã mua."}]}}]}""";
+            if (Requests == 2)
+            {
+                using var parsed = JsonDocument.Parse(payload);
+                FunctionResponseBody = string.Join("\n", parsed.RootElement.GetProperty("contents")
+                    .EnumerateArray().Last().GetProperty("parts").EnumerateArray()
+                    .Select(part => part.GetProperty("functionResponse").GetProperty("response")
+                        .GetProperty("result").GetString()));
+                Assert.Contains("functionResponse", payload);
+                Assert.Contains("\"mode\":\"AUTO\"", payload);
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK) {
+                Content = new StringContent(body, Encoding.UTF8, "application/json") };
+        }
+    }
+
+    private sealed class InvalidCountGemini : HttpMessageHandler
+    {
+        private int requests;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var body = ++requests == 1
+                ? """{"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"get_vocabulary","args":{"question":"Có bao nhiêu chủ đề từ vựng?"}}}]}}]}"""
+                : """{"candidates":[{"content":{"role":"model","parts":[{"text":"Tôi chưa có số liệu."}]}}]}""";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) {
                 Content = new StringContent(body, Encoding.UTF8, "application/json") });
         }

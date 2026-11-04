@@ -16,7 +16,8 @@ public sealed record AiChatMessageRequest(Guid RequestId, string? Message, AiLea
 [Authorize(Roles = "HOC_VIEN")]
 [Route("api/ai/conversations")]
 public sealed class AiChatController(ToeicDbContext db, AiToeicService ai,
-    AiKnowledgeService knowledge, ILogger<AiChatController>? logger = null) : ControllerBase
+    AiKnowledgeService knowledge, ILogger<AiChatController>? logger = null,
+    AiFunctionTools? functionTools = null) : ControllerBase
 {
     private int LearnerId => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
     private static object View(AiTinNhan item) => new { id = item.MaTinNhan, role = item.VaiTro,
@@ -113,14 +114,26 @@ public sealed class AiChatController(ToeicDbContext db, AiToeicService ai,
             retrievalMs += Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
             phase = Stopwatch.GetTimestamp();
             var grounding = await knowledge.ResolveAsync(LearnerId, text, input.Context, ct,
-                history.Take(history.Count - 1).ToArray(), input.Route);
+                history.Take(history.Count - 1).ToArray(), input.Route,
+                skipSemanticPlan: functionTools is not null);
             retrievalMs += Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
             phase = Stopwatch.GetTimestamp();
-            var reply = grounding.ExactAnswer is not null
-                ? AiAnswerComposer.Compose(grounding.ExactAnswer, grounding.Sources)
-                : grounding.UncheckedPractice && AiQuestionIntent.IsProtectedAnswerRequest(text)
+            var reply = grounding.UncheckedPractice && AiQuestionIntent.IsProtectedAnswerRequest(text)
                 ? AiAnswerComposer.Compose(PracticeHint(grounding.PracticePart), grounding.Sources)
+                : functionTools is not null
+                ? await ReplyWithToolsAsync()
+                : grounding.ExactAnswer is not null
+                ? AiAnswerComposer.Compose(grounding.ExactAnswer, grounding.Sources)
                 : AiAnswerComposer.Compose(await ai.ReplyAsync(history, grounding.Text, ct), grounding.Sources);
+            async Task<string> ReplyWithToolsAsync()
+            {
+                var result = await ai.ReplyWithToolsAsync(history, grounding.PageContextText, LearnerId,
+                    input.Route, functionTools!, ct);
+                logger?.LogInformation("AI function calls conversation={ConversationId} tools={ToolNames}",
+                    id, string.Join(',', result.ToolCalls));
+                return AiAnswerComposer.Compose(result.Answer,
+                    grounding.Sources.Concat(result.Sources).DistinctBy(source => source.Url).ToArray());
+            }
             geminiMs = Stopwatch.GetElapsedTime(phase).TotalMilliseconds;
             // The provider call has completed before acquiring any SQL transaction or conversation lock.
             phase = Stopwatch.GetTimestamp();

@@ -37,6 +37,20 @@ public static class AiQuestionIntent
             "trang nao", "menu nao", "vao dau", "nhu the nao", "lam sao", "huong dan");
     }
 
+    public static bool WantsWebsiteCatalog(string question)
+    {
+        var text = AiWebsiteGuide.Normalize(question);
+        return Has(text, "chuc nang nao", "tat ca chuc nang", "cac chuc nang",
+            "website co gi", "web co gi", "website co nhung", "all features");
+    }
+
+    public static bool WantsLessonList(string question)
+    {
+        var text = AiWebsiteGuide.Normalize(question);
+        return Has(text, "danh sach bai hoc", "liet ke bai hoc", "tat ca bai hoc",
+            "cac bai hoc", "nhung bai hoc", "all lessons", "list lessons");
+    }
+
     public static bool IsProtectedAnswerRequest(string question)
     {
         var text = AiWebsiteGuide.Normalize(question);
@@ -88,6 +102,14 @@ public static class AiQuestionIntent
         return Has(text, "chu de", "topic", "danh sach", "co nhung", "ke ten", "thuoc chu de");
     }
 
+    public static bool WantsWordsInTopic(string question)
+    {
+        var text = AiWebsiteGuide.Normalize(question);
+        return Has(text, "chu de", "topic", "nhom tu") &&
+            Has(text, "tu nao", "nhung tu", "cac tu", "danh sach tu", "liet ke tu",
+                "co tu gi", "tu vung trong", "all words", "list words");
+    }
+
     public static bool IsPublicCountQuestion(string question)
     {
         var text = AiWebsiteGuide.Normalize(question);
@@ -118,8 +140,9 @@ public static class AiQuestionIntent
     public static bool IsFollowUp(string question)
     {
         var text = AiWebsiteGuide.Normalize(question);
-        return Has(text, "bai do", "khoa do", "chu de do", "phan do", "vay", "tiep theo",
-            "bai nay", "cai do", "that lesson", "that course", "those", "then");
+        return Has(text, "bai do", "khoa do", "chu de do", "tu do", "cac tu do",
+            "phan do", "vay", "tiep theo", "bai nay", "cai do", "that lesson",
+            "that course", "that topic", "those", "then");
     }
 
     public static bool WantsPracticeExamples(string question)

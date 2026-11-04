@@ -161,9 +161,10 @@ builder.Services.AddSingleton<IKnnClassifier, KnnClassifier>();
 builder.Services.AddSingleton<KnnDiagnosticsStore>();
 builder.Services.AddSingleton<IToeicScoreCalculator, EstimatedLinearToeicScoreCalculator>();
 builder.Services.AddSingleton<SupportContactStore>();
-builder.Services.AddHttpClient<AiToeicService>(client => client.Timeout = TimeSpan.FromSeconds(35));
+builder.Services.AddHttpClient<AiToeicService>(client => client.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddScoped<AiLearningContextService>();
 builder.Services.AddScoped<AiKnowledgeService>();
+builder.Services.AddScoped<AiFunctionTools>();
 builder.Services.AddScoped<AiPdfTextService>();
 
 builder.Services.AddDbContext<ToeicDbContext>((services, options) =>

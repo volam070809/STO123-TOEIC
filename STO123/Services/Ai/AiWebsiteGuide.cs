@@ -7,7 +7,8 @@ namespace STO123.Services.Ai;
 
 public sealed record AiSource(string Title, string Url);
 public sealed record AiGrounding(string Text, IReadOnlyList<AiSource> Sources,
-    bool UncheckedPractice = false, int? PracticePart = null, string? ExactAnswer = null);
+    bool UncheckedPractice = false, int? PracticePart = null, string? ExactAnswer = null,
+    string PageContextText = "");
 public sealed record AiWebsiteFeature(string Route, string Label, string[] Roles,
     string Workflow, string[] Aliases, string Link);
 
