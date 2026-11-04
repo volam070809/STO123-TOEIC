@@ -32,7 +32,7 @@ public sealed class PaymentCreationTests
         Assert.Equal("12000000", query["vnp_Amount"].ToString());
         Assert.Equal("VND", query["vnp_CurrCode"].ToString());
         Assert.Equal("20261015100000", query["vnp_CreateDate"].ToString());
-        Assert.Equal("20261015101500", query["vnp_ExpireDate"].ToString());
+        Assert.Equal("20261015100300", query["vnp_ExpireDate"].ToString());
         Assert.Equal("https://example.test/payment/return", query["vnp_ReturnUrl"].ToString());
 
         var unsigned = uri.Query.TrimStart('?').Split("&vnp_SecureHash=", 2)[0];
@@ -233,6 +233,32 @@ public sealed class PaymentCreationTests
             .Create(new CreatePaymentRequest(1), CancellationToken.None));
         Assert.Single(await fixture.Db.DangKyGoiHoc.ToListAsync());
         Assert.Single(await fixture.Db.GiaoDichThanhToan.ToListAsync());
+    }
+
+    [Fact]
+    public async Task ExpiredCheckoutAllowsRetryWithNewReferenceWithoutRemovingHistory()
+    {
+        await using var fixture = await PaymentDb.CreateAsync();
+        Assert.IsType<OkObjectResult>(await fixture.Controller(1)
+            .Create(new CreatePaymentRequest(1), CancellationToken.None));
+        var old = await fixture.Db.GiaoDichThanhToan.SingleAsync();
+        old.NgayTao = Now.ToOffset(TimeSpan.FromHours(7)).DateTime
+            .AddMinutes(-PaymentExpiry.PendingMinutes - 1);
+        await fixture.Db.SaveChangesAsync();
+        fixture.Db.ChangeTracker.Clear();
+
+        Assert.IsType<OkObjectResult>(await fixture.Controller(1)
+            .Create(new CreatePaymentRequest(1), CancellationToken.None));
+        var rows = await fixture.Db.GiaoDichThanhToan.AsNoTracking()
+            .OrderBy(x => x.MaGiaoDich).ToListAsync();
+        Assert.Equal(2, rows.Count);
+        Assert.Equal("QUA_HAN", rows[0].TrangThai);
+        Assert.Equal("CHO_XU_LY", rows[1].TrangThai);
+        Assert.NotEqual(rows[0].MaGiaoDichCongThanhToan, rows[1].MaGiaoDichCongThanhToan);
+        var enrollments = await fixture.Db.DangKyGoiHoc.AsNoTracking()
+            .OrderBy(x => x.MaDangKy).ToListAsync();
+        Assert.Equal("QUA_HAN", enrollments[0].TrangThai);
+        Assert.Equal("CHO_THANH_TOAN", enrollments[1].TrangThai);
     }
 
     [Fact]

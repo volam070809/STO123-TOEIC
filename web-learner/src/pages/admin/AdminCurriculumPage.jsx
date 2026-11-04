@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import { adminContentApi as api } from "../../services/adminContentApi";
@@ -20,19 +20,62 @@ const errorText = e => e.data?.message || ({ MEDIA_UNAVAILABLE: "Không kết n�
   MEDIA_PERSISTENCE_UNCERTAIN: "Chưa xác định được kết quả lưu tệp. Mở lại hoạt động để kiểm tra trước khi thử lại." })[e.data?.code]
   || e.message || "Không thực hiện được thao tác.";
 
+function UploadStatus({ progress }) {
+  if (!progress) return null;
+  const stage = progress.phase === "verify" ? "Đang xác minh Blob và lưu SQL" :
+    progress.phase === "saving" ? "Đang kiểm tra tệp trong danh sách đã lưu" :
+      progress.phase === "saved" ? "Đã lưu và xác minh" :
+        progress.phase === "error" ? "Chưa tải tệp" : "Đang tải lên";
+  return <div className="builder-upload-status" role="status" aria-live="polite">
+    <strong>{progress.name}</strong><span>{progress.index && progress.total > 1 ?
+      `Tệp ${progress.index}/${progress.total} · ` : ""}{stage} · {progress.percent}%</span>
+    <progress max="100" value={progress.percent} aria-label={`Tiến độ ${progress.name}`} />
+  </div>;
+}
+
 function PreviewResource({ lectureId, resource, token }) {
   const [state, setState] = useState({ url: "", error: "" });
+  const [renewal, setRenewal] = useState(0);
+  const videoRef = useRef(null);
+  const resumeAt = useRef(null);
+  const resumePlaying = useRef(false);
+  const lastRenewal = useRef(0);
   useEffect(() => {
     let live = true; let url = "";
-    api.resourceBlob(lectureId, resource.id, token).then(blob => {
-      if (!live) return;
-      url = URL.createObjectURL(blob); setState({ url, error: "" });
+    const request = resource.kind === "VIDEO" ?
+      api.previewVideoTicket(lectureId, resource.id, token).then(result => ({
+        url: api.previewVideoUrl(result.url), temporary: false })) :
+      api.resourceBlob(lectureId, resource.id, token).then(blob => ({
+        url: URL.createObjectURL(blob), temporary: true }));
+    request.then(result => {
+      if (!live) { if (result.temporary) URL.revokeObjectURL(result.url); return; }
+      url = result.temporary ? result.url : "";
+      setState({ url: result.url, error: "" });
     }).catch(e => live && setState({ url: "", error: errorText(e) }));
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
-  }, [lectureId, resource.id, token]);
+  }, [lectureId, resource.id, resource.kind, token, renewal]);
+  function videoError() {
+    if (Date.now() - lastRenewal.current > 30_000) {
+      lastRenewal.current = Date.now();
+      resumeAt.current = videoRef.current?.currentTime || 0;
+      resumePlaying.current = !videoRef.current?.paused;
+      setRenewal(value => value + 1);
+      return;
+    }
+    setState(current => ({ ...current,
+      error: "Video không phát được. Tệp có thể đã bị gỡ hoặc kho lưu trữ đang gián đoạn." }));
+  }
   return <div className="builder-preview-resource"><strong>{resource.name}</strong>
     {state.error && <p role="alert">{state.error}</p>}
-    {state.url && <>{resource.kind === "VIDEO" ? <video controls src={state.url}/> :
+    {state.url && <>{resource.kind === "VIDEO" ? <video ref={videoRef} controls playsInline preload="metadata"
+      src={state.url} onError={videoError} onLoadedMetadata={event => {
+        if (resumeAt.current != null) {
+          event.currentTarget.currentTime = resumeAt.current;
+          resumeAt.current = null;
+          if (resumePlaying.current) event.currentTarget.play().catch(() => {});
+          resumePlaying.current = false;
+        }
+      }}/> :
       resource.kind === "AUDIO" ? <audio controls src={state.url}/> :
       resource.kind === "HINH_ANH" ? <img src={state.url} alt={resource.name}/> :
       resource.kind === "PDF" ? <iframe src={state.url} title={resource.name}/> : null}
@@ -66,6 +109,9 @@ export default function AdminCurriculumPage() {
   const [copyMode, setCopyMode] = useState(false);
   const [capabilities, setCapabilities] = useState({ excelEnabled: false, maxFileBytes: 250000000, maxVideoBytes: 950000000 });
   const [preview, setPreview] = useState(null); const [loading, setLoading] = useState(true);
+  const [previewResourceId, setPreviewResourceId] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailLoadFailed, setDetailLoadFailed] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [nameDialog, setNameDialog] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState(null);
@@ -77,13 +123,26 @@ export default function AdminCurriculumPage() {
   const [progressSummary, setProgressSummary] = useState(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+  const [lastSavedId, setLastSavedId] = useState(null);
+  const outlineRequest = useRef(0);
+  const selectionRequest = useRef(0);
+  const editVersion = useRef(0);
   const unit = outline?.units.find(x => x.id === selected?.unitId);
   const lesson = unit?.lessons.find(x => x.id === selected?.lessonId);
   const activity = lesson?.steps.find(x => x.id === selected?.stepId);
+  useEffect(() => {
+    if (lastSavedId == null) return;
+    document.querySelector(`.builder-editor [data-resource-id="${lastSavedId}"]`)
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [lastSavedId]);
 
-  async function refresh() { const data = await api.outline(courseId, token); setOutline(data); setLoading(false); setStatsRevision(value => value + 1); return data; }
-  useEffect(() => { let live = true; Promise.all([api.outline(courseId, token), api.resourceCapabilities(token)])
-    .then(([data, caps]) => { if (live) { setOutline(data); setCapabilities(caps); setLoading(false);
+  async function refresh() { const request = ++outlineRequest.current; const data = await api.outline(courseId, token);
+    if (request === outlineRequest.current) { setOutline(data); setLoading(false); setStatsRevision(value => value + 1); }
+    return data; }
+  useEffect(() => { let live = true; const request = ++outlineRequest.current;
+    Promise.all([api.outline(courseId, token), api.resourceCapabilities(token)])
+    .then(([data, caps]) => { if (live && request === outlineRequest.current) { setOutline(data); setCapabilities(caps); setLoading(false);
       if (data.units[0]) { const first = data.units.find(u => !u.isArchived) || data.units[0];
         const firstLesson = first.lessons.find(l => !l.isArchived) || first.lessons[0];
         const firstStep = firstLesson?.steps.find(s => !s.isArchived);
@@ -91,28 +150,35 @@ export default function AdminCurriculumPage() {
         else setSelected({ unitId: first.id, lessonId: firstLesson?.id || null });
         setExpanded(Object.fromEntries(data.units.flatMap(u => [[`u${u.id}`, true], ...u.lessons.map(l => [`l${l.id}`, true])]))); }
     } })
-    .catch(e => { if (live) { setError(errorText(e)); setLoading(false); } }); return () => { live = false; }; }, [courseId, token]);
+    .catch(e => { if (live && request === outlineRequest.current) { setError(errorText(e)); setLoading(false); } });
+    return () => { live = false; }; }, [courseId, token]);
   useEffect(() => { if (studioTab !== "progress" || !token) return; let live = true;
     api.progressSummary(courseId, token).then(value => live && setProgressSummary(value))
       .catch(e => live && setError(errorText(e))); return () => { live = false; }; }, [courseId, studioTab, token]);
   useEffect(() => { if (!editorDirty && !files.length) return; const warn = e => { e.preventDefault(); e.returnValue = ""; };
     window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, [editorDirty, files.length]);
   const expand = key => setExpanded(x => ({ ...x, [key]: !x[key] }));
-  function resetEditor() { setContent(emptyContent()); setExercise(emptyExercise()); setLecture(null); setFiles([]); setCopyMode(false); setMode("LECTURE"); setEditorTab("info"); setEditorDirty(false); setError(""); setNotice(""); }
+  function resetEditor() { setContent(emptyContent()); setExercise(emptyExercise()); setLecture(null); setFiles([]); setCopyMode(false); setMode("LECTURE"); setEditorTab("info"); setEditorDirty(false); setDetailLoading(false); setDetailLoadFailed(false); setUploadProgress(null); setUploadError(null); setLastSavedId(null); setError(""); setNotice(""); }
   async function select(unitId, lessonId = null, step = null, discard = false) {
+    if (busy && !discard) return;
     if ((editorDirty || files.length) && !discard && !window.confirm("Bạn có thông tin hoặc tệp chưa lưu. Rời khỏi hoạt động này?")) return;
+    const request = ++selectionRequest.current;
     resetEditor(); setSelected({ unitId, lessonId, stepId: step?.id || null });
     if (!step) return;
+    setDetailLoading(true);
     setMode(step.activityType);
     try {
       if (step.activityType === "LECTURE") {
         const item = await api.lecture(step.activityId, token);
+        if (request !== selectionRequest.current) return;
         setLecture(item); setContent({ title: item.title, summary: item.summary || "", content: item.content || "" });
       } else if (step.activityType === "EXERCISE") {
         const item = await api.exerciseDetail(courseId, unitId, lessonId, step.id, token);
+        if (request !== selectionRequest.current) return;
         setExercise({ title: item.title, questions: item.questions });
       }
-    } catch (e) { setError(errorText(e)); }
+    } catch (e) { if (request === selectionRequest.current) { setError(errorText(e)); setDetailLoadFailed(true); } }
+    finally { if (request === selectionRequest.current) setDetailLoading(false); }
   }
   async function perform(action, success) {
     if (busy) return null; setBusy(true); setError(""); setNotice("");
@@ -187,13 +253,15 @@ export default function AdminCurriculumPage() {
   function chooseFiles(list) {
     const next = [...list].map(file => ({ file, kind: kindFromFile(file, capabilities.excelEnabled) }));
     if (next.some(x => !x.kind || x.file.size > (x.kind === "VIDEO" ? capabilities.maxVideoBytes : capabilities.maxFileBytes))) {
-      setError("Tệp không đúng định dạng hoặc vượt quá giới hạn dung lượng."); return;
+      setUploadProgress(null); setUploadError("Tệp không đúng định dạng hoặc vượt quá giới hạn dung lượng."); return;
     }
-    setFiles(next); setError("");
+    setFiles(next); setUploadError(null); setUploadProgress(null); setLastSavedId(null);
   }
   async function saveContent(e) {
     e.preventDefault(); if (busy || !lesson) return;
+    const savedVersion = editVersion.current;
     setBusy(true); setError(""); setNotice("");
+    let persisted = false;
     try {
       if (activity && !copyMode) {
         const lectureId = lecture?.id ?? activity.activityId;
@@ -201,31 +269,39 @@ export default function AdminCurriculumPage() {
           content.content !== (lecture.content || "");
         if (changed) await api.editCourseLecture(courseId, unit.id, lesson.id, activity.id,
           { ...content, categoryId: null, level: null, partId: null }, token);
+        persisted = true;
         setLecture(await api.lecture(lectureId, token));
       }
       else {
         const result = await api.addCourseLecture(courseId, unit.id, lesson.id,
           { ...content, categoryId: null, level: null, partId: null }, token);
+        persisted = true;
         setSelected({ unitId: unit.id, lessonId: lesson.id, stepId: result.id });
         setLecture(await api.lecture(result.lectureId, token));
       }
       await refresh();
-      setCopyMode(false); setEditorDirty(false); setNotice("Đã lưu thông tin hoạt động. Để thêm tài nguyên, chọn tệp rồi nhấn Tải tệp đã chọn.");
+      setCopyMode(false); if (editVersion.current === savedVersion) setEditorDirty(false);
+      setNotice("Đã lưu thông tin hoạt động. Để thêm tài nguyên, chọn tệp rồi nhấn Tải tệp đã chọn.");
     } catch (e) {
       const needsCopy = e.status === 409 && activity && !copyMode;
       if (needsCopy) setCopyMode(true);
-      setError(needsCopy ? `${errorText(e)} Lưu thành hoạt động mới để giữ lịch sử học.` : errorText(e));
+      setError(persisted ? "Thông tin đã lưu nhưng chưa tải lại được. Chọn lại hoạt động để xem dữ liệu mới; không lưu lặp." :
+        needsCopy ? `${errorText(e)} Lưu thành hoạt động mới để giữ lịch sử học.` : errorText(e));
     } finally { setBusy(false); }
   }
   async function uploadSelectedFiles() {
     if (!lecture || !files.length || busy) return;
-    setBusy(true); setError(""); setNotice("");
+    setBusy(true); setUploadError(null); setError(""); setNotice(""); setLastSavedId(null);
+    const total = files.length;
+    let currentIndex = 0;
     try {
       for (const entry of files) {
+        currentIndex++;
         const body = new FormData(); body.set("name", entry.file.name); body.set("kind", entry.kind); body.set("file", entry.file);
-        setUploadProgress({ name: entry.file.name, percent: 0, phase: "upload" });
+        setUploadProgress({ name: entry.file.name, percent: 0, phase: "upload", index: currentIndex, total });
         const uploaded = await api.uploadResource(lecture.id, null, body, token,
-          (percent, phase = "upload") => setUploadProgress({ name: entry.file.name, percent, phase }));
+          (percent, phase = "upload") => setUploadProgress({ name: entry.file.name, percent, phase, index: currentIndex, total }));
+        setUploadProgress({ name: entry.file.name, percent: 100, phase: "saving", index: currentIndex, total });
         setFiles(current => current.filter(file => file !== entry));
         let saved;
         try { saved = await api.lecture(lecture.id, token); }
@@ -233,21 +309,29 @@ export default function AdminCurriculumPage() {
         setLecture(saved);
         if (!saved.resources.some(resource => resource.id === uploaded.id))
           throw new Error("Máy chủ đã xác nhận lưu tệp nhưng danh sách chưa cập nhật. Tải lại hoạt động để kiểm tra; không tải lại cùng tệp.");
+        setLastSavedId(uploaded.id);
+        setUploadProgress({ name: entry.file.name, percent: 100, phase: "saved", index: currentIndex, total });
       }
       await refresh(); setNotice("Đã tải và lưu tệp. Tài nguyên hiện có trong mục Tệp đã lưu.");
     } catch (e) {
-      setError(errorText(e));
+      setUploadError(errorText(e));
       try { setLecture(await api.lecture(lecture.id, token)); } catch { /* Giữ thông báo lỗi gốc. */ }
-    } finally { setBusy(false); setUploadProgress(null); }
+    } finally { setBusy(false); }
   }
   async function saveExercise(e, publish) {
     e.preventDefault(); if (busy || !lesson) return; setBusy(true); setError(""); setNotice("");
+    const savedVersion = editVersion.current;
     try {
       const body = { ...exercise, publish };
       const result = activity ? await api.reviseExercise(courseId, unit.id, lesson.id, activity.id, body, token)
         : await api.addExercise(courseId, unit.id, lesson.id, body, token);
-      await refresh(); setSelected({ unitId: unit.id, lessonId: lesson.id, stepId: result.id });
-      setEditorDirty(false);
+      setSelected({ unitId: unit.id, lessonId: lesson.id, stepId: result.id });
+      if (editVersion.current === savedVersion) setEditorDirty(false);
+      try {
+        const saved = await api.exerciseDetail(courseId, unit.id, lesson.id, result.id, token);
+        if (editVersion.current === savedVersion) setExercise({ title: saved.title, questions: saved.questions });
+        await refresh();
+      } catch { setError("Bài tập đã lưu nhưng chưa tải lại được. Chọn lại hoạt động để kiểm tra; không lưu lặp."); return; }
       setNotice(publish ? "Đã xuất bản bài tập." : "Đã lưu bản nháp.");
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
@@ -257,6 +341,7 @@ export default function AdminCurriculumPage() {
   function reorderQuestion(index, direction) {
     const next = [...exercise.questions]; const other = index + direction; if (other < 0 || other >= next.length) return;
     [next[index], next[other]] = [next[other], next[index]]; setExercise({ ...exercise, questions: next });
+    editVersion.current++; setEditorDirty(true);
   }
   async function moveResource(index, direction) {
     if (!lecture || busy) return; const next = [...lecture.resources]; const other = index + direction;
@@ -272,17 +357,27 @@ export default function AdminCurriculumPage() {
   }
   async function replaceResource(resource, file) {
     if (!file || !lecture) return; const kind = kindFromFile(file, capabilities.excelEnabled);
-    if (!kind || file.size > (kind === "VIDEO" ? capabilities.maxVideoBytes : capabilities.maxFileBytes)) { setError("Tệp không đúng định dạng hoặc vượt giới hạn dung lượng."); return; }
-    setBusy(true); setError(""); setNotice("");
+    if (!kind || file.size > (kind === "VIDEO" ? capabilities.maxVideoBytes : capabilities.maxFileBytes)) {
+      setUploadProgress({ name: file.name, percent: 0, phase: "error", replaceId: resource.id });
+      setUploadError("Tệp không đúng định dạng hoặc vượt giới hạn dung lượng."); return;
+    }
+    setBusy(true); setError(""); setNotice(""); setUploadError(null); setLastSavedId(null);
+    let newResourceId = null;
     try { const body = new FormData(); body.set("name", file.name); body.set("kind", kind); body.set("file", file);
-      setUploadProgress({ name: file.name, percent: 0, phase: "upload" });
-      await api.uploadResource(lecture.id, null, body, token,
-        (percent, phase = "upload") => setUploadProgress({ name: file.name, percent, phase }));
+      setUploadProgress({ name: file.name, percent: 0, phase: "upload", replaceId: resource.id });
+      const uploaded = await api.uploadResource(lecture.id, null, body, token,
+        (percent, phase = "upload") => setUploadProgress({ name: file.name, percent, phase, replaceId: resource.id }));
+      newResourceId = uploaded.id;
+      setUploadProgress({ name: file.name, percent: 100, phase: "saving", replaceId: resource.id });
       await api.archiveResource(lecture.id, resource.id, true, token);
-      setLecture(await api.lecture(lecture.id, token)); setNotice("Đã thay tệp; bản cũ được lưu trữ để bảo vệ lịch sử."); }
-    catch (e) { setError(`${errorText(e)} Tải lại danh sách tệp để kiểm tra trạng thái trước khi thử lại.`);
+      setLecture(await api.lecture(lecture.id, token)); await refresh(); setLastSavedId(newResourceId);
+      setUploadProgress({ name: file.name, percent: 100, phase: "saved", replaceId: resource.id });
+      setNotice("Đã thay tệp; bản cũ được lưu trữ để bảo vệ lịch sử."); }
+    catch (e) { setUploadError(newResourceId ?
+        `Tệp mới đã lưu nhưng chưa hoàn tất lưu trữ tệp cũ hoặc làm mới danh sách: ${errorText(e)}. Tải lại danh sách để kiểm tra; không tải lặp.` :
+        `${errorText(e)} Tải lại danh sách tệp để kiểm tra trạng thái trước khi thử lại.`);
       try { setLecture(await api.lecture(lecture.id, token)); } catch { /* giữ lỗi gốc */ } }
-    finally { setBusy(false); setUploadProgress(null); }
+    finally { setBusy(false); }
   }
   async function showPreview(steps, title) {
     setPreviewIndex(0); setPreview({ loading: true, title });
@@ -306,7 +401,6 @@ export default function AdminCurriculumPage() {
     <nav className="studio-tabs" aria-label="Nội dung khóa học">{[["curriculum","Chương trình học"],["resources","Thư viện tài nguyên"],["exercises","Bài tập"],["progress","Tiến độ học viên"],["archived","Đã lưu trữ"]].map(([key,label]) => <button key={key} className={studioTab === key ? "is-active" : ""} onClick={() => { if ((!editorDirty && !files.length) || window.confirm("Bạn có thông tin hoặc tệp chưa lưu. Chuyển mục?")) setStudioTab(key); }}>{label}</button>)}</nav>
     {error && <p className="admin-feedback is-error" role="alert">{error}</p>}
     {notice && !error && <p className="admin-feedback is-success" role="status">{notice}</p>}
-    {uploadProgress && <div role="status" className="admin-feedback"><strong>{uploadProgress.phase === "verify" ? "Đang ghép, xác minh Blob và lưu SQL" : uploadProgress.phase === "saved" ? "Đã lưu tài nguyên" : `Đang tải ${uploadProgress.name}: ${uploadProgress.percent}%`}</strong><progress max="100" value={uploadProgress.percent}/></div>}
     {studioTab === "progress" && progressSummary && <div className="studio-progress-summary"><div><strong>{progressSummary.enrolled}</strong><span>Học viên đang đăng ký</span></div><div><strong>{progressSummary.learnersStarted}</strong><span>Học viên đã bắt đầu</span></div><div><strong>{progressSummary.completedActivityRecords}</strong><span>Lượt hoàn thành hoạt động</span></div><div><strong>{progressSummary.activeActivities}</strong><span>Hoạt động đang hiển thị</span></div></div>}
     {loading ? <p role="status">Đang tải…</p> : outline && <div className="course-builder">
       <section className="admin-panel builder-tree"><header><div><h2>{studioTab === "archived" ? "Nội dung đã lưu trữ" : studioTab === "resources" ? "Nội dung có tài nguyên" : studioTab === "exercises" ? "Bài tập trong khóa học" : studioTab === "progress" ? "Tiến độ học viên" : "Chương trình học"}</h2><p>Quản lý cấu trúc khóa học, thêm, sửa, sắp xếp và xem trước.</p></div><div className="studio-tree-tools"><input type="search" aria-label="Tìm kiếm nội dung" placeholder="Tìm kiếm Lesson, hoạt động..." value={search} onChange={e => setSearch(e.target.value)}/><button className="admin-button" onClick={addUnit}>+ Thêm Unit</button></div></header>
@@ -332,26 +426,39 @@ export default function AdminCurriculumPage() {
           {activity && <nav className="studio-editor-tabs" aria-label="Chỉnh sửa hoạt động"><button type="button" className={editorTab === "info" ? "is-active" : ""} onClick={() => { setEditorTab("info"); document.querySelector('.builder-editor-body')?.scrollTo({ top: 0, behavior: 'smooth' }); }}>Thông tin</button><button type="button" className={editorTab === "resources" ? "is-active" : ""} onClick={() => { setEditorTab("resources"); document.querySelector('.builder-editor-body .builder-resources, .builder-editor-body input[type=file]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}>Tài nguyên</button><button type="button" onClick={() => showPreview([activity], activity.title)}>Xem trước</button></nav>}
           {!activity && <div className="builder-type"><button className={mode === "LECTURE" ? "is-selected" : ""} onClick={() => setMode("LECTURE")}>Nội dung học</button>
             <button className={mode === "EXERCISE" ? "is-selected" : ""} onClick={() => setMode("EXERCISE")}>Bài tập</button></div>}
-          {(activity?.activityType === "LECTURE" || !activity && mode === "LECTURE") && <form className="builder-form" onSubmit={saveContent}>
+          {detailLoading && <p role="status">Đang tải nội dung hoạt động…</p>}
+          {detailLoadFailed && <p role="alert">Chưa tải được nội dung hoạt động. <button type="button" onClick={() => select(unit.id, lesson.id, activity, true)}>Thử lại</button></p>}
+          {!detailLoading && !detailLoadFailed && (activity?.activityType === "LECTURE" || !activity && mode === "LECTURE") && <form className="builder-form" onSubmit={saveContent} onChange={() => { editVersion.current++; }}>
             {activity && <label>Loại hoạt động<select value={lecture?.resources?.some(r => !r.isArchived && r.kind === "VIDEO") ? "Video" : "Bài giảng"} disabled><option>Video</option><option>Bài giảng</option></select></label>}
             <label>Tiêu đề<input required maxLength={128} value={content.title} onChange={e => { setContent({ ...content, title: e.target.value }); setEditorDirty(true); }}/></label>
             <label>Mô tả<textarea rows={3} maxLength={2000} value={content.summary} onChange={e => { setContent({ ...content, summary: e.target.value }); setEditorDirty(true); }}/></label>
             <label>Nội dung (không bắt buộc nếu có tệp)<textarea rows={7} maxLength={100000} value={content.content} onChange={e => { setContent({ ...content, content: e.target.value }); setEditorDirty(true); }}/></label>
             {!lecture && <p className="content-empty">Lưu thông tin hoạt động trước, sau đó chọn và tải video.</p>}
-            {lecture && <label>Thêm tệp<input type="file" multiple accept={capabilities.excelEnabled ? ".mp4,.mp3,.wav,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" : ".mp4,.mp3,.wav,.pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"} onChange={e => chooseFiles(e.target.files || [])}/></label>}
+            {lecture && <label>Thêm tệp<input type="file" multiple disabled={busy} accept={capabilities.excelEnabled ? ".mp4,.mp3,.wav,.pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.webp" : ".mp4,.mp3,.wav,.pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"} onChange={e => { chooseFiles(e.target.files || []); e.target.value = ""; }}/></label>}
             {!!files.length && <ul>{files.map((x, i) => <li key={i}>{x.file.name} · {x.kind} · Chưa tải lên</li>)}</ul>}
             <small>Video MP4 tối đa 950 MB, tải theo từng phần. Các tệp khác tối đa {(capabilities.maxFileBytes / 1000000).toFixed(0)} MB.</small>
             {lecture && <button type="button" className="admin-button" disabled={busy || !files.length} onClick={uploadSelectedFiles}>{busy && uploadProgress ? "Đang tải tệp…" : `Tải ${files.length || ""} tệp đã chọn`}</button>}
-            {lecture && <div className="builder-resources"><h3>Tệp đã lưu</h3>{lecture.resources.map((r, index) => <div key={r.id}><span>{r.name} · {r.kind}{r.isArchived ? " · Đã lưu trữ" : " · Đã lưu"}</span>
+            {uploadProgress && !uploadProgress.replaceId && <UploadStatus progress={uploadProgress} />}
+            {uploadError && !uploadProgress?.replaceId && <p role="alert" className="builder-upload-error">{uploadError} <button type="button" disabled={busy} onClick={async () => {
+              try { setLecture(await api.lecture(lecture.id, token)); await refresh(); setUploadError(null); }
+              catch (e) { setUploadError(errorText(e)); }
+            }}>Tải lại danh sách đã lưu</button></p>}
+            {lecture && <div className="builder-resources"><h3>Tệp đã lưu</h3>{lecture.resources.map((r, index) => <div key={r.id} data-resource-id={r.id}><span>{r.name} · {r.kind}{r.isArchived ? " · Đã lưu trữ" : " · Đã lưu"}</span>
+              {lastSavedId === r.id && <small className="builder-saved-badge">Vừa lưu thành công</small>}
               <button type="button" disabled={index === 0 || busy} aria-label={`Đưa ${r.name} lên`} onClick={() => moveResource(index, -1)}>↑</button>
               <button type="button" disabled={index === lecture.resources.length - 1 || busy} aria-label={`Đưa ${r.name} xuống`} onClick={() => moveResource(index, 1)}>↓</button>
-              <button type="button" onClick={async () => { try { const blob = await api.resourceBlob(lecture.id, r.id, token); const url = URL.createObjectURL(blob); window.open(url, "_blank", "noopener,noreferrer"); setTimeout(() => URL.revokeObjectURL(url), 60000); } catch (e) { setError(errorText(e)); } }}>Mở</button>
+              <button type="button" onClick={async () => { try { if (r.kind === "VIDEO") { setPreviewResourceId(current => current === r.id ? null : r.id); return; } const blob = await api.resourceBlob(lecture.id, r.id, token); const url = URL.createObjectURL(blob); window.open(url, "_blank", "noopener,noreferrer"); setTimeout(() => URL.revokeObjectURL(url), 60000); } catch (e) { setError(errorText(e)); } }}>{previewResourceId === r.id ? "Đóng" : "Mở"}</button>
               <button type="button" onClick={() => downloadResource(r)}>Tải xuống</button>
-              {!r.isArchived && <label className="builder-replace-file">Thay tệp<input type="file" accept=".mp4,.mp3,.wav,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; replaceResource(r, file); }}/></label>}
+              {!r.isArchived && <label className="builder-replace-file">Thay tệp<input type="file" disabled={busy} accept=".mp4,.mp3,.wav,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; replaceResource(r, file); }}/></label>}
+              {uploadProgress?.replaceId === r.id && <UploadStatus progress={uploadProgress} />}
+              {uploadError && uploadProgress?.replaceId === r.id && <p role="alert" className="builder-upload-error">{uploadError}
+                <button type="button" disabled={busy} onClick={async () => { try { setLecture(await api.lecture(lecture.id, token)); await refresh(); setUploadError(null); }
+                  catch (e) { setUploadError(errorText(e)); } }}>Tải lại danh sách</button></p>}
               <button type="button" onClick={() => perform(async () => { await api.archiveResource(lecture.id, r.id, !r.isArchived, token); setLecture(await api.lecture(lecture.id, token)); }, r.isArchived ? "Đã khôi phục tệp." : "Đã lưu trữ tệp.")}>{r.isArchived ? "Khôi phục" : "Lưu trữ"}</button>
-              <button type="button" onClick={() => removeResource(r)}>Xóa</button></div>)}</div>}
+              <button type="button" onClick={() => removeResource(r)}>Xóa</button>
+              {r.kind === "VIDEO" && previewResourceId === r.id && <PreviewResource lectureId={lecture.id} resource={r} token={token} />}</div>)}</div>}
           </form>}
-          {(activity?.activityType === "EXERCISE" || !activity && mode === "EXERCISE") && <form className="builder-form" onChange={() => setEditorDirty(true)} onSubmit={e => saveExercise(e, false)}>
+          {!detailLoading && !detailLoadFailed && (activity?.activityType === "EXERCISE" || !activity && mode === "EXERCISE") && <form className="builder-form" onChange={() => { editVersion.current++; setEditorDirty(true); }} onSubmit={e => saveExercise(e, false)}>
             <label>Tiêu đề<input required maxLength={128} value={exercise.title} onChange={e => setExercise({ ...exercise, title: e.target.value })}/></label>
             {exercise.questions.map((q, i) => <fieldset key={i}><legend>Câu {i + 1}</legend>
               <label>Câu hỏi<textarea required value={q.content} onChange={e => questionField(i, "content", e.target.value)}/></label>
@@ -361,16 +468,16 @@ export default function AdminCurriculumPage() {
               <label>Giải thích<textarea value={q.explanation || ""} onChange={e => questionField(i, "explanation", e.target.value)}/></label>
               <div className="builder-actions"><button type="button" disabled={i === 0} onClick={() => reorderQuestion(i, -1)}>↑</button>
                 <button type="button" disabled={i === exercise.questions.length - 1} onClick={() => reorderQuestion(i, 1)}>↓</button>
-                <button type="button" disabled={exercise.questions.length === 1} onClick={() => setExercise({ ...exercise, questions: exercise.questions.filter((_, index) => index !== i) })}>Xóa câu</button></div>
+                <button type="button" disabled={exercise.questions.length === 1} onClick={() => { setExercise({ ...exercise, questions: exercise.questions.filter((_, index) => index !== i) }); editVersion.current++; setEditorDirty(true); }}>Xóa câu</button></div>
             </fieldset>)}
-            <button type="button" onClick={() => setExercise({ ...exercise, questions: [...exercise.questions, emptyQuestion()] })}>+ Câu hỏi</button>
+            <button type="button" onClick={() => { setExercise({ ...exercise, questions: [...exercise.questions, emptyQuestion()] }); editVersion.current++; setEditorDirty(true); }}>+ Câu hỏi</button>
             <div className="builder-save"><button disabled={busy} type="submit">Lưu nháp</button>
               <button disabled={busy} className="admin-button" type="button" onClick={e => { if (e.currentTarget.form?.reportValidity()) saveExercise(e, true); }}>Xuất bản</button></div>
           </form>}
           {activity?.activityType === "VOCABULARY" && <p>Chủ đề từ vựng hiện có. Dùng Xem trước để kiểm tra nội dung.</p>}
         </>}
         </div>
-        {lesson && <div className="studio-editor-actions"><button type="button" disabled={busy} onClick={() => { if ((editorDirty || files.length) && !window.confirm("Bạn có thông tin hoặc tệp chưa lưu. Hủy thay đổi?")) return; activity ? select(unit.id, lesson.id, activity, true) : (resetEditor(), setSelected({ unitId: unit.id, lessonId: lesson.id })); }}>Hủy</button>{(activity?.activityType === "LECTURE" || !activity && mode === "LECTURE") && <button type="button" className="is-primary" disabled={busy} onClick={() => document.querySelector('.builder-editor .builder-form')?.requestSubmit()}>{copyMode ? "Lưu hoạt động mới" : "Lưu thông tin"}</button>}{activity && <><button type="button" onClick={() => archive("step", activity, unit.id, lesson.id, !activity.isArchived)}>{activity.isArchived ? "Khôi phục" : "Lưu trữ"}</button><button type="button" className="is-danger" onClick={() => remove("step", activity, unit.id, lesson.id)}>Xóa hoạt động</button></>}</div>}
+        {lesson && <div className="studio-editor-actions"><button type="button" disabled={busy} onClick={() => { if ((editorDirty || files.length) && !window.confirm("Bạn có thông tin hoặc tệp chưa lưu. Hủy thay đổi?")) return; activity ? select(unit.id, lesson.id, activity, true) : (resetEditor(), setSelected({ unitId: unit.id, lessonId: lesson.id })); }}>Hủy</button>{!detailLoading && !detailLoadFailed && (activity?.activityType === "LECTURE" || !activity && mode === "LECTURE") && <button type="button" className="is-primary" disabled={busy} onClick={() => document.querySelector('.builder-editor .builder-form')?.requestSubmit()}>{copyMode ? "Lưu hoạt động mới" : "Lưu thông tin"}</button>}{activity && <><button type="button" onClick={() => archive("step", activity, unit.id, lesson.id, !activity.isArchived)}>{activity.isArchived ? "Khôi phục" : "Lưu trữ"}</button><button type="button" className="is-danger" onClick={() => remove("step", activity, unit.id, lesson.id)}>Xóa hoạt động</button></>}</div>}
       </aside></div>}
     {deleteDialog && <div className="admin-modal-backdrop" onMouseDown={e => e.target === e.currentTarget && setDeleteDialog(null)}><section className="admin-modal builder-name-modal" role="alertdialog" aria-modal="true" aria-label="Xác nhận xóa vĩnh viễn">
       <span className="builder-eyebrow">XÓA VĨNH VIỄN</span><h2>{deleteDialog.item.name || deleteDialog.item.title}</h2>

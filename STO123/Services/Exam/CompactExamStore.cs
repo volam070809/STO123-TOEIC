@@ -175,7 +175,9 @@ public sealed class CompactExamStore(ToeicDbContext db, ExamVersionStore? versio
                 groups.Add(new NhomLuotLam {
                     MaNhomLuotLam = gid, ThuTu = groups.Count + 1,
                     MaPartNavigation = new PartTOEIC { SoPart = part },
-                    NoiDungNguLieu = media.NoiDungNguLieu, DuongDanAudio = media.DuongDanAudio,
+                    NoiDungNguLieu = media.NoiDungNguLieu,
+                    NoiDungDich = view == SnapshotView.Review ? media.NoiDungDich : null,
+                    DuongDanAudio = media.DuongDanAudio,
                     DuongDanAnh = media.DuongDanAnh,
                     TaiLieuJson = media.NguLieuTaiLieu.Count == 0 ? null : ExamDocumentCodec.Encode(
                         media.NguLieuTaiLieu.Select(d => new ExamDocumentSnapshot(d.ThuTu, d.LoaiTaiLieu,

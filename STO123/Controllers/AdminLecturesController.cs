@@ -20,12 +20,12 @@ public sealed class LectureUploadRequest
 }
 
 [ApiController]
-[Authorize(Roles = "ADMIN_NOI_DUNG,ADMIN_QUAN_LY")]
+[Authorize(Roles = "ADMIN_NOI_DUNG")]
 [Route("api/admin/content/lectures")]
 [ServiceFilter(typeof(CourseBlobSyncFilter), Order = -1000)]
 public sealed class AdminLecturesController(ToeicDbContext db, LectureResourceStorage storage,
-    CourseBlobSynchronizer sync,
-    ILogger<AdminLecturesController> logger) : ControllerBase
+    CourseBlobSynchronizer sync, ILogger<AdminLecturesController> logger,
+    AdminLectureMediaTicket? mediaTickets = null) : ControllerBase
 {
     private int AdminId => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
     private bool Manager => User.IsInRole("ADMIN_QUAN_LY");
@@ -384,6 +384,48 @@ public sealed class AdminLecturesController(ToeicDbContext db, LectureResourceSt
         }
         catch (Exception e) when (e is RequestFailedException or AuthenticationFailedException)
         { return StatusCode(503, new { code = "MEDIA_UNAVAILABLE" }); }
+    }
+
+    [HttpPost("{id:int}/resources/{resourceId:int}/preview-ticket")]
+    public async Task<IActionResult> PreviewTicket(int id, int resourceId, CancellationToken ct)
+    {
+        var exists = await db.TaiNguyenBaiGiang.AsNoTracking().AnyAsync(x =>
+            x.MaBaiGiang == id && x.MaTaiNguyen == resourceId && x.LoaiTaiNguyen == "VIDEO" &&
+            !x.IsArchived, ct);
+        if (!exists) return NotFound(new { message = "Không tìm thấy video xem trước." });
+        if (mediaTickets is null) return StatusCode(503);
+        var ticket = mediaTickets.Issue(AdminId, id, resourceId);
+        return Ok(new { url = $"/api/admin/content/lectures/{id}/resources/{resourceId}/preview-stream?ticket={ticket}" });
+    }
+
+    [AllowAnonymous]
+    [HttpGet("{id:int}/resources/{resourceId:int}/preview-stream")]
+    public async Task<IActionResult> PreviewStream(int id, int resourceId, [FromQuery] string? ticket,
+        [FromQuery] bool download, CancellationToken ct)
+    {
+        if (mediaTickets is null || !mediaTickets.Valid(ticket, id, resourceId)) return Unauthorized();
+        var resource = await db.TaiNguyenBaiGiang.AsNoTracking().Where(x => x.MaBaiGiang == id &&
+            x.MaTaiNguyen == resourceId && !x.IsArchived)
+            .Select(x => new { x.DuongDanTep, x.TenTaiNguyen, x.LoaiTaiNguyen }).SingleOrDefaultAsync(ct);
+        if (resource is null) return NotFound(new { message = "Tài nguyên đã bị gỡ hoặc không còn tồn tại." });
+        try
+        {
+            var file = await storage.OpenAsync(resource.DuongDanTep, ct);
+            if (file is null) return NotFound(new { message = "Không tìm thấy tệp trong kho lưu trữ." });
+            Response.Headers.CacheControl = "private, no-store";
+            var contentType = resource.LoaiTaiNguyen switch
+            {
+                "VIDEO" => "video/mp4",
+                "PDF" => "application/pdf",
+                "AUDIO" when resource.DuongDanTep.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) => "audio/mpeg",
+                _ => file.Value.ContentType
+            };
+            return File(file.Value.Stream, contentType,
+                download ? LectureResourceStorage.DownloadName(resource.TenTaiNguyen, resource.DuongDanTep) : null,
+                enableRangeProcessing: true);
+        }
+        catch (Exception e) when (e is RequestFailedException or AuthenticationFailedException)
+        { return StatusCode(503, new { message = "Chưa thể mở tài nguyên từ kho lưu trữ. Vui lòng thử lại." }); }
     }
 
     private async Task RemoveBlob(string path, CancellationToken ct)

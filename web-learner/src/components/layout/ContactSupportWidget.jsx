@@ -11,10 +11,10 @@ function Icon({ kind }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3V5Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/><path d="M8 10h8M8 13h5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
 }
 
-export default function ContactSupportWidget() {
+export default function ContactSupportWidget({ embedded = false }) {
   const { pathname } = useLocation();
-  const hidden = /^\/exam\//.test(pathname) || pathname === "/placement" ||
-    /^\/courses\/\d+\/steps\//.test(pathname) || pathname === "/practice/parts";
+  const hidden = !embedded && (/^\/exam\//.test(pathname) || pathname === "/placement" ||
+    /^\/courses\/\d+\/steps\//.test(pathname) || pathname === "/practice/parts");
   const [open, setOpen] = useState(false);
   const [links, setLinks] = useState(null);
   const [error, setError] = useState(false);
@@ -35,7 +35,15 @@ export default function ContactSupportWidget() {
     document.addEventListener("visibilitychange", refresh);
     return () => { active = false; window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [load, hidden]);
-  if (hidden || (!error && !links?.zaloUrl && !links?.messengerUrl)) return null;
+  if (hidden) return null;
+  if (embedded) return <div className="contact-widget-menu contact-widget-embedded">
+    <strong>Liên hệ hỗ trợ</strong>
+    {error && <p>Chưa tải được liên kết. <button type="button" onClick={load}>Thử lại</button></p>}
+    {!error && !links?.zaloUrl && !links?.messengerUrl && <p>Chưa có kênh liên hệ nào được cấu hình.</p>}
+    {links?.zaloUrl && <a href={links.zaloUrl} target="_blank" rel="noopener noreferrer"><Icon kind="zalo" /> Zalo</a>}
+    {links?.messengerUrl && <a href={links.messengerUrl} target="_blank" rel="noopener noreferrer"><Icon kind="messenger" /> Messenger</a>}
+  </div>;
+  if (!error && !links?.zaloUrl && !links?.messengerUrl) return null;
   return <div className="contact-widget">
     {open && <div className="contact-widget-menu" id="contact-options">
       <strong>Liên hệ hỗ trợ</strong>

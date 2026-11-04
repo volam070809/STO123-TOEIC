@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../../services/api";
 import PartSevenDocumentForm from "./PartSevenDocumentForm";
+import PartSevenTranslationForm from "./PartSevenTranslationForm";
 import { documentPayload, fromDocument, newDocument } from "./partSevenDocumentData";
+import { parsePart7Translation, serializePart7Translation } from "./partSevenTranslationData";
 
 const part6Translation = (value, order) => value?.replace(/\r/g, "").split("\n")
   .find(line => line.trim().startsWith(`[${order}]`))?.trim().slice(3).trim() || "";
@@ -14,16 +16,18 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
     audioPath: unit.resource?.audio || "", imagePath: unit.resource?.image || "",
     documents: (unit.documents || []).map(fromDocument)
   }));
+  const [part7Translation, setPart7Translation] = useState(() =>
+    parsePart7Translation(unit.resource?.translation, (unit.documents || []).map(fromDocument)));
   const [previews, setPreviews] = useState({});
   const objectUrls = useRef([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [initial, setInitial] = useState(() => JSON.stringify({
+  const [initial, setInitial] = useState(() => JSON.stringify({ value: {
     text: unit.resource?.text || "", translation: unit.resource?.translation || "",
     audioPath: unit.resource?.audio || "", imagePath: unit.resource?.image || "",
     documents: (unit.documents || []).map(fromDocument)
-  }));
-  const dirty = JSON.stringify(value) !== initial;
+  }, part7Translation: parsePart7Translation(unit.resource?.translation, (unit.documents || []).map(fromDocument)) }));
+  const dirty = JSON.stringify({ value, part7Translation }) !== initial;
   useEffect(() => () => objectUrls.current.forEach(URL.revokeObjectURL), []);
   useEffect(() => {
     if (!dirty) return undefined;
@@ -83,15 +87,21 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
     if (value.documents.some(doc => doc._parseError)) {
       setError("Có tài liệu cũ không đọc được. Chưa lưu để tránh mất dữ liệu."); return;
     }
+    let translated = value.translation || null;
+    if (unit.part === 7) {
+      try { translated = serializePart7Translation(part7Translation, value.documents); }
+      catch (failure) { setError(failure.message); return; }
+    }
     setBusy(true); setError("");
     try {
       const result = await apiRequest(`/api/admin/content/groups/${unit.groupId}/unit`, {
         method: "PUT", token, timeoutMs: 120000,
-        body: { text: value.text || null, translation: value.translation || null,
+        body: { text: value.text || null, translation: translated,
           audioPath: value.audioPath || null, imagePath: value.imagePath || null,
           documents: unit.part === 7 ? value.documents.map(documentPayload) : [] }
       });
-      setInitial(JSON.stringify(value));
+      setValue(old => ({ ...old, translation: translated || "" }));
+      setInitial(JSON.stringify({ value: { ...value, translation: translated || "" }, part7Translation }));
       onSaved(result);
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
@@ -118,8 +128,18 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
         {value.documents.map((doc, index) => <PartSevenDocumentForm key={index} value={doc} index={index}
           fileField={(label, path, setter, accept) => fileField(label, path, setter, accept, `doc-${index}`)}
           canRemove={value.documents.length > 1}
-          onRemove={() => change("documents", value.documents.filter((_, at) => at !== index))}
+          onRemove={() => { change("documents", value.documents.filter((_, at) => at !== index));
+            setPart7Translation(old => ({ ...old, documents: old.documents.filter((_, at) => at !== index) })); }}
           onChange={next => change("documents", value.documents.map((item, at) => at === index ? next : item))} />)}
+      </div>}
+      {unit.part === 7 && <div className="exam-author-docs"><h3>Bản dịch tiếng Việt theo từng tài liệu</h3>
+        {value.documents.map((doc, index) => <PartSevenTranslationForm key={index} original={doc} token={token} bank={unit.bank}
+          value={part7Translation.documents[index]} index={index} onChange={next =>
+            setPart7Translation(old => ({ ...old, documents: value.documents.map((_, at) =>
+              at === index ? next : old.documents[at]) }))} />)}
+        {part7Translation.invalid && <p role="alert" className="exam-alert exam-alert-error">Bản dịch có cấu trúc hiện tại không đọc được. Chưa lưu để bảo vệ dữ liệu cũ.</p>}
+        <label>Bản dịch văn bản chung hoặc bản dịch cũ<textarea rows={3} value={part7Translation.legacyText}
+          onChange={event => setPart7Translation(old => ({ ...old, legacyText: event.target.value }))} /></label>
       </div>}
       {[3, 4, 6, 7].includes(unit.part) && <details className="exam-optional-fields"><summary>Thông tin bổ sung</summary>
         {unit.part === 7 && <label>Ngữ liệu chung nếu có<textarea rows={3}
@@ -130,7 +150,7 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
           <textarea rows={2} value={part6Translation(value.translation, index + 1)}
             onChange={event => change("translation", withPart6Translation(value.translation, index + 1, event.target.value))} />
           {!part6Translation(value.translation, index + 1) && <small className="exam-field-error">Cần nhập bản dịch câu {index + 1}.</small>}
-        </label>) : <label>Bản dịch nếu có<textarea rows={3}
+        </label>) : unit.part === 7 ? null : <label>Bản dịch nếu có<textarea rows={3}
           value={value.translation} onChange={event => change("translation", event.target.value)} /></label>}
       </details>}
       <div className="exam-editor-actions"><button type="button" onClick={cancel} disabled={busy}>Hủy sửa</button>

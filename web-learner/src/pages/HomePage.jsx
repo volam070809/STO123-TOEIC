@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthState";
 import SessionBoundary from "../components/auth/SessionBoundary";
 import SiteLayout from "../layouts/SiteLayout";
+import { useContentRevision } from "../services/contentRevisions";
 import { examApi, placementApi } from "../services/examApi";
 import "../styles/home.css";
 
@@ -40,6 +41,7 @@ function HomeFeatureGrid({ learner = false, placement, mock }) {
 
 function LearnerHome({ user }) {
   const { token } = useAuth();
+  const contentRevision = useContentRevision("EXAMS", "COURSES", "ACCESS");
   const [mock, setMock] = useState(null);
   const [placement, setPlacement] = useState(null);
   useEffect(() => {
@@ -47,7 +49,7 @@ function LearnerHome({ user }) {
     examApi.catalog(token).then(value => { if (live) setMock(value); }).catch(() => {});
     placementApi.summary(token).then(value => { if (live) setPlacement(value); }).catch(() => {});
     return () => { live = false; };
-  }, [token]);
+  }, [token, contentRevision]);
   return <div className="site-container home-content home-learner">
     <div className="page-heading"><span>Học viên / Tổng quan</span><h1>Chào mừng, {user.hoTen}</h1>
       <p>Chọn hoạt động học tiếp theo.</p></div>
@@ -95,7 +97,13 @@ function GuestHome() {
 
 export default function HomePage() {
   const { user } = useAuth();
-  return <SiteLayout className="home-page"><SessionBoundary>{user ? <LearnerHome user={user} /> : <GuestHome />}</SessionBoundary></SiteLayout>;
+  const adminHome = user?.vaiTro === "ADMIN_QUAN_LY" ? "/admin" :
+    user?.vaiTro === "ADMIN_NOI_DUNG" ? "/admin/content" : null;
+  return <SiteLayout className="home-page"><SessionBoundary>{adminHome ?
+    <div className="site-container home-content"><div className="page-heading"><span>STO123 / Xem trước</span>
+      <h1>Chào mừng, {user.hoTen}</h1><p>Bạn đang xem trang công khai với quyền quản trị chỉ đọc.</p>
+      <Link className="primary-button" to={adminHome}>Về trang quản trị</Link></div>
+      <HomeFeatureGrid /></div> : user ? <LearnerHome user={user} /> : <GuestHome />}</SessionBoundary></SiteLayout>;
 }
 
 function HomeIcon({ kind }) {

@@ -7,6 +7,7 @@ import { CourseCover } from "./coursePresentation";
 import { courseAudienceLabel, courseEntryReference, courseStage, courseTargetLabel } from "./coursePresentationData";
 import { hasRoadmapContent } from "./courseOutline";
 import { publicCourseApi } from "../../services/publicCourseApi";
+import { useContentRevision } from "../../services/contentRevisions";
 import { useGuestAuthPrompt } from "../../contexts/GuestAuthPromptState";
 import { requestGuestCoursePurchase } from "./coursePublicAccess";
 import "../../styles/course.css";
@@ -18,9 +19,11 @@ export default function CoursePage() {
   const { search } = useLocation();
   const requestedUnitId = Number(new URLSearchParams(search).get("unit"));
   const requestedLessonId = Number(new URLSearchParams(search).get("lesson"));
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const contentRevision = useContentRevision("COURSES", "ACCESS", "CURRICULUM", "LECTURES", "EXERCISES");
   const { requireAuthentication } = useGuestAuthPrompt();
-  const isGuest = !token;
+  const isAdmin = user?.vaiTro === "ADMIN_QUAN_LY" || user?.vaiTro === "ADMIN_NOI_DUNG";
+  const isGuest = !token || isAdmin;
   const [view, setView] = useState({ token: undefined, courseId: null,
     course: null, error: "" });
   const [selectedUnit, setSelectedUnit] = useState(0);
@@ -28,7 +31,7 @@ export default function CoursePage() {
     view : { course: null, error: "" };
   useEffect(() => {
     let live = true;
-    const request = token ? placementApi.course(courseId, token) : publicCourseApi.detail(courseId);
+    const request = !isGuest ? placementApi.course(courseId, token) : publicCourseApi.detail(courseId);
     request.then(data => { if (live) { setView({ token,
       courseId, course: data, error: "" }); const target = data.units?.findIndex(unit => unit.id === requestedUnitId);
       if (target >= 0) setSelectedUnit(target); } })
@@ -36,7 +39,7 @@ export default function CoursePage() {
         error: e.status === 403 ? "Khóa học đang khóa. Hãy chọn khóa học hoặc combo tại trang Khóa học để mở quyền học." :
           e.data?.message || "Không thể tải khóa học." }); });
     return () => { live = false; };
-  }, [courseId, token, requestedUnitId]);
+  }, [courseId, token, isGuest, requestedUnitId, contentRevision]);
   const info = courseStage[course?.stage];
   const hasContent = hasRoadmapContent(course);
   const allActivities = course?.units?.flatMap(unit => unit.lessons.flatMap(lesson => lesson.contents)) || [];
@@ -65,7 +68,7 @@ export default function CoursePage() {
           <div className="course-detail-actions"><p className="course-access">{isGuest ?
             `${course.retailPrice > 0 ? money.format(course.retailPrice) : "Chưa có giá bán"} · ${course.accessDays} ngày` :
             course.accessStatus === "ACTIVE" ? "Đã có quyền truy cập" : "Khóa học đang khóa"}</p>
-            {isGuest && course.retailPrice > 0 && <button type="button" className="primary-button course-detail-purchase"
+            {!isAdmin && isGuest && course.retailPrice > 0 && <button type="button" className="primary-button course-detail-purchase"
               onClick={() => requestGuestCoursePurchase(requireAuthentication)}>Mua khóa học</button>}</div>
         </div>
       </div> : <header className="course-learning-header">

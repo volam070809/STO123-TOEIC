@@ -5,8 +5,10 @@ namespace STO123.Services.Payment;
 
 public static class PaymentExpiry
 {
-    // The signed VNPay checkout expires after 15 minutes. Allow another 15 minutes for IPN delivery.
-    public const int PendingMinutes = 30;
+    // The signed checkout is payable for three minutes. Keep one further minute
+    // for a callback already in flight before allowing a new checkout.
+    public const int CheckoutMinutes = 3;
+    public const int PendingMinutes = CheckoutMinutes + 1;
 
     public static async Task ExpireAsync(ToeicDbContext db, int learnerId, DateTime localNow, CancellationToken ct)
     {

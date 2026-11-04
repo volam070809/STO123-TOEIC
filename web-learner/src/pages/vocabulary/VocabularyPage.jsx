@@ -7,6 +7,7 @@ import { apiRequest, API_BASE_URL } from "../../services/api";
 import { INITIAL_TOPIC_COUNT, topicCatalogView, topicGridStyle, useMobileTopicCatalog } from "../practice/topicCatalog";
 import { useGuestAuthPrompt } from "../../contexts/GuestAuthPromptState";
 import { publicVocabularyApi } from "../../services/publicVocabularyApi";
+import { useContentRevision } from "../../services/contentRevisions";
 import { guestPreviewHasMore, vocabularyReturnTo, vocabularyTopicFromSearch } from "./guestVocabularyPreview";
 import "../../styles/vocabulary.css";
 
@@ -16,10 +17,13 @@ const LEARNING = "DANG_HOC";
 
 export default function VocabularyPage() {
   const { user, token } = useAuth();
+  const contentRevision = useContentRevision("VOCABULARY");
   const { requireAuthentication } = useGuestAuthPrompt();
   const { search } = useLocation();
   const navigate = useNavigate();
-  const isLearner = !!user;
+  const isLearner = user?.vaiTro === "HOC_VIEN";
+  const isAdmin = user?.vaiTro === "ADMIN_QUAN_LY" || user?.vaiTro === "ADMIN_NOI_DUNG";
+  const canReadAll = isLearner || isAdmin;
   const requestedTopicId = vocabularyTopicFromSearch(search);
   const [topics, setTopics] = useState([]);
   const [topicQuery, setTopicQuery] = useState("");
@@ -36,6 +40,8 @@ export default function VocabularyPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const audioRef = useRef(null);
+  const selectionRef = useRef(null);
+  selectionRef.current = { topic, words, order, position, stage };
 
   useEffect(() => {
     if (token && !user) return;
@@ -48,12 +54,12 @@ export default function VocabularyPage() {
     setTopic(null);
     setWords([]);
     const load = async () => {
-      const data = isLearner ? await apiRequest(ROOT + "/topics", { token }) : await publicVocabularyApi.topics();
+      const data = canReadAll ? await apiRequest(ROOT + "/topics", { token }) : await publicVocabularyApi.topics();
       if (!active) return;
       setTopics(data);
       const requested = requestedTopicId && data.find(item => item.maChuDe === requestedTopicId);
       if (!requested) return;
-      const detail = isLearner ? await apiRequest(ROOT + "/topics/" + requested.maChuDe, { token }) :
+      const detail = canReadAll ? await apiRequest(ROOT + "/topics/" + requested.maChuDe, { token }) :
         await publicVocabularyApi.preview(requested.maChuDe);
       if (!active) return;
       setTopic(detail.topic);
@@ -64,13 +70,53 @@ export default function VocabularyPage() {
       .catch(() => { if (active) setError("Không thể tải dữ liệu từ vựng."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [user, token, isLearner, requestedTopicId]);
+  }, [user, token, canReadAll, requestedTopicId]);
+
+  useEffect(() => {
+    if (!contentRevision || token && !user) return undefined;
+    let live = true;
+    const refresh = async () => {
+      const list = canReadAll ? await apiRequest(ROOT + "/topics", { token, cache: "no-store" }) :
+        await publicVocabularyApi.topics();
+      if (!live) return;
+      setTopics(list);
+      const selected = selectionRef.current;
+      const topicId = selected.topic?.maChuDe;
+      if (!topicId) return;
+      if (!list.some(item => item.maChuDe === topicId)) {
+        setTopic(null); setWords([]); setStage("topics");
+        setError("Chủ đề này không còn mở. Danh sách đã được cập nhật.");
+        return;
+      }
+      const detail = canReadAll ? await apiRequest(ROOT + "/topics/" + topicId,
+        { token, cache: "no-store" }) : await publicVocabularyApi.preview(topicId);
+      if (!live || selectionRef.current.topic?.maChuDe !== topicId) return;
+      const current = selectionRef.current;
+      setTopic(detail.topic);
+      setWords(detail.words);
+      if (current.stage === "cards") {
+        const orderedIds = current.order.map(index => current.words[index]?.maTuVung).filter(Boolean);
+        const nextOrder = orderedIds.map(id => detail.words.findIndex(word => word.maTuVung === id))
+          .filter(index => index >= 0);
+        detail.words.forEach((_, index) => { if (!nextOrder.includes(index)) nextOrder.push(index); });
+        if (nextOrder.length === 0) setStage("list");
+        else {
+          const currentId = current.words[current.order[current.position]]?.maTuVung;
+          const currentIndex = detail.words.findIndex(word => word.maTuVung === currentId);
+          setOrder(nextOrder);
+          setPosition(currentIndex >= 0 ? nextOrder.indexOf(currentIndex) : Math.min(current.position, nextOrder.length - 1));
+        }
+      }
+    };
+    refresh().catch(() => { if (live) setError("Không thể tải nội dung từ vựng mới. Hãy thử lại."); });
+    return () => { live = false; };
+  }, [contentRevision, token, user, canReadAll]);
 
   async function openTopic(item) {
     setError("");
     setLoading(true);
     try {
-      const data = isLearner ? await apiRequest(ROOT + "/topics/" + item.maChuDe, { token }) :
+      const data = canReadAll ? await apiRequest(ROOT + "/topics/" + item.maChuDe, { token }) :
         await publicVocabularyApi.preview(item.maChuDe);
       setTopic(data.topic);
       setWords(data.words);
@@ -144,13 +190,13 @@ export default function VocabularyPage() {
   }
 
   async function playAudio(example = false) {
-    if (!word || (isLearner && !token) || (!isLearner && !topic?.maChuDe)) return;
+    if (!word || (canReadAll && !token) || (!canReadAll && !topic?.maChuDe)) return;
     setError("");
     try {
-      const endpoint = isLearner ? ROOT + "/" + word.maTuVung +
+      const endpoint = canReadAll ? ROOT + "/" + word.maTuVung +
         (example ? "/audio-vi-du" : "/audio") :
         publicVocabularyApi.audioEndpoint(topic.maChuDe, word.maTuVung, example);
-      const response = await fetch(API_BASE_URL + endpoint, isLearner ? {
+      const response = await fetch(API_BASE_URL + endpoint, canReadAll ? {
         headers: { Authorization: "Bearer " + token }
       } : {});
       if (!response.ok) throw new Error();

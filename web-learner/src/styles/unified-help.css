@@ -1,0 +1,10 @@
+.unified-help{position:fixed;right:20px;bottom:calc(22px + env(safe-area-inset-bottom));z-index:92;display:flex;flex-direction:column;align-items:flex-end;gap:12px}
+.unified-help-launcher{width:54px;height:54px;display:grid;place-items:center;border:0;border-radius:50%;background:#1761ae;color:#fff;box-shadow:0 10px 26px #184b8860;cursor:pointer}
+.unified-help-launcher:hover{background:#104d90}.unified-help-launcher svg{width:25px;height:25px}
+.unified-help-popup{width:min(400px,calc(100vw - 24px));max-height:calc(100dvh - 112px);overflow:hidden;display:flex;flex-direction:column;border:1px solid #d4e1ee;border-radius:18px;background:#fff;box-shadow:0 22px 60px #173c7150}
+.unified-help-tabs{display:flex;align-items:center;gap:4px;padding:9px;border-bottom:1px solid #e3ebf4;flex:none}
+.unified-help-tabs button{border:0;border-radius:8px;padding:9px 11px;background:transparent;color:#42546d;font-weight:700;cursor:pointer}
+.unified-help-tabs button.is-active{background:#e9f3ff;color:#145797}.unified-help-tabs .unified-help-close{margin-left:auto;font-size:23px;line-height:1;padding:5px 10px}
+.unified-help .ai-chat-shell{position:static;display:block;z-index:auto}.unified-help .ai-chat-panel{width:100%;height:min(590px,calc(100dvh - 175px));min-height:280px;border:0;border-radius:0;box-shadow:none;animation:none}
+.unified-help .contact-widget-embedded{width:100%;min-width:0;min-height:145px;border:0;border-radius:0;box-shadow:none;padding:18px}
+@media(max-width:640px){.unified-help{right:12px;bottom:calc(86px + env(safe-area-inset-bottom))}.unified-help-popup{max-height:calc(100dvh - 160px)}.unified-help .ai-chat-panel{height:min(590px,calc(100dvh - 230px))}}

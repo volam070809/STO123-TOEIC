@@ -8,7 +8,7 @@ using STO123.Services.Exam;
 
 namespace STO123.Controllers;
 
-[Authorize(Roles = "ADMIN_NOI_DUNG,ADMIN_QUAN_LY")]
+[Authorize(Roles = "ADMIN_NOI_DUNG")]
 [ApiController]
 [Route("api/admin/content/groups")]
 public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServiceClient blobs,
@@ -59,6 +59,9 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
             part != 7 && docs.Length > 0 ||
             part == 6 && !QuestionContentRules.ValidPart6(resource.NoiDungDich))
             return BadRequest(new { code = "INVALID_RESOURCE", message = "Ngữ liệu không đúng cấu trúc Part." });
+        if (part == 7 && !Part7TranslationCodec.IsValid(resource.NoiDungDich, docs))
+            return BadRequest(new { code = "INVALID_PART7_TRANSLATION",
+                message = "Bản dịch Part 7 không khớp cấu trúc tài liệu gốc." });
         var paths = new[] { resource.DuongDanAudio, resource.DuongDanAnh }
             .Concat(docs.Select(d => d.DuongDanAnh)).Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(x => x!).Distinct().ToArray();
@@ -134,6 +137,11 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
         }).ToArray();
         if (!ExamSourceValidator.ValidDocuments(7, documents))
             return BadRequest(new { code = "INVALID_DOCUMENT", message = "Tài liệu Part 7 không hợp lệ." });
+        var currentTranslation = await db.NguLieu.AsNoTracking().Where(x => x.MaNguLieu == groupId)
+            .Select(x => x.NoiDungDich).SingleOrDefaultAsync(ct);
+        if (!Part7TranslationCodec.IsValid(currentTranslation, documents))
+            return BadRequest(new { code = "TRANSLATION_SHAPE_MISMATCH",
+                message = "Cấu trúc tài liệu đã đổi. Hãy sửa bản dịch tương ứng trước khi lưu." });
         try
         {
             var affected = await versions.ApplySourceEditAsync(memberIds, async token => {
@@ -179,6 +187,14 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
                 if (!ExamSourceValidator.ValidMedia(group, part))
                     throw new ExamProblem("INVALID_GROUP_CONTENT",
                         "Ngữ liệu chưa đủ nội dung bắt buộc cho Part này.");
+                if (part == 7)
+                {
+                    var documents = await db.NguLieuTaiLieu.AsNoTracking()
+                        .Where(x => x.MaNguLieu == groupId).OrderBy(x => x.ThuTu).ToArrayAsync(token);
+                    if (!Part7TranslationCodec.IsValid(group.NoiDungDich, documents))
+                        throw new ExamProblem("INVALID_PART7_TRANSLATION",
+                            "Bản dịch Part 7 không khớp cấu trúc tài liệu gốc.");
+                }
             }, editorId, ct);
             return Ok(new { groupId, text = request.Text?.Trim(),
                 translation = request.Translation?.Trim(), affectedExamIds = affected });

@@ -27,9 +27,7 @@ export default function AdminLayout() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const initials = user?.hoTen?.split(/\s+/).filter(Boolean).slice(-2).map(part => part[0]).join("").toUpperCase() || "AD";
-  const items = user?.vaiTro === "ADMIN_QUAN_LY"
-    ? [managementItems[0], ...contentItems, ...managementItems.slice(1)]
-    : contentItems;
+  const items = user?.vaiTro === "ADMIN_QUAN_LY" ? managementItems : contentItems;
   const currentTitle = items.find(([path, , , end]) => end ? location.pathname === path : location.pathname.startsWith(path))?.[1] || "Quản trị";
   const warm = path => { Promise.all([preloadAdminRoute(path), prefetchAdminData(path, token)]).catch(() => {}); };
   const preload = path => ({ onPointerEnter: () => warm(path), onFocus: () => warm(path), onPointerDown: () => warm(path) });
@@ -46,6 +44,7 @@ export default function AdminLayout() {
         </NavLink>)}
       </nav>
       <div className="admin-sidebar-footer">
+        <Link to="/admin/preview" className="admin-site-link" onClick={() => setMenuOpen(false)}><HomeIcon/><span>Xem như học viên</span><ArrowIcon/></Link>
         <Link to="/" className="admin-site-link"><HomeIcon/><span>Về trang học viên</span><ArrowIcon/></Link>
       </div>
     </aside>

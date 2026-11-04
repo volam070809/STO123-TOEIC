@@ -23,6 +23,7 @@ export default function AdminQuestionBankPage({ bank }) {
   const [part, setPart] = useState("");
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState("all");
+  const [completeness, setCompleteness] = useState("all");
   const [page, setPage] = useState(1);
   const [list, setList] = useState({ items: [], total: 0 });
   const [detail, setDetail] = useState(null);
@@ -38,13 +39,13 @@ export default function AdminQuestionBankPage({ bank }) {
     if (adding || questionId) return undefined;
     let live = true;
     setPending(true); setError("");
-    apiRequest(`${api}/questions/units?${new URLSearchParams({ bank, scope,
+    apiRequest(`${api}/questions/units?${new URLSearchParams({ bank, scope, completeness,
       ...(part && { part }), search, page: String(page) })}`, { token, timeoutMs: 90_000 })
       .then(data => { if (live) setList(data); })
       .catch(e => { if (live) setError(e.message); })
       .finally(() => { if (live) setPending(false); });
     return () => { live = false; };
-  }, [adding, questionId, bank, part, search, scope, page, revision, token]);
+  }, [adding, questionId, bank, part, search, scope, completeness, page, revision, token]);
 
   useEffect(() => {
     if (!questionId) return undefined;
@@ -60,6 +61,15 @@ export default function AdminQuestionBankPage({ bank }) {
       .finally(() => { if (live) setPending(false); });
     return () => { live = false; };
   }, [questionId, bank, revision, token]);
+
+  useEffect(() => {
+    const editor = location.state?.openEditor;
+    if (!detail || !editor || !questionId) return;
+    if (editor === "group" && detail.groupId) setGroupEditing(true);
+    else if (detail.questions.some(question => question.id === Number(editor)))
+      setEditingQuestion(Number(editor));
+    navigate(location.pathname, { replace: true, state: null });
+  }, [detail, questionId, location.pathname, location.state, navigate]);
 
   async function deleteSource() {
     if (!detail || pending) return;
@@ -124,14 +134,18 @@ export default function AdminQuestionBankPage({ bank }) {
     <section className="admin-panel question-bank-list">
       <div className="exam-filter-row"><input aria-label="Tìm câu hỏi" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Tìm mã câu, mã nhóm, nội dung hoặc đề thi" />
         <select aria-label="Loại câu hỏi" value={scope} onChange={event => { setScope(event.target.value); setPage(1); }}><option value="all">Tất cả câu hỏi</option><option value="groups">Nhóm câu</option><option value="single">Câu riêng</option></select>
-        <select aria-label="Lọc Part" value={part} onChange={event => { setPart(event.target.value); setPage(1); }}><option value="">Tất cả Part</option>{Array.from({ length: 7 }, (_, i) => <option key={i + 1} value={i + 1}>Part {i + 1}</option>)}</select></div>
+        <select aria-label="Lọc Part" value={part} onChange={event => { setPart(event.target.value); setPage(1); }}><option value="">Tất cả Part</option>{Array.from({ length: 7 }, (_, i) => <option key={i + 1} value={i + 1}>Part {i + 1}</option>)}</select>
+        <select aria-label="Mức độ đầy đủ" value={completeness} onChange={event => { setCompleteness(event.target.value); setPage(1); }}><option value="all">Tất cả nội dung</option><option value="complete">Đã đủ nội dung</option><option value="incomplete">Thiếu nội dung</option></select></div>
       {pending && <p role="status">Đang tải câu hỏi…</p>}
       <div className="question-bank-count">{list.total} nhóm hoặc câu riêng · Nhóm chỉ hiển thị một lần</div>
       <div className="question-bank-table"><div className="question-bank-list-head"><span>Câu hỏi / Nhóm câu</span><span>Đang thuộc đề thi</span><span>Thao tác</span></div>
         {list.items.map(unit => <article className="question-bank-row" key={unit.groupId ? `g${unit.groupId}` : `q${unit.questionIds[0]}`}>
         <div><strong>{unit.isGroup ? `Nhóm ${unit.groupId}` : `Câu ${unit.questionIds[0]}`}</strong> <span className="exam-pill">Part {unit.part}</span> <span className="exam-pill">{unit.questionCount} câu</span>
           <p>{(unit.preview || "Media câu hỏi").slice(0, 160)}</p>
-          <small>Mã câu: {unit.questionIds.join(", ")}</small></div>
+          <small>Mã câu: {unit.questionIds.join(", ")}</small>
+          {unit.missingFields?.length > 0 && <p className="question-bank-missing" role="status"><strong>Thiếu nội dung:</strong> {unit.missingFields.join(" · ")}{" "}
+            <Link to={`${base}/detail/${unit.questionIds[0]}`} state={{ openEditor:
+              Number(unit.missingFields[0].match(/^Câu (\d+):/)?.[1]) || "group" }}>Sửa ngay</Link></p>}</div>
         <div className="question-bank-related">{bank === "DE_THI" && unit.exams?.length ?
           unit.exams.map(exam => <span key={exam.examId}><strong>{exam.name}</strong><small>#{exam.examId} · {exam.current ? "Đang sử dụng" : "Chưa xuất bản"}</small></span>) :
           <span>{bank === "DE_THI" ? "Chưa thuộc đề thi" : "Ngân hàng luyện tập"}</span>}</div>

@@ -12,6 +12,7 @@ import { verifiedCurrentStage } from "./placementAttemptAnalysis";
 import "../../styles/exam.css";
 import "../../styles/placement.css";
 import heroImage from "../../assets/placement/placement-hero.svg";
+import { useContentRevision } from "../../services/contentRevisions";
 
 const date = value => value ? new Date(value).toLocaleString("vi-VN") : "—";
 const remaining = value => value == null ? "—" : [Math.floor(value / 3600), Math.floor(value % 3600 / 60), value % 60]
@@ -113,6 +114,7 @@ function GuestPlacementOverview() {
 
 function LearnerPlacementPage() {
   const { token } = useAuth();
+  const contentRevision = useContentRevision("EXAMS", "COURSES", "ACCESS");
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const analysisTab = searchParams.get("tab") === "analysis";
@@ -145,7 +147,7 @@ function LearnerPlacementPage() {
     }).catch(() => { if (live) setError("Không thể tải lộ trình học."); });
     const timer = setInterval(() => setTick(n => n + 1), 1000);
     return () => { live = false; clearInterval(timer); };
-  }, [token, retryLoad]);
+  }, [token, retryLoad, contentRevision]);
 
   useEffect(() => {
     if (!analysisTab || !history?.completedCount) return;
@@ -168,7 +170,7 @@ function LearnerPlacementPage() {
       finally { if (live) setAnalysisLoading(false); }
     });
     return () => { live = false; };
-  }, [analysisTab, history?.completedCount, token, analysisRetry]);
+  }, [analysisTab, history?.completedCount, token, analysisRetry, contentRevision]);
 
   function showAnalysis() { setSearchParams({ tab: "analysis" }); }
 

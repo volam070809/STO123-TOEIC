@@ -22,7 +22,7 @@ public sealed class AdminContentFoundationTests
         var curriculum = Assert.Single(typeof(AdminCurriculumController).GetCustomAttributes<AuthorizeAttribute>());
         var lectures = Assert.Single(typeof(AdminLecturesController).GetCustomAttributes<AuthorizeAttribute>());
         var learning = Assert.Single(typeof(CourseLearningController).GetCustomAttributes<AuthorizeAttribute>());
-        Assert.Equal("ADMIN_NOI_DUNG,ADMIN_QUAN_LY", curriculum.Roles);
+        Assert.Equal("ADMIN_NOI_DUNG", curriculum.Roles);
         Assert.Equal(curriculum.Roles, lectures.Roles);
         Assert.Equal("HOC_VIEN", learning.Roles);
     }

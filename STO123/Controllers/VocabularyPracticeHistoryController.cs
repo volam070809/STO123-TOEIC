@@ -7,7 +7,7 @@ using STO123.Models;
 namespace STO123.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "HOC_VIEN")]
 [Route("api/tu-vung/practice-history")]
 public class VocabularyPracticeHistoryController(ToeicDbContext db) : ControllerBase
 {

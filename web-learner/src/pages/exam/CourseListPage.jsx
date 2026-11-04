@@ -9,6 +9,7 @@ import { usePaymentStatus } from "../../hooks/usePaymentStatus";
 import { CourseCover } from "./coursePresentation";
 import { courseAudienceLabel, courseEntryReference, courseStage, courseTargetLabel } from "./coursePresentationData";
 import { publicCourseApi } from "../../services/publicCourseApi";
+import { useContentRevision } from "../../services/contentRevisions";
 import { useGuestAuthPrompt } from "../../contexts/GuestAuthPromptState";
 import { loadCourseCatalog, requestGuestCoursePurchase } from "./coursePublicAccess";
 import "../../styles/course.css";
@@ -22,14 +23,24 @@ const accessLabels = {
 const paymentLabels = { CHO_XU_LY: "Đang chờ xác nhận", THANH_CONG: "Thành công", THAT_BAI: "Thất bại", QUA_HAN: "Quá hạn" };
 
 export default function CourseListPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { requireAuthentication } = useGuestAuthPrompt();
-  const isGuest = !token;
+  const isGuest = user?.vaiTro !== "HOC_VIEN";
+  const learnerToken = isGuest ? null : token;
   const { search } = useLocation();
   const paymentId = paymentIdFromSearch(search);
-  const { view: paymentView, refresh: refreshPayment } = usePaymentStatus(paymentId, token);
-  const terminalPayment = ["success", "failed"].includes(paymentView.kind) ? paymentView.kind : null;
+  const { view: paymentView, refresh: refreshPayment } = usePaymentStatus(paymentId, learnerToken);
+  const terminalPayment = ["success", "failed", "expired"].includes(paymentView.kind) ? paymentView.kind : null;
+  const [paymentNow, setPaymentNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (paymentView.kind !== "pending") return undefined;
+    const timer = window.setInterval(() => setPaymentNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [paymentView.kind]);
+  const retrySeconds = paymentView.retryAvailableAt ? Math.max(0,
+    Math.ceil((new Date(paymentView.retryAvailableAt).getTime() - paymentNow) / 1000)) : null;
   const [revision, setRevision] = useState(0);
+  const contentRevision = useContentRevision("COURSES", "ACCESS", "EXAMS");
   const [view, setView] = useState({ token: null, courses: null, placement: null, history: null, error: "" });
   const [selected, setSelected] = useState([]);
   const [quotation, setQuotation] = useState({ key: "", data: null, error: "" });
@@ -38,7 +49,7 @@ export default function CourseListPage() {
   const busyRef = useRef(false);
   useEffect(() => {
     let live = true;
-    const request = loadCourseCatalog(token, {
+    const request = loadCourseCatalog(learnerToken, {
       loadLearnerCourses: placementApi.courses,
       loadPlacement: placementApi.summary,
       loadHistory: paymentApi.history,
@@ -52,16 +63,17 @@ export default function CourseListPage() {
           error: "Không thể tải thông tin khóa học. Vui lòng thử lại." });
       });
     return () => { live = false; };
-  }, [token, revision, terminalPayment]);
+  }, [token, learnerToken, revision, terminalPayment, contentRevision]);
 
   const current = view.token === token ? view : { courses: null, placement: null, history: null, error: "" };
   const { courses, placement, history, error } = current;
+  const retryCourses = history?.find(item => item.maGiaoDich === paymentId)?.courseIds || [];
   const recommended = courses?.filter(item => item.recommended) ?? [];
   const owned = courses?.filter(item => ["ACTIVE", "EXPIRED"].includes(item.accessStatus)) ?? [];
   const selectionKey = selected.join(",");
   const quoted = quotation.key === selectionKey ? quotation : { data: null, error: "" };
   useEffect(() => {
-    if (!token || !selectionKey) return;
+    if (!learnerToken || !selectionKey) return;
     let live = true;
     paymentApi.quote(selectionKey.split(",").map(Number), token).then(data => {
       if (live) setQuotation({ key: selectionKey, data, error: "" });
@@ -69,11 +81,17 @@ export default function CourseListPage() {
       if (live) setQuotation({ key: selectionKey, data: null, error: checkoutErrorMessage(failure) });
     });
     return () => { live = false; };
-  }, [token, selectionKey, quoteRevision]);
+  }, [token, learnerToken, selectionKey, quoteRevision, contentRevision]);
   function toggle(id) {
     setSelected(current => current.includes(id) ? current.filter(value => value !== id) :
       [...current, id].sort((a, b) => a - b));
     setCheckout({ busy: false, message: "" });
+  }
+  function prepareRetry(ids) {
+    if (!ids?.length) return;
+    setSelected([...ids].sort((a, b) => a - b));
+    setQuoteRevision(value => value + 1);
+    document.getElementById("course-quotation")?.scrollIntoView({ behavior: "smooth" });
   }
   async function purchase() {
     if (!quoted.data || !token || busyRef.current) return;
@@ -106,8 +124,12 @@ export default function CourseListPage() {
     <header className="course-page-heading"><div><h1>Khóa học TOEIC</h1>
       <p>{isGuest ? "Khám phá chương trình, giai đoạn và mức giá của các khóa học đang mở." :
         "Chọn một hoặc nhiều khóa học, xem giá chính xác và theo dõi quyền học tại đây."}</p></div></header>
-    {token && paymentId && <div className="course-notice" role="status"><strong>Thanh toán #{paymentId}</strong>
-      <span>{paymentMessage}</span><button type="button" onClick={() => { refreshPayment(); setRevision(v => v + 1); }}>Cập nhật</button></div>}
+    {learnerToken && paymentId && <div className="course-notice" role="status"><strong>Thanh toán #{paymentId}</strong>
+      <span>{paymentMessage}{paymentView.kind === "pending" && retrySeconds != null &&
+        ` Tự kiểm tra lại; có thể thanh toán lại sau ${Math.floor(retrySeconds / 60)}:${String(retrySeconds % 60).padStart(2, "0")}.`}</span>
+      {["expired", "failed"].includes(paymentView.kind) && retryCourses.length > 0 &&
+        <button type="button" onClick={() => prepareRetry(retryCourses)}>Thanh toán lại</button>}
+      <button type="button" onClick={() => { refreshPayment(); setRevision(v => v + 1); }}>Cập nhật</button></div>}
     {search && !paymentId && <p className="exam-error" role="alert">Mã giao dịch trên liên kết không hợp lệ.</p>}
     {error && <p className="exam-error" role="alert">{error} <button type="button" onClick={() => setRevision(v => v + 1)}>Thử lại</button></p>}
     {!courses && !error && <p role="status">Đang tải khóa học…</p>}
@@ -156,12 +178,12 @@ export default function CourseListPage() {
                     onChange={() => toggle(course.courseId)} /> Chọn khóa học</label>}</div>
                 {isGuest ? <div className="course-card-actions">
                   <Link className="outline-button course-cta course-info-cta" to={`/courses/${course.courseId}`}>Xem thông tin</Link>
-                  {purchasable && <button type="button" className="primary-button course-cta"
+                  {!user && purchasable && <button type="button" className="primary-button course-cta"
                     onClick={() => requestGuestCoursePurchase(requireAuthentication)}>Mua khóa học</button>}
                 </div> : course.accessStatus === "ACTIVE" && <Link className="primary-button course-cta" to={`/courses/${course.courseId}`}>Vào học</Link>}
               </div></div></article>;
         })}</div></section>
-      {!isGuest && <section className="course-section course-quotation" aria-live="polite"><h2>Báo giá khóa học</h2>
+      {!isGuest && <section id="course-quotation" className="course-section course-quotation" aria-live="polite"><h2>Báo giá khóa học</h2>
         {!selected.length && <p>Chọn ít nhất một khóa học để xem báo giá từ hệ thống.</p>}
         {selected.length > 0 && !quoted.data && !quoted.error && <p>Đang tính giá…</p>}
         {quoted.error && <p className="exam-error" role="alert">{quoted.error}</p>}
@@ -185,6 +207,8 @@ export default function CourseListPage() {
         {history?.length ? <div className="course-history">{history.map(item => <div key={item.maGiaoDich}>
           <strong>#{item.maGiaoDich} · {item.tenGoiHoc}</strong><span>{money.format(item.soTien)}</span>
           <span>{paymentLabels[item.trangThai] || item.trangThai}</span><time>{date(item.ngayTao)}</time>
+          {["QUA_HAN", "THAT_BAI"].includes(item.trangThai) && item.courseIds?.length > 0 &&
+            <button type="button" onClick={() => prepareRetry(item.courseIds)}>Thanh toán lại</button>}
         </div>)}</div> : <p>Chưa có giao dịch.</p>}</details></section>}
     </>}
   </main></SiteLayout>;

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import { adminLearnerApi } from "../../services/adminLearnerApi";
+import AdminLearnerAvatar from "../../components/admin/AdminLearnerAvatar";
 import { formatDate, learnerStatuses, statusLabel, statusTone } from "./adminFormat";
 import { DateRangeFields } from "./AdminDateRangeFields";
 import { ADMIN_DATE_FILTER_STATUS, adminDateDisplayState, validateAdminDateRange } from "./adminDateRange";
@@ -24,6 +25,11 @@ export default function AdminLearnersPage() {
   const requestedPage = Number(params.get("page"));
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision(value => value + 1);
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
   const requestKey = `${token}|${search}|${status}|${dateFrom}|${dateTo}|${page}|${revision}`;
   const [request, setRequest] = useState({ key: null, result: null, error: "" });
   const current = request.key === requestKey ? request : { result: null, error: "" };
@@ -80,7 +86,7 @@ export default function AdminLearnersPage() {
           <div className="admin-table-wrap"><table className="admin-table">
             <thead><tr><th>Học viên</th><th>Liên hệ</th><th>Trạng thái</th><th>Đăng ký</th><th>Lượt học</th><th>Làm bài gần nhất</th><th><span className="sr-only">Chi tiết</span></th></tr></thead>
             <tbody>{result.items.map(learner => <tr key={learner.learnerId}>
-              <td><div className="admin-person"><span className="admin-person-avatar">{initials(learner.fullName)}</span>
+              <td><div className="admin-person"><AdminLearnerAvatar learner={learner} token={token} />
                 <span><strong>{learner.fullName}</strong><small>ID #{learner.learnerId} · Tham gia {formatDate(learner.createdAt)}</small></span></div></td>
               <td><strong className="admin-cell-main">{learner.email}</strong><small>{learner.phoneNumber || "Chưa có số điện thoại"}</small></td>
               <td><span className={`admin-status is-${statusTone(learner.status)}`}>{statusLabel(learner.status)}</span></td>
@@ -110,10 +116,6 @@ function SearchForm({ search, onSearch }) {
     </label>
     <button className="admin-button" type="submit">Tìm kiếm</button>
   </form>;
-}
-
-function initials(name) {
-  return name?.split(/\s+/).filter(Boolean).slice(-2).map(part => part[0]).join("").toUpperCase() || "HV";
 }
 
 function ListSkeleton() {

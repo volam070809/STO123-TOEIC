@@ -32,7 +32,7 @@ public sealed class VNPayGateway(IOptions<VNPayOptions> options) : IPaymentGatew
             ["vnp_Command"] = "pay",
             ["vnp_CreateDate"] = vietnamTime.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture),
             ["vnp_CurrCode"] = "VND",
-            ["vnp_ExpireDate"] = vietnamTime.AddMinutes(15).ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture),
+            ["vnp_ExpireDate"] = vietnamTime.AddMinutes(PaymentExpiry.CheckoutMinutes).ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture),
             ["vnp_IpAddr"] = address.IsIPv4MappedToIPv6 ? address.MapToIPv4().ToString() : address.ToString(),
             ["vnp_Locale"] = "vn",
             ["vnp_OrderInfo"] = $"Thanh toan khoa hoc {transactionRef}",

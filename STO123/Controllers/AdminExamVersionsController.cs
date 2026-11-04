@@ -7,7 +7,7 @@ using STO123.Services.Exam;
 
 namespace STO123.Controllers;
 
-[Authorize(Roles = "ADMIN_NOI_DUNG,ADMIN_QUAN_LY")]
+[Authorize(Roles = "ADMIN_NOI_DUNG")]
 [ApiController]
 [Route("api/admin/content/exams/{examId:int}/versions")]
 public sealed class AdminExamVersionsController(ToeicDbContext db, ExamVersionStore versions) : ControllerBase

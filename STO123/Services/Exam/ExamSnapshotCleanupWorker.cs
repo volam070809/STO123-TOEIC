@@ -7,12 +7,16 @@ namespace STO123.Services.Exam;
 
 /// <summary>Reconciles uploaded snapshots that never became a committed SQL version.</summary>
 public sealed class ExamSnapshotCleanupWorker(IServiceScopeFactory scopes, BlobServiceClient blobs,
-    IConfiguration configuration, ILogger<ExamSnapshotCleanupWorker> logger) : BackgroundService
+    IConfiguration configuration, IHostEnvironment environment,
+    ILogger<ExamSnapshotCleanupWorker> logger) : BackgroundService
 {
     private readonly string containerName = configuration["ExamMedia:ContainerName"] ?? "toeic-exam-media";
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Development commonly uses an isolated or incomplete SQL fixture while
+        // Azure Blob credentials still point to the shared account.
+        if (environment.IsDevelopment()) return;
         while (!stoppingToken.IsCancellationRequested)
         {
             try { await ReconcileAsync(stoppingToken); }
@@ -30,6 +34,13 @@ public sealed class ExamSnapshotCleanupWorker(IServiceScopeFactory scopes, BlobS
         // A failed SQL read must abort cleanup. Never infer that versions are absent.
         var referenced = (await db.PhienBanDeThi.AsNoTracking()
             .Select(v => v.BlobPath).ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
+        // An empty or wrongly selected database must never cause the shared Blob
+        // container to be treated as entirely orphaned.
+        if (referenced.Count == 0)
+        {
+            logger.LogWarning("Skipping exam Blob cleanup: no exam snapshot references were found in SQL.");
+            return;
+        }
         var container = blobs.GetBlobContainerClient(containerName);
         await foreach (var item in container.GetBlobsAsync(BlobTraits.None, BlobStates.None,
             prefix: "exam-snapshots/", cancellationToken: ct))

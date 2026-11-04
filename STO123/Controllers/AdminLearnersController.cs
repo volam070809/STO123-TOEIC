@@ -11,7 +11,7 @@ namespace STO123.Controllers;
 [ApiController]
 [Authorize(Policy = AdminAuthorization.ManagementPolicy)]
 [Route("api/admin/learners")]
-public sealed class AdminLearnersController(ToeicDbContext db) : ControllerBase
+public sealed class AdminLearnersController(ToeicDbContext db, AvatarStorage? avatars = null) : ControllerBase
 {
     private static readonly HashSet<string> SupportedStatuses =
         ["CHO_XAC_THUC", "HOAT_DONG", "BI_KHOA"];
@@ -65,7 +65,8 @@ public sealed class AdminLearnersController(ToeicDbContext db) : ControllerBase
                 user.DangKyGoiHoc.Count(enrollment => enrollment.TrangThai == "DANG_SU_DUNG"),
                 user.KetQuaLamBai.Count,
                 user.KetQuaLamBai.OrderByDescending(attempt => attempt.NgayLamBai)
-                    .Select(attempt => (DateTime?)attempt.NgayLamBai).FirstOrDefault()))
+                    .Select(attempt => (DateTime?)attempt.NgayLamBai).FirstOrDefault(),
+                user.AnhDaiDien))
             .ToListAsync(ct);
 
         var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)request.PageSize);
@@ -85,6 +86,7 @@ public sealed class AdminLearnersController(ToeicDbContext db) : ControllerBase
                 user.HoTen,
                 user.Email,
                 user.SoDienThoai,
+                user.AnhDaiDien,
                 user.TrangThai,
                 user.NgayTao,
                 user.LanDangNhapCuoi
@@ -190,6 +192,21 @@ public sealed class AdminLearnersController(ToeicDbContext db) : ControllerBase
             learner.NgayTao,
             learner.LanDangNhapCuoi,
             enrollments,
-            learning));
+            learning,
+            learner.AnhDaiDien));
+    }
+
+    [HttpGet("{learnerId:int}/avatar")]
+    public async Task<IActionResult> Avatar(int learnerId, CancellationToken ct)
+    {
+        var reference = await db.NguoiDung.AsNoTracking()
+            .Where(x => x.MaNguoiDung == learnerId && x.VaiTro == "HOC_VIEN")
+            .Select(x => x.AnhDaiDien).SingleOrDefaultAsync(ct);
+        if (!AvatarStorage.IsCustomReference(learnerId, reference)) return NotFound();
+        if (avatars is null) return StatusCode(503);
+        var file = await avatars.OpenAsync(reference!, ct);
+        if (file is null) return NotFound();
+        Response.Headers.CacheControl = "private, no-store";
+        return File(file.Value.Stream, file.Value.ContentType);
     }
 }

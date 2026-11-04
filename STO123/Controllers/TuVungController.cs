@@ -131,7 +131,7 @@ public class TuVungController : ControllerBase
         });
     }
 
-    [Authorize]
+    [Authorize(Roles = "HOC_VIEN")]
     [HttpPut("{id:int}/progress")]
     public async Task<IActionResult> SetProgress(int id, [FromBody] ProgressRequest request, CancellationToken ct)
     {
@@ -175,6 +175,7 @@ public class TuVungController : ControllerBase
         if (string.IsNullOrWhiteSpace(path)) return NotFound();
         var blob = container.GetBlobClient(path);
         if (!await blob.ExistsAsync(ct)) return NotFound();
+        Response.Headers.CacheControl = "private, no-store";
         return File(await blob.OpenReadAsync(cancellationToken: ct), "audio/mpeg", enableRangeProcessing: true);
     }
 

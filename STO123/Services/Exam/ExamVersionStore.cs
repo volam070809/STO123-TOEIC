@@ -396,7 +396,7 @@ public sealed class ExamVersionStore(ToeicDbContext db, BlobServiceClient blobs,
         var groups = view == SnapshotView.Result ? [] : version.Groups.Select(g => new NhomLuotLam {
             MaNhomLuotLam = g.Id, ThuTu = g.Order,
             MaPartNavigation = new PartTOEIC { SoPart = g.Part },
-            NoiDungNguLieu = g.Text, NoiDungDich = g.Translation,
+            NoiDungNguLieu = g.Text, NoiDungDich = view == SnapshotView.Review ? g.Translation : null,
             DuongDanAudio = g.Audio, DuongDanAnh = g.Image,
             TaiLieuJson = g.Documents.Count == 0 ? null : ExamDocumentCodec.Encode(g.Documents)
         }).ToList();

@@ -49,7 +49,7 @@ function ImageDocument({ document, token, ImageComponent }) {
   return document.imageUrl && <ImageComponent endpoint={document.imageUrl} token={token} alt="Hình tài liệu" />;
 }
 
-export default function DocumentRenderer({ document, token, ImageComponent = PrivateImage }) {
+export default function DocumentRenderer({ document, token, ImageComponent = PrivateImage, heading }) {
   const { type, content } = document ?? {};
   const structured = content && typeof content === "object" && !Array.isArray(content);
   const valid = type === "IMAGE" ? Boolean(document.imageUrl) :
@@ -59,7 +59,7 @@ export default function DocumentRenderer({ document, token, ImageComponent = Pri
     type === "CHAT" ? structured && Array.isArray(content.messages) :
     type === "FORM" ? structured && Array.isArray(content.fields) : false;
   return <article className="exam-document">
-    <h3>Tài liệu {document?.order}</h3>
+    <h3>{heading || `Tài liệu ${document?.order}`}</h3>
     {!valid ? unavailable : <>
       {type === "TEXT" && <TextDocument content={content} />}
       {type === "EMAIL" && <EmailDocument content={content} />}

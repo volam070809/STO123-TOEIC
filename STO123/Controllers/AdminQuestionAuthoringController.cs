@@ -8,7 +8,7 @@ using STO123.Services.Exam;
 
 namespace STO123.Controllers;
 
-[Authorize(Roles = "ADMIN_NOI_DUNG,ADMIN_QUAN_LY")]
+[Authorize(Roles = "ADMIN_NOI_DUNG")]
 [ApiController]
 [Route("api/admin/content/question-authoring")]
 public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
@@ -174,6 +174,9 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
             !ExamSourceValidator.ValidDocuments(input.Part, docs)))
             return BadRequest(new { code = "INVALID_RESOURCE",
                 message = "Ngữ liệu, media hoặc tài liệu của nhóm chưa hợp lệ." });
+        if (input.Part == 7 && !Part7TranslationCodec.IsValid(resource?.NoiDungDich, docs))
+            return BadRequest(new { code = "INVALID_PART7_TRANSLATION",
+                message = "Bản dịch Part 7 phải khớp loại, số dòng và số cột của từng tài liệu gốc." });
         if (resource is null && (input.AudioPath is not null || input.ImagePath is not null ||
             input.Text is not null || input.Translation is not null))
             return BadRequest(new { code = "INVALID_PART_5_RESOURCE",

@@ -1,19 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import SiteLayout from "../../layouts/SiteLayout";
 import { learningApi } from "../../services/adminContentApi";
 import { placementApi } from "../../services/examApi";
+import { useContentRevision } from "../../services/contentRevisions";
 import "../../styles/admin-content.css";
 
-function Resource({ courseId, stepId, item, token, onReady }) {
+function Resource({ courseId, stepId, item, token, onReady, resourceRevision }) {
   const [state, setState] = useState({ loading: true, url: "", error: "" });
   const [pdfUrl, setPdfUrl] = useState("");
   const [documentDownloaded, setDocumentDownloaded] = useState(false);
   const videoRef = useRef(null); const resumeRef = useRef(null);
+  const refreshRef = useRef(null); const deferredRefresh = useRef(false);
   useEffect(() => {
     let alive = true; let timer;
     async function refresh() {
+      clearTimeout(timer);
+      if (videoRef.current && !videoRef.current.paused) { deferredRefresh.current = true; return; }
       if (videoRef.current) resumeRef.current = { time: videoRef.current.currentTime, play: !videoRef.current.paused };
       try {
         const grant = await learningApi.resourceTicket(courseId, stepId, item.id, token);
@@ -23,8 +27,19 @@ function Resource({ courseId, stepId, item, token, onReady }) {
       } catch (error) { if (alive) setState({ loading: false, url: "", error: error.status === 403 ?
         "Tài khoản chưa có quyền mở tài nguyên này." : "Không mở được tài nguyên. Vui lòng tải lại bài học." }); }
     }
+    refreshRef.current = refresh;
     refresh(); return () => { alive = false; clearTimeout(timer); };
   }, [courseId, stepId, item.id, token]);
+  useEffect(() => {
+    if (!resourceRevision) return;
+    if (videoRef.current && !videoRef.current.paused) { deferredRefresh.current = true; return; }
+    refreshRef.current?.();
+  }, [resourceRevision]);
+  function refreshAfterPlayback() {
+    if (!deferredRefresh.current) return;
+    deferredRefresh.current = false;
+    refreshRef.current?.();
+  }
   useEffect(() => {
     if (item.kind !== "PDF" || !state.url) return undefined;
     let active = true;
@@ -67,7 +82,8 @@ function Resource({ courseId, stepId, item, token, onReady }) {
       {item.kind === "HINH_ANH" ? <img src={state.url} alt={item.name} onLoad={() => onReady(item.id, "DISPLAYED")}/> :
         item.kind === "AUDIO" ? <audio src={state.url} controls preload="metadata" onEnded={() => onReady(item.id, "ENDED")}/> :
           item.kind === "VIDEO" ? <video ref={videoRef} src={state.url} controls playsInline preload="metadata"
-            onLoadedMetadata={resumeVideo} onEnded={() => onReady(item.id, "ENDED")}
+            onLoadedMetadata={resumeVideo} onPause={refreshAfterPlayback}
+            onEnded={() => { onReady(item.id, "ENDED"); refreshAfterPlayback(); }}
             onError={() => setState(x => ({ ...x, error: "Không phát được video. Vui lòng tải lại bài học." }))}/> :
             item.kind === "PDF" && pdfUrl ? <iframe src={pdfUrl} title={`Xem PDF: ${item.name}`} onLoad={() => onReady(item.id, "DISPLAYED")}/> : null}
       {office && <p>Tài liệu Office chưa có bản xem trước trong ứng dụng. Tải tệp để mở bằng phần mềm phù hợp.</p>}
@@ -78,7 +94,7 @@ function Resource({ courseId, stepId, item, token, onReady }) {
   </li>;
 }
 
-function ExercisePlayer({ courseId, stepId, token, onComplete }) {
+function ExercisePlayer({ courseId, stepId, token, onComplete, onQuestionContext }) {
   const [data, setData] = useState(null); const [index, setIndex] = useState(0);
   const [choice, setChoice] = useState(""); const [feedback, setFeedback] = useState(null);
   const [answer, setAnswer] = useState(null); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
@@ -91,6 +107,11 @@ function ExercisePlayer({ courseId, stepId, token, onComplete }) {
     setChoice(previous?.choice || ""); setFeedback(previous ? { correct: previous.correct, choice: previous.choice } : null); })
     .catch(e => live && setError(e.data?.message || e.message)); return () => { live = false; }; }, [courseId, stepId, token]);
   const question = data?.questions[index];
+  useEffect(() => {
+    if (data?.attemptId && question?.id)
+      onQuestionContext({ type: "COURSE_EXERCISE", courseId: Number(courseId),
+        stepId: Number(stepId), attemptId: data.attemptId, questionId: question.id });
+  }, [courseId, stepId, data?.attemptId, question?.id, onQuestionContext]);
   async function start() { setBusy(true); setError(""); try { await learningApi.startExercise(courseId, stepId, data?.completed ? data.attemptId : null, token);
     setData(await learningApi.exercise(courseId, stepId, token)); setHistory(await learningApi.exerciseHistory(courseId, stepId, token)); setIndex(0); setChoice(""); setFeedback(null); setAnswer(null); }
     catch (e) { setError(e.data?.message || e.message); } finally { setBusy(false); } }
@@ -164,16 +185,20 @@ function ExercisePlayer({ courseId, stepId, token, onComplete }) {
 
 export default function CourseStepPage() {
   const { courseId, stepId } = useParams(); const { token } = useAuth();
+  const contentRevision = useContentRevision("ACCESS", "CURRICULUM", "LECTURES", "VOCABULARY", "EXERCISES");
+  const lectureRevision = useContentRevision("LECTURES");
   const [state, setState] = useState({ loading: true, data: null, error: "" });
   const [neighbors, setNeighbors] = useState({ previous: null, next: null });
   const [completion, setCompletion] = useState({ done: false, busy: false, error: "" });
+  const [exerciseAiContext, setExerciseAiContext] = useState(null);
+  const updateExerciseAiContext = useCallback(context => setExerciseAiContext(context), []);
   const completionRef = useRef({ key: "", status: "idle" });
   const lastCompletionEvent = useRef({ resourceId: null, completionEvent: null });
   useEffect(() => { let live = true;
     learningApi.step(courseId, stepId, token).then(data => live && setState({ courseId, stepId, loading: false, data, error: "" }))
       .catch(e => live && setState({ courseId, stepId, loading: false, data: null,
         error: e.status === 403 ? "Tài khoản chưa có quyền học khóa này." : e.data?.message || "Không mở được nội dung học." }));
-    return () => { live = false; }; }, [courseId, stepId, token]);
+    return () => { live = false; }; }, [courseId, stepId, token, contentRevision]);
   useEffect(() => { let live = true; placementApi.course(courseId, token).then(course => {
     if (!live) return; const steps = course.units.flatMap(u => u.lessons.flatMap(l => l.contents)).filter(x => !x.locked);
     const index = steps.findIndex(x => String(x.id) === String(stepId));
@@ -183,7 +208,7 @@ export default function CourseStepPage() {
     if (steps[index]?.progressStatus === "HOAN_THANH") completionRef.current.status = "done";
     setCompletion({ done: completionRef.current.status === "done",
       busy: completionRef.current.status === "pending", error: "" });
-  }).catch(() => {}); return () => { live = false; }; }, [courseId, stepId, token]);
+  }).catch(() => {}); return () => { live = false; }; }, [courseId, stepId, token, contentRevision]);
   const currentState = state.courseId === courseId && state.stepId === stepId ? state : { loading: true, data: null, error: "" };
   const item = currentState.data;
   const courseReturnPath = item?.unitId ? `/courses/${courseId}?unit=${item.unitId}&lesson=${item.lessonId}` : `/courses/${courseId}`;
@@ -211,17 +236,20 @@ export default function CourseStepPage() {
   useEffect(() => {
     if (item?.type === "VOCABULARY" || item?.type === "LECTURE" && !item.lecture?.resources?.length) complete();
   }, [item, courseId, stepId, token]);
-  return <SiteLayout aiContext={item ? { type: "LESSON", courseId: Number(courseId), stepId: Number(stepId) } : null}><main className="site-container course-step-page"><Link className="course-player-back" to={courseReturnPath}>← Trở về lộ trình khóa học</Link>
+  const aiContext = item?.type === "EXERCISE" && exerciseAiContext?.stepId === Number(stepId) ?
+    exerciseAiContext : item ? { type: "LESSON", courseId: Number(courseId), stepId: Number(stepId) } : null;
+  return <SiteLayout aiContext={aiContext}><main className="site-container course-step-page"><Link className="course-player-back" to={courseReturnPath}>← Trở về lộ trình khóa học</Link>
     {currentState.loading ? <p role="status">Đang tải bài học…</p> : currentState.error ? <p role="alert">{currentState.error}</p> : <article>
-      <header className="course-player-header"><p className="course-step-breadcrumb">{item.unitName} <span>›</span> {item.lessonName} <span>›</span> {item.title}</p><span className="course-player-eyebrow">{item.type === "EXERCISE" ? "BÀI TẬP" : "NỘI DUNG HỌC"}</span><h1>{item.title}</h1></header>
+      <header className="course-player-header"><nav className="course-step-breadcrumb" aria-label="Đường dẫn bài học"><Link to={`/courses/${courseId}`}>Khóa học</Link> <span>›</span> <Link to={courseReturnPath}>{item.unitName}</Link> <span>›</span> <Link to={courseReturnPath}>{item.lessonName}</Link> <span>›</span> {item.title}</nav><span className="course-player-eyebrow">{item.type === "EXERCISE" ? "BÀI TẬP" : "NỘI DUNG HỌC"}</span><h1>{item.title}</h1></header>
       <div className="course-player-workspace"><aside className="course-player-context"><span className="course-player-eyebrow">BẠN ĐANG HỌC</span><strong>{item.unitName}</strong><p>{item.lessonName}</p><div className="course-player-context-current">{item.title}</div><nav aria-label="Chuyển hoạt động">{neighbors.previous && <Link to={`/courses/${courseId}/steps/${neighbors.previous.id}`}>← {neighbors.previous.title}</Link>}{neighbors.next && <Link to={`/courses/${courseId}/steps/${neighbors.next.id}`}>{neighbors.next.title} →</Link>}</nav><Link className="course-player-context-return" to={courseReturnPath}>Xem toàn bộ lộ trình ↗</Link></aside><div className="course-player-content">
       {item.type === "EXERCISE" ? <ExercisePlayer key={`${courseId}-${stepId}`} courseId={courseId} stepId={stepId} token={token}
-        onComplete={() => setCompletion({ done: true, busy: false, error: "" })}/> : item.type === "LECTURE" ? <><h2>{item.lecture.title}</h2>
+        onComplete={() => setCompletion({ done: true, busy: false, error: "" })}
+        onQuestionContext={updateExerciseAiContext}/> : item.type === "LECTURE" ? <><h2>{item.lecture.title}</h2>
         {item.lecture.summary && <p>{item.lecture.summary}</p>}
         {item.lecture.content ? <div className="course-step-text">{item.lecture.content}</div> :
           <p>Bài giảng chưa có nội dung văn bản.</p>}
         <h3>Tài nguyên</h3>{item.lecture.resources.length ? <ul className="course-resource-list">
-          {item.lecture.resources.map(r => <Resource key={r.id} courseId={courseId} stepId={stepId} item={r} token={token} onReady={complete}/>)}</ul> :
+          {item.lecture.resources.map(r => <Resource key={r.id} courseId={courseId} stepId={stepId} item={r} token={token} onReady={complete} resourceRevision={lectureRevision}/>)}</ul> :
           <p>Bài giảng không có tệp đính kèm.</p>}</> : <><h2>{item.topic.title}</h2>
         {item.topic.description && <p>{item.topic.description}</p>}
         {item.topic.words.length ? <div className="course-word-list">{item.topic.words.map((w, i) =>

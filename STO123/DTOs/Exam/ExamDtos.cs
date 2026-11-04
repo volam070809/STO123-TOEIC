@@ -61,7 +61,10 @@ public sealed record ReviewQuestionDto(int AttemptQuestionId, int Order, int Par
     string A, string B, string C, string? D, string? SelectedOption, string CorrectOption,
     string Status, string Explanation, bool Flagged);
 public sealed record ReviewGroupDto(int GroupId, int Order, int Part, string? Context, bool HasAudio,
-    bool HasImage, IReadOnlyList<ExamDocumentDto> Documents, IReadOnlyList<ReviewQuestionDto> Questions);
+    bool HasImage, IReadOnlyList<ExamDocumentDto> Documents, IReadOnlyList<ReviewQuestionDto> Questions)
+{
+    public string? Translation { get; init; }
+}
 public sealed record ExamReviewDto(int AttemptId, IReadOnlyList<ReviewGroupDto> Groups,
     IReadOnlyList<ReviewQuestionDto> IndependentQuestions)
 {

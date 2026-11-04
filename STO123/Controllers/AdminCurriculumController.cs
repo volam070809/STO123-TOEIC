@@ -22,7 +22,7 @@ public sealed record CourseQuestionRequest(string Content, string? Passage, stri
 public sealed record CourseExerciseRequest(string Title, CourseQuestionRequest[] Questions, bool Publish);
 
 [ApiController]
-[Authorize(Roles = "ADMIN_NOI_DUNG,ADMIN_QUAN_LY")]
+[Authorize(Roles = "ADMIN_NOI_DUNG")]
 [Route("api/admin/content")]
 [ServiceFilter(typeof(CourseBlobSyncFilter), Order = -1000)]
 public sealed class AdminCurriculumController(ToeicDbContext db) : ControllerBase

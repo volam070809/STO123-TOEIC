@@ -5,27 +5,29 @@ using STO123.Services.Exam;
 namespace STO123.Services.Ai;
 
 public sealed record AiLearningContext(string? Type, int? WordId, int? CourseId, int? StepId,
-    int? AttemptId, int? QuestionId);
+    long? AttemptId, int? QuestionId);
+
+public sealed record AiContextResolution(string Text, AiSource? Source = null,
+    bool UncheckedPractice = false, int? Part = null);
 
 public sealed class AiLearningContextService(ToeicDbContext db, TimeProvider clock)
 {
-    public async Task<string> ResolveAsync(int learnerId, AiLearningContext? context, CancellationToken ct)
+    public async Task<AiContextResolution> ResolveAsync(int learnerId, AiLearningContext? context, CancellationToken ct)
     {
-        var stage = await db.KetQuaPhanLopKNN.AsNoTracking()
-            .Where(x => x.MaKetQuaNavigation.MaHocVien == learnerId)
-            .OrderByDescending(x => x.NgayPhanLop).Select(x => (byte?)x.GiaiDoanDeXuat)
-            .FirstOrDefaultAsync(ct);
-        var label = stage switch { 1 => "Beginner", 2 => "Intermediate", 3 => "Advanced", _ => "chưa phân lớp" };
-        var prefix = $"Giai đoạn học hiện tại: {label}.";
-        if (context?.Type is null) return prefix;
+        if (context?.Type is null) return new("");
         if (context.Type == "VOCABULARY" && context.WordId is > 0)
         {
             var word = await db.TuVung.AsNoTracking().Where(w => w.MaTuVung == context.WordId &&
                 w.TuVungChuDe.Any(link => link.MaChuDeNavigation.TrangThai == "DANG_MO"))
-                .Select(w => new { w.TuVung1, w.Nghia, w.PhienAm, w.LoaiTu, w.ViDu, w.DichViDu })
+                .Select(w => new { w.TuVung1, w.Nghia, w.PhienAm, w.LoaiTu, w.ViDu, w.DichViDu,
+                    topic = w.TuVungChuDe.Where(link => link.MaChuDeNavigation.TrangThai == "DANG_MO")
+                        .OrderBy(link => link.MaChuDe).Select(link => new {
+                            link.MaChuDe, link.MaChuDeNavigation.TenChuDe }).FirstOrDefault() })
                 .FirstOrDefaultAsync(ct);
-            if (word is null) throw Unavailable();
-            return $"{prefix}\nTừ đang học: {word.TuVung1}; nghĩa: {word.Nghia}; phiên âm: {word.PhienAm}; loại từ: {word.LoaiTu}; ví dụ: {word.ViDu}; dịch: {word.DichViDu}.";
+            if (word?.topic is null) throw Unavailable();
+            return new($"Từ đang học: {word.TuVung1}; nghĩa: {word.Nghia}; phiên âm: {word.PhienAm}; " +
+                $"loại từ: {word.LoaiTu}; ví dụ: {word.ViDu}; dịch: {word.DichViDu}.",
+                new AiSource($"Từ vựng · {word.topic.TenChuDe}", $"/vocabulary?topic={word.topic.MaChuDe}"));
         }
         if (context.Type == "LESSON" && context.CourseId is > 0 && context.StepId is > 0)
         {
@@ -34,33 +36,87 @@ public sealed class AiLearningContextService(ToeicDbContext db, TimeProvider clo
                 .AnyAsync(id => id == context.CourseId, ct)) throw Unavailable();
             var step = await db.BuocLoTrinh.AsNoTracking().Where(s => s.MaBuoc == context.StepId &&
                 s.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc == context.CourseId && !s.IsArchived &&
-                !s.MaLessonNavigation.IsArchived && !s.MaLessonNavigation.MaUnitNavigation.IsArchived)
+                !s.MaLessonNavigation.IsArchived && !s.MaLessonNavigation.MaUnitNavigation.IsArchived &&
+                s.MaLessonNavigation.MaUnitNavigation.MaKhoaHocNavigation.TrangThai == "DANG_MO" &&
+                (s.MaBaiGiang != null && s.MaBaiGiangNavigation.TrangThai == "DANG_MO" ||
+                 s.MaChuDe != null && s.MaChuDeNavigation.TrangThai == "DANG_MO" ||
+                 s.MaBaiTap != null && db.PhienBanBaiTapKhoaHoc.Any(v =>
+                     v.MaBaiTap == s.MaBaiTap && v.TrangThai == "XUAT_BAN")))
                 .Select(s => new { s.TieuDe, lesson = s.MaLessonNavigation.TenLesson,
+                    course = s.MaLessonNavigation.MaUnitNavigation.MaKhoaHocNavigation.TenKhoaHoc,
                     lecture = s.MaBaiGiangNavigation == null ? null : s.MaBaiGiangNavigation.NoiDung,
                     summary = s.MaBaiGiangNavigation == null ? null : s.MaBaiGiangNavigation.NoiDungTomTat })
                 .FirstOrDefaultAsync(ct);
             if (step is null) throw Unavailable();
             var content = step.lecture ?? step.summary ?? "";
-            return $"{prefix}\nBài đang học: {step.lesson} / {step.TieuDe}. Nội dung: {content[..Math.Min(1800, content.Length)]}";
+            return new($"Khóa: {step.course}; bài: {step.lesson}; hoạt động: {step.TieuDe}. " +
+                $"Nội dung: {content[..Math.Min(1800, content.Length)]}",
+                new AiSource($"{step.course} · {step.lesson}",
+                    $"/courses/{context.CourseId}/steps/{context.StepId}"));
         }
         if (context.Type == "PRACTICE" && context.AttemptId is > 0 && context.QuestionId is > 0)
         {
-            var q = await db.CauHoiLuotLam.AsNoTracking().Where(q => q.MaKetQua == context.AttemptId &&
+            if (context.AttemptId > int.MaxValue) throw Unavailable();
+            var practiceAttemptId = (int)context.AttemptId.Value;
+            var q = await db.CauHoiLuotLam.AsNoTracking().Where(q => q.MaKetQua == practiceAttemptId &&
                 q.MaCauHoiLuotLam == context.QuestionId && q.MaKetQuaNavigation.MaHocVien == learnerId &&
                 q.MaKetQuaNavigation.LoaiBaiLam == PracticeQuestionBank.AttemptType &&
                 q.MaKetQuaNavigation.TrangThai == ExamCore.Active)
-                .Select(q => new { q.MaPart, q.NoiDung, q.PhuongAnA, q.PhuongAnB,
+                .Select(q => new { part = q.MaPartNavigation.SoPart, q.NoiDung, q.PhuongAnA, q.PhuongAnB,
                     q.PhuongAnC, q.PhuongAnD, q.PhuongAnDung, q.GiaiThich,
                     passage = q.MaNhomLuotLamNavigation == null ? null : q.MaNhomLuotLamNavigation.NoiDungNguLieu,
                     selected = q.ChiTietKetQua == null ? null : q.ChiTietKetQua.DapAnChon })
                 .FirstOrDefaultAsync(ct);
             if (q is null) throw Unavailable();
-            if (q.selected is null)
-                return $"{prefix}\nHọc viên đang làm câu luyện tập Part {q.MaPart} nhưng chưa kiểm tra đáp án. Chỉ hướng dẫn phương pháp chung của Part này; không đoán hoặc tiết lộ đáp án câu đang làm.";
+            if (string.IsNullOrWhiteSpace(q.selected))
+                return new($"Câu luyện tập Part {q.part} chưa kiểm tra.",
+                    new AiSource($"Luyện tập Part {q.part}", "/practice/parts"), true, q.part);
             var passage = q.passage ?? "";
-            var content = $"{prefix}\nCâu luyện tập Part {q.MaPart}: {q.NoiDung}. Ngữ liệu: {passage[..Math.Min(1600, passage.Length)]}. " +
-                $"A: {q.PhuongAnA}; B: {q.PhuongAnB}; C: {q.PhuongAnC}; D: {q.PhuongAnD}.";
-            return content + $" Đã kiểm tra: học viên chọn {q.selected}; đáp án đúng {q.PhuongAnDung}; giải thích: {q.GiaiThich}.";
+            var content = $"Câu luyện tập Part {q.part} theo bản gốc của lượt đang làm: {q.NoiDung}. " +
+                $"Ngữ liệu: {passage[..Math.Min(1200, passage.Length)]}. " +
+                $"A: {q.PhuongAnA}; B: {q.PhuongAnB}; C: {q.PhuongAnC}; D: {q.PhuongAnD}. " +
+                $"Học viên chọn {q.selected}; đáp án đúng {q.PhuongAnDung}; giải thích: {q.GiaiThich}.";
+            return new(content, new AiSource($"Câu đã kiểm tra · Part {q.part}", "/practice/parts"), false, q.part);
+        }
+        if (context.Type == "COURSE_EXERCISE" && context.CourseId is > 0 && context.StepId is > 0 &&
+            context.AttemptId is > 0 && context.QuestionId is > 0)
+        {
+            var now = clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime;
+            if (!await CourseEntitlement.ActiveCourseIds(db, learnerId, now)
+                .AnyAsync(id => id == context.CourseId, ct)) throw Unavailable();
+            var courseId = context.CourseId.Value;
+            var stepId = context.StepId.Value;
+            var attemptId = context.AttemptId.Value;
+            var questionId = context.QuestionId.Value;
+            var attempt = await db.LuotBaiTapKhoaHoc.AsNoTracking().Where(a => a.MaLuot == attemptId &&
+                a.MaBuoc == stepId && db.DangKyGoiHoc.Any(e =>
+                    e.MaDangKy == a.MaDangKy && e.MaNguoiDung == learnerId) &&
+                db.BuocLoTrinh.Any(s => s.MaBuoc == stepId && s.MaBaiTap == a.MaBaiTap &&
+                    s.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc == courseId && !s.IsArchived &&
+                    !s.MaLessonNavigation.IsArchived && !s.MaLessonNavigation.MaUnitNavigation.IsArchived &&
+                    s.MaLessonNavigation.MaUnitNavigation.MaKhoaHocNavigation.TrangThai == "DANG_MO"))
+                .Select(a => new { a.MaPhienBan, a.MaBaiTap }).FirstOrDefaultAsync(ct);
+            if (attempt is null) throw Unavailable();
+            var check = await db.LanKiemTraBaiTapKhoaHoc.AsNoTracking().Where(c =>
+                c.MaLuot == attemptId && c.MaCauHoi == questionId && c.MaPhienBan == attempt.MaPhienBan)
+                .OrderByDescending(c => c.LanKiemTra)
+                .Select(c => new { c.PhuongAnChon, c.PhuongAnDungLucKiemTra,
+                    c.GiaiThichLucKiemTra }).FirstOrDefaultAsync(ct);
+            var source = new AiSource("Bài tập đang học", $"/courses/{courseId}/steps/{stepId}");
+            if (check is null)
+                return new("Câu bài tập trong khóa chưa được kiểm tra. Chỉ gợi ý cách suy luận, không nêu đáp án.",
+                    source, true);
+            var question = await db.CauHoiBaiTapKhoaHoc.AsNoTracking().Where(q =>
+                q.MaCauHoi == questionId && q.MaPhienBan == attempt.MaPhienBan &&
+                q.MaBaiTap == attempt.MaBaiTap)
+                .Select(q => new { q.NoiDung, q.NguLieu, q.PhuongAnA, q.PhuongAnB,
+                    q.PhuongAnC, q.PhuongAnD }).FirstOrDefaultAsync(ct);
+            if (question is null) throw Unavailable();
+            return new($"Câu bài tập thuộc phiên bản học viên đã làm: {question.NoiDung}. " +
+                $"Ngữ liệu: {question.NguLieu}. A: {question.PhuongAnA}; B: {question.PhuongAnB}; " +
+                $"C: {question.PhuongAnC}; D: {question.PhuongAnD}. " +
+                $"Học viên chọn {check.PhuongAnChon}; đáp án lúc kiểm tra " +
+                $"{check.PhuongAnDungLucKiemTra}; giải thích lúc kiểm tra: {check.GiaiThichLucKiemTra}.", source);
         }
         throw Unavailable();
     }

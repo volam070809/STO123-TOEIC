@@ -78,3 +78,21 @@ test("unmount suppresses late responses and timers", async () => {
   await Promise.resolve();
   assert.deepEqual(views, [{ kind: "loading", polling: true }]);
 });
+
+test("default polling continues through the payment window until backend expires it", async () => {
+  const timers = []; const views = []; let calls = 0;
+  const stop = startPaymentPolling({ paymentId: 21,
+    load: async () => ({ maGiaoDich: 21, trangThai: ++calls === 12 ? "QUA_HAN" : "CHO_XU_LY",
+      trangThaiDangKy: calls === 12 ? "QUA_HAN" : "CHO_THANH_TOAN",
+      retryAvailableAt: "2026-11-04T10:04:00+07:00" }),
+    onView: view => views.push(view),
+    schedule: callback => { timers.push(callback); return callback; }, cancel: () => {} });
+  await Promise.resolve();
+  for (let index = 0; index < 11; index++) {
+    timers.shift()(); await Promise.resolve();
+  }
+  assert.equal(calls, 12);
+  assert.equal(views.at(-1).kind, "expired");
+  assert.equal(timers.length, 0);
+  stop();
+});

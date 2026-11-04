@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../../services/api";
 import DocumentPreview from "./ExamDocumentPreview";
+import { fromDocument } from "./partSevenDocumentData";
+import { hasTranslatedContent, parsePart7Translation } from "./partSevenTranslationData";
 
 const part6Translation = (value, order) => value?.replace(/\r/g, "").split("\n")
   .find(line => line.trim().startsWith(`[${order}]`))?.trim().slice(3).trim() || "";
@@ -27,17 +29,24 @@ function Media({ path, bank, token, audio }) {
 export default function QuestionContentPreview({ unit, token, onEditQuestion }) {
   if (!unit) return null;
   const questions = unit.questions || [];
+  const part7Translation = unit.part === 7 ? parsePart7Translation(unit.resource?.translation,
+    (unit.documents || []).map(fromDocument)) : null;
   return <div className="exam-content-preview">
     <p><strong>{unit.groupId ? `Nhóm ${unit.groupId}` : `Câu ${questions[0]?.id}`} · Part {unit.part}</strong> · {questions.length} câu</p>
     {unit.resource && <section className="exam-author-question"><h3>Ngữ liệu chung</h3>
       {unit.resource.text && <p style={{ whiteSpace: "pre-wrap" }}>{unit.resource.text}</p>}
-      {unit.resource.translation && unit.part !== 6 && unit.part !== 2 && <p><em>{unit.resource.translation}</em></p>}
+      {unit.part === 7 && part7Translation?.legacyText && <p className="exam-preserve-lines"><em>{part7Translation.legacyText}</em></p>}
+      {unit.resource.translation && unit.part !== 7 && unit.part !== 6 && unit.part !== 2 && <p><em>{unit.resource.translation}</em></p>}
       {unit.part === 6 && unit.resource.translation && !part6Translation(unit.resource.translation, 1) &&
         <p><em>{unit.resource.translation}</em></p>}
       <Media path={unit.resource.audio} bank={unit.bank || "DE_THI"} token={token} audio />
       <Media path={unit.resource.image} bank={unit.bank || "DE_THI"} token={token} />
     </section>}
-    {unit.documents?.map((doc, index) => <div key={index}><DocumentPreview doc={doc} index={index} />
+    {unit.documents?.map((doc, index) => <div className="exam-document-pair" key={index}><DocumentPreview doc={doc} index={index} title={`Tài liệu ${index + 1} · Bản gốc`} />
+      {hasTranslatedContent(part7Translation?.documents[index], fromDocument(doc)) && <DocumentPreview index={index}
+        doc={{ type: doc.type, content: typeof part7Translation.documents[index].content === "string" ?
+          part7Translation.documents[index].content : JSON.stringify(part7Translation.documents[index].content) }}
+        title={`Tài liệu ${index + 1} · Bản dịch tiếng Việt`} translation />}
       {doc.image && <Media path={doc.image} bank={unit.bank || "DE_THI"} token={token} />}</div>)}
     {questions.map((question, index) => <section className="exam-author-question" key={question.id}>
       <h3>Câu {index + 1} · #{question.id}</h3>

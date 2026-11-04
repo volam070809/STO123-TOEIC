@@ -92,7 +92,8 @@ public sealed class ExamSnapshotQueryService(ToeicDbContext db, CompactExamStore
         };
         var groupSelect = view == SnapshotView.Result ? "" :
             """
-            SELECT g.MaNhomLuotLam, g.ThuTu, p.SoPart, g.NoiDungNguLieu, g.DuongDanAudio, g.DuongDanAnh, g.TaiLieuJson
+            SELECT g.MaNhomLuotLam, g.ThuTu, p.SoPart, g.NoiDungNguLieu, g.DuongDanAudio, g.DuongDanAnh, g.TaiLieuJson,
+                CASE WHEN @active = 1 THEN NULL ELSE g.NoiDungDich END
             FROM dbo.NhomLuotLam AS g JOIN dbo.PartTOEIC AS p ON p.MaPart = g.MaPart
             WHERE g.MaKetQua = @id AND EXISTS (SELECT 1 FROM dbo.KetQuaLamBai AS a WHERE a.MaKetQua = @id AND a.MaHocVien = @learner)
             ORDER BY g.ThuTu;
@@ -170,7 +171,8 @@ public sealed class ExamSnapshotQueryService(ToeicDbContext db, CompactExamStore
                         MaNhomLuotLam = reader.GetInt32(0), ThuTu = reader.GetInt32(1),
                         MaPartNavigation = new PartTOEIC { SoPart = reader.GetInt32(2) },
                         NoiDungNguLieu = StringOrNull(reader, 3), DuongDanAudio = StringOrNull(reader, 4),
-                        DuongDanAnh = StringOrNull(reader, 5), TaiLieuJson = StringOrNull(reader, 6)
+                        DuongDanAnh = StringOrNull(reader, 5), TaiLieuJson = StringOrNull(reader, 6),
+                        NoiDungDich = StringOrNull(reader, 7)
                     });
                 await reader.NextResultAsync(ct);
             }

@@ -188,6 +188,10 @@ export const adminContentApi = {
     if (!response.ok) throw new Error("Không tải được tài nguyên xem trước.");
     return response.blob();
   },
+  previewVideoTicket: (lectureId, resourceId, token) =>
+    apiRequest(`${root}/lectures/${lectureId}/resources/${resourceId}/preview-ticket`,
+      { method: "POST", token }),
+  previewVideoUrl: relativeUrl => `${API_BASE_URL}${relativeUrl}`,
 };
 
 export const learningApi = {

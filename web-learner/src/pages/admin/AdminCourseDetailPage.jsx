@@ -18,7 +18,7 @@ export default function AdminCourseDetailPage() {
   const [action, setAction] = useState(null);
   const [mutation, setMutation] = useState({ busy: false, error: "", blockers: [] });
   const current = request.key === requestKey ? request : { course: null, error: "" };
-  const canManage = user?.vaiTro === "ADMIN_QUAN_LY";
+  const canManage = user?.vaiTro === "ADMIN_NOI_DUNG";
 
   useEffect(() => {
     let active = true;

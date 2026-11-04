@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { newDocument } from "./partSevenDocumentData";
 
 export default function PartSevenDocumentForm({ value, index, onChange, onRemove, canRemove, fileField }) {
+  const [isOpen, setIsOpen] = useState(index === 0);
   const change = (key, next) => onChange({ ...value, [key]: next });
   const update = (key, at, next) => change(key, value[key].map((item, position) => position === at ? next : item));
-  return <details className="exam-author-doc" defaultOpen={index === 0}><summary><strong>Tài liệu {index + 1} · {{ TEXT: "Văn bản", EMAIL: "Email", TABLE: "Bảng", CHAT: "Tin nhắn", FORM: "Biểu mẫu", IMAGE: "Hình ảnh" }[value.type] || value.type}</strong></summary>
+  return <details className="exam-author-doc" open={isOpen} onToggle={event => setIsOpen(event.currentTarget.open)}><summary><strong>Tài liệu {index + 1} · {{ TEXT: "Văn bản", EMAIL: "Email", TABLE: "Bảng", CHAT: "Tin nhắn", FORM: "Biểu mẫu", IMAGE: "Hình ảnh" }[value.type] || value.type}</strong></summary>
     <div className="exam-author-doc-body"><button className="exam-doc-remove" type="button" disabled={!canRemove} onClick={onRemove}>Xóa tài liệu</button>
     {value._parseError && <p role="alert" className="exam-alert exam-alert-error">Tài liệu cũ không đọc được theo cấu trúc hiện hành. Không lưu lại khi chưa xử lý nội dung này.</p>}
     <label>Loại tài liệu<select value={value.type} onChange={event => onChange(value._parseError ?

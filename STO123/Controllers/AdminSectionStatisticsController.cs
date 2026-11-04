@@ -7,13 +7,13 @@ using STO123.Services.Exam;
 namespace STO123.Controllers;
 
 [ApiController]
-[Authorize(Roles = "ADMIN_NOI_DUNG,ADMIN_QUAN_LY")]
+[Authorize(Roles = "ADMIN_NOI_DUNG")]
 [Route("api/admin/statistics")]
 public sealed class AdminSectionStatisticsController(ToeicDbContext db, TimeProvider clock) : ControllerBase
 {
-    private sealed record Enrollment(int CourseId, int EnrollmentId, int LearnerId, string LearnerName,
+    private sealed record Enrollment(int CourseId, int EnrollmentId, int LearnerId,
         string Status, DateTime? Starts, DateTime? Ends);
-    private sealed record LearnerProgress(int CourseId, int EnrollmentId, int LearnerId, string LearnerName,
+    private sealed record LearnerProgress(int CourseId, int EnrollmentId, int LearnerId,
         int Completed, int Incomplete, int Percent, bool Started, bool Finished, bool Active);
     private static object Metric(string label, object value, string? note = null) => new { label, value, note };
 
@@ -25,7 +25,7 @@ public sealed class AdminSectionStatisticsController(ToeicDbContext db, TimeProv
             .Where(x => (courseId == null || x.MaKhoaHoc == courseId) &&
                 x.MaDangKyNavigation.GiaoDichThanhToan.Any(p => p.TrangThai == "THANH_CONG"))
             .Select(x => new Enrollment(x.MaKhoaHoc, x.MaDangKy,
-                x.MaDangKyNavigation.MaNguoiDung, x.MaDangKyNavigation.MaNguoiDungNavigation.HoTen,
+                x.MaDangKyNavigation.MaNguoiDung,
                 x.MaDangKyNavigation.TrangThai, x.MaDangKyNavigation.NgayBatDau,
                 x.MaDangKyNavigation.NgayKetThuc)).ToListAsync(ct);
         var package = await db.DangKyGoiHoc.AsNoTracking()
@@ -33,7 +33,7 @@ public sealed class AdminSectionStatisticsController(ToeicDbContext db, TimeProv
             .SelectMany(e => e.MaGoiHocNavigation.MaKhoaHoc
                 .Where(c => courseId == null || c.MaKhoaHoc == courseId)
                 .Select(c => new Enrollment(c.MaKhoaHoc, e.MaDangKy, e.MaNguoiDung,
-                    e.MaNguoiDungNavigation.HoTen, e.TrangThai, e.NgayBatDau, e.NgayKetThuc)))
+                    e.TrangThai, e.NgayBatDau, e.NgayKetThuc)))
             .ToListAsync(ct);
         var latest = direct.Concat(package).GroupBy(x => (x.CourseId, x.LearnerId))
             .Select(g => g.OrderByDescending(x => x.EnrollmentId).First()).ToList();
@@ -60,7 +60,7 @@ public sealed class AdminSectionStatisticsController(ToeicDbContext db, TimeProv
             var row = progressByEnrollment.GetValueOrDefault((x.CourseId, x.EnrollmentId));
             var completed = row?.Completed ?? 0;
             var percent = count == 0 ? 0 : (int)Math.Round((row?.PercentUnits ?? 0) / (double)count);
-            return new LearnerProgress(x.CourseId, x.EnrollmentId, x.LearnerId, x.LearnerName,
+            return new LearnerProgress(x.CourseId, x.EnrollmentId, x.LearnerId,
                 completed, Math.Max(0, count - completed), percent, row?.Rows > 0,
                 count > 0 && completed == count,
                 x.Status == "DANG_SU_DUNG" && x.Starts <= now && x.Ends > now);
@@ -87,31 +87,13 @@ public sealed class AdminSectionStatisticsController(ToeicDbContext db, TimeProv
     {
         if (!await db.KhoaHoc.AsNoTracking().AnyAsync(x => x.MaKhoaHoc == courseId, ct)) return NotFound();
         var data = await CourseData(courseId, ct);
-        var rows = data.Learners.OrderBy(x => x.LearnerName).ToArray();
+        var rows = data.Learners.ToArray();
         var attempts = await (from a in db.LuotBaiTapKhoaHoc.AsNoTracking()
             join step in db.BuocLoTrinh.AsNoTracking() on a.MaBuoc equals step.MaBuoc
             where step.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc == courseId
             orderby a.BatDauLuc descending
             select new { a.MaLuot, a.MaDangKy, a.MaPhienBan, a.LanLam, a.TrangThai, a.BatDauLuc })
             .Take(20).ToListAsync(ct);
-        var attemptIds = attempts.Select(x => x.MaLuot).ToArray();
-        var checks = await db.LanKiemTraBaiTapKhoaHoc.AsNoTracking()
-            .Where(x => attemptIds.Contains(x.MaLuot))
-            .Select(x => new { x.MaLuot, x.MaCauHoi, x.LanKiemTra, x.Dung }).ToListAsync(ct);
-        var versions = attempts.Select(x => x.MaPhienBan).Distinct().ToArray();
-        var totals = await db.CauHoiBaiTapKhoaHoc.AsNoTracking()
-            .Where(x => versions.Contains(x.MaPhienBan))
-            .GroupBy(x => x.MaPhienBan).Select(g => new { Version = g.Key, Total = g.Count() })
-            .ToDictionaryAsync(x => x.Version, x => x.Total, ct);
-        var names = rows.GroupBy(x => x.EnrollmentId).ToDictionary(g => g.Key, g => g.First().LearnerName);
-        var quiz = attempts.Select(a => {
-            var latestChecks = checks.Where(c => c.MaLuot == a.MaLuot).GroupBy(c => c.MaCauHoi)
-                .Select(g => g.OrderByDescending(c => c.LanKiemTra).First()).ToArray();
-            return new { learner = names.GetValueOrDefault(a.MaDangKy, $"Đăng ký #{a.MaDangKy}"),
-                attempt = a.LanLam, status = a.TrangThai, answered = latestChecks.Length,
-                total = totals.GetValueOrDefault(a.MaPhienBan), correct = latestChecks.Count(c => c.Dung),
-                startedAt = a.BatDauLuc };
-        }).ToArray();
         return Ok(new { metrics = new[] {
             Metric("Học viên đăng ký", rows.Length),
             Metric("Đang học", rows.Count(x => x.Active && x.Started && !x.Finished)),
@@ -121,9 +103,7 @@ public sealed class AdminSectionStatisticsController(ToeicDbContext db, TimeProv
             Metric("Hoạt động chưa xong", data.IncompleteRecords),
             Metric("Bài tập hoàn thành gần đây", attempts.Count(x => x.TrangThai == "HOAN_THANH"), "Trong 20 lượt gần nhất"),
             Metric("Bài tập đang làm gần đây", attempts.Count(x => x.TrangThai != "HOAN_THANH"), "Trong 20 lượt gần nhất")
-        }, learners = rows.Select(x => new { x.LearnerId, x.LearnerName, x.Completed,
-            x.Incomplete, x.Percent, x.Started, x.Finished, x.Active }),
-            quizResults = quiz, totalActivities = data.Steps.GetValueOrDefault(courseId) });
+        }, totalActivities = data.Steps.GetValueOrDefault(courseId) });
     }
 
     [HttpGet("questions")]
@@ -222,15 +202,12 @@ public sealed class AdminSectionStatisticsController(ToeicDbContext db, TimeProv
         var totals = await completed.GroupBy(_ => 1).Select(g => new { count = g.Count(),
             learners = g.Select(a => a.MaHocVien).Distinct().Count(), average = g.Average(a => a.DiemTong),
             highest = g.Max(a => a.DiemTong) }).SingleOrDefaultAsync(ct);
-        var attempts = await completed.OrderByDescending(a => a.NgayNopBai)
-            .Select(a => new { a.MaHocVien, learner = a.MaHocVienNavigation.HoTen,
-                a.DiemTong, a.DiemNghe, a.DiemDoc, a.NgayNopBai }).Take(20).ToListAsync(ct);
         return Ok(new { metrics = new[] {
             Metric("Kết quả đã nộp", totals?.count ?? 0, "Theo kết quả còn lưu"),
             Metric("Học viên đã thi", totals?.learners ?? 0),
             Metric("Điểm trung bình", totals is null ? "—" : $"{totals.average:0.#}"),
             Metric("Điểm cao nhất", totals?.highest?.ToString() ?? "—")
-        }, recentAttempts = attempts });
+        } });
     }
 
     [HttpGet("vocabulary")]

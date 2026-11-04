@@ -8,7 +8,7 @@ using STO123.Services.Auth;
 namespace STO123.Controllers;
 
 [ApiController]
-[Authorize(Policy = AdminAuthorization.CourseReadPolicy)]
+[Authorize(Roles = AdminAuthorization.ContentRole)]
 [Route("api/admin/courses")]
 public sealed class AdminCoursesController(ToeicDbContext db) : ControllerBase
 {

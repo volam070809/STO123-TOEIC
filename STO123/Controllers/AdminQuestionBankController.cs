@@ -6,7 +6,7 @@ using STO123.Services.Exam;
 
 namespace STO123.Controllers;
 
-[Authorize(Roles = "ADMIN_NOI_DUNG,ADMIN_QUAN_LY")]
+[Authorize(Roles = "ADMIN_NOI_DUNG")]
 [ApiController]
 [Route("api/admin/content/questions")]
 public sealed class AdminQuestionBankController(ToeicDbContext db,
@@ -15,10 +15,13 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
     [HttpGet("units")]
     public async Task<IActionResult> Units([FromQuery] int? part, [FromQuery] string? bank,
         [FromQuery] string? search, [FromQuery] string scope = "all",
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default,
+        [FromQuery] string completeness = "all")
     {
         if (part is < 1 or > 7 || bank is not (null or "DE_THI" or "LUYEN_TAP") ||
-            scope is not ("all" or "groups" or "single") || page < 1 || pageSize is < 1 or > 50)
+            scope is not ("all" or "groups" or "single") ||
+            completeness is not ("all" or "complete" or "incomplete") ||
+            page < 1 || pageSize is < 1 or > 50)
             return BadRequest(new { code = "INVALID_FILTER", message = "Bộ lọc không hợp lệ." });
         var query = db.CauHoi.AsNoTracking().AsQueryable();
         if (part.HasValue) query = query.Where(q => q.MaPartNavigation.SoPart == part);
@@ -28,11 +31,33 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
             text = q.NoiDung, groupId = q.NhomCauHoi == null ? (int?)null : q.NhomCauHoi.MaNguLieu,
             order = q.NhomCauHoi == null ? 0 : q.NhomCauHoi.ThuTu,
             groupText = q.NhomCauHoi == null ? null : q.NhomCauHoi.MaNguLieuNavigation.NoiDungNguLieu,
+            groupTranslation = q.NhomCauHoi == null ? null : q.NhomCauHoi.MaNguLieuNavigation.NoiDungDich,
             audio = q.NhomCauHoi == null ? null : q.NhomCauHoi.MaNguLieuNavigation.DuongDanAudio,
             image = q.NhomCauHoi == null ? null : q.NhomCauHoi.MaNguLieuNavigation.DuongDanAnh,
+            a = q.PhuongAnA, b = q.PhuongAnB, c = q.PhuongAnC, d = q.PhuongAnD,
+            correct = q.PhuongAnDung, explanation = q.GiaiThich,
             examCount = q.CauHoiDeThi.Count
         }).ToListAsync(ct);
-        var usage = await db.CauHoiDeThi.AsNoTracking()
+        var documentsQuery = db.NguLieuTaiLieu.AsNoTracking()
+            .Where(d => d.MaNguLieuNavigation.NhomCauHoi.Any(m =>
+                bank == null || m.MaCauHoiNavigation.LoaiCauHoi == bank));
+        if (part.HasValue)
+        {
+            var selectedPart = part.Value;
+            documentsQuery = documentsQuery.Where(d => d.MaNguLieuNavigation.NhomCauHoi.Any(m =>
+                m.MaCauHoiNavigation.MaPartNavigation.SoPart == selectedPart));
+        }
+        var documents = await documentsQuery.OrderBy(d => d.ThuTu).ToListAsync(ct);
+        var documentsByGroup = documents.GroupBy(d => d.MaNguLieu)
+            .ToDictionary(g => g.Key, g => g.ToArray());
+        var usageQuery = db.CauHoiDeThi.AsNoTracking()
+            .Where(link => bank == null || link.MaCauHoiNavigation.LoaiCauHoi == bank);
+        if (part.HasValue)
+        {
+            var selectedPart = part.Value;
+            usageQuery = usageQuery.Where(link => link.MaCauHoiNavigation.MaPartNavigation.SoPart == selectedPart);
+        }
+        var usage = await usageQuery
             .Select(link => new { link.MaCauHoi, link.MaDeThi,
                 name = link.MaDeThiNavigation.TenDe, status = link.MaDeThiNavigation.TrangThai,
                 current = link.MaDeThiNavigation.MaPhienBanHienHanh != null }).ToListAsync(ct);
@@ -49,6 +74,47 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
                     numericSearch ? q.id == number : q.id.ToString().Contains(keyword) ||
                     (q.text?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)).Select(q => q.id).ToArray();
                 var memberIds = members.Select(q => q.id).ToHashSet();
+                var missing = new List<string>();
+                foreach (var q in members)
+                {
+                    var field = QuestionContentRules.InvalidField(q.part, q.text, q.explanation,
+                        q.part == 6 ? QuestionContentRules.Part6Translation(q.groupTranslation, q.order) : null);
+                    if (field is not null) missing.Add($"Câu {q.id}: {field}");
+                    if (string.IsNullOrWhiteSpace(q.a)) missing.Add($"Câu {q.id}: đáp án A");
+                    if (string.IsNullOrWhiteSpace(q.b)) missing.Add($"Câu {q.id}: đáp án B");
+                    if (string.IsNullOrWhiteSpace(q.c)) missing.Add($"Câu {q.id}: đáp án C");
+                    if (q.part != 2 && string.IsNullOrWhiteSpace(q.d)) missing.Add($"Câu {q.id}: đáp án D");
+                    if (q.correct?.Trim() is not ("A" or "B" or "C") &&
+                        !(q.part != 2 && q.correct?.Trim() == "D"))
+                        missing.Add($"Câu {q.id}: đáp án đúng");
+                }
+                if (first.part == 5 && first.groupId is not null)
+                    missing.Add($"Câu {first.id}: Part 5 không thuộc nhóm");
+                if (members.Any(q => q.part != first.part || q.bank != first.bank))
+                    missing.Add($"Nhóm {first.groupId}: Part hoặc ngân hàng không đồng nhất");
+                if (first.part != 5)
+                {
+                    if (first.groupId is null) missing.Add($"Câu {first.id}: nhóm ngữ liệu");
+                    else
+                    {
+                        var expected = first.part switch { 1 or 2 => 1, 3 or 4 => 3, 6 => 4, 7 => -1, _ => 0 };
+                        if (expected > 0 && members.Length != expected || first.part == 7 && members.Length is < 2 or > 5 ||
+                            members.Select((q, i) => q.order == i + 1).Any(valid => !valid))
+                            missing.Add($"Nhóm {first.groupId}: số câu hoặc thứ tự");
+                        if (first.part is >= 1 and <= 4 && string.IsNullOrWhiteSpace(first.audio))
+                            missing.Add($"Nhóm {first.groupId}: âm thanh");
+                        if (first.part == 1 && string.IsNullOrWhiteSpace(first.image))
+                            missing.Add($"Nhóm {first.groupId}: hình ảnh");
+                        if (first.part == 6 && string.IsNullOrWhiteSpace(first.groupText))
+                            missing.Add($"Nhóm {first.groupId}: đoạn văn");
+                        if (first.part == 7)
+                        {
+                            var docs = documentsByGroup.GetValueOrDefault(first.groupId.Value) ?? [];
+                            if (!ExamSourceValidator.ValidDocuments(7, docs))
+                                missing.Add($"Nhóm {first.groupId}: tài liệu đọc");
+                        }
+                    }
+                }
                 return new { first.groupId, first.part, first.bank,
                     isGroup = first.groupId != null && first.part is 3 or 4 or 6 or 7,
                     questionIds = members.Select(q => q.id).ToArray(),
@@ -58,13 +124,17 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
                         .GroupBy(link => link.MaDeThi).Select(g => new { examId = g.Key,
                             name = g.First().name, status = g.First().status,
                             current = g.First().current }).ToArray(),
-                    preview = first.groupText ?? first.text, first.audio, first.image, matchingQuestionIds = matching,
+                    preview = first.groupText ?? first.text, first.audio, first.image,
+                    missingFields = missing.ToArray(), matchingQuestionIds = matching,
                     matches = string.IsNullOrWhiteSpace(keyword) || matching.Length > 0 ||
                         (!exactQuestionExists && first.groupId?.ToString().Contains(groupSearch!) == true) ||
                         (!numericSearch && first.groupText?.Contains(keyword, StringComparison.OrdinalIgnoreCase) == true) ||
                         (!numericSearch && usage.Any(link => memberIds.Contains(link.MaCauHoi) &&
                             link.name.Contains(keyword, StringComparison.OrdinalIgnoreCase))) };
-            }).Where(u => u.matches && (scope == "all" || scope == "groups" && u.isGroup ||
+            }).Where(u => u.matches &&
+                (completeness == "all" || completeness == "incomplete" && u.missingFields.Length > 0 ||
+                    completeness == "complete" && u.missingFields.Length == 0) &&
+                (scope == "all" || scope == "groups" && u.isGroup ||
                 scope == "single" && !u.isGroup))
             .OrderBy(u => u.questionIds[0]).ToArray();
         return Ok(new { items = units.Skip((page - 1) * pageSize).Take(pageSize), total = units.Length, page, pageSize });

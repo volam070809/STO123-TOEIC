@@ -38,7 +38,7 @@
 .vocabulary-practice-page .vocabulary-topic-tools label { color: var(--color-heading); font-size: .94rem; font-weight: 700; }
 .vocabulary-practice-page .vocabulary-topic-tools input { width: min(100%, 300px); min-height: 44px; padding: .6rem .8rem; border: 1px solid #c7d7eb; border-radius: 9px; background: #fff; color: var(--color-heading); font: inherit; }
 .vocabulary-practice-page .vocabulary-topic-tools span { color: var(--text-muted); font-size: .9rem; }
-.vocabulary-practice-page .vocab-topic-grid { grid-template-columns: repeat(var(--topic-columns), minmax(0, 1fr)); width: 100%; max-width: var(--topic-max-width); gap: 18px; }
+.vocabulary-practice-page .vocab-topic-grid { grid-template-columns: repeat(var(--topic-columns), minmax(0, 1fr)); width: 100%; max-width: var(--topic-max-width); margin-inline: auto; gap: 18px; }
 .vocabulary-practice-page .vocab-topic-card { min-width: 0; min-height: 0; padding: 0; border-color: #dae6f6; border-radius: 14px; box-shadow: 0 5px 16px rgb(10 43 98 / 6%); transition: border-color .18s, box-shadow .18s, transform .18s; }
 .vocabulary-practice-page .vocab-topic-card:hover { transform: translateY(-3px); border-color: #a9bfdf; box-shadow: 0 10px 24px rgb(10 43 98 / 10%); }
 .vocabulary-practice-page .vocab-topic-card:focus-within { border-color: var(--primary); }

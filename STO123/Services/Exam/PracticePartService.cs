@@ -435,6 +435,9 @@ public sealed class PracticePartService(ToeicDbContext db)
                 ? g.NoiDungNguLieu : null,
             audioUrl = string.IsNullOrWhiteSpace(g.DuongDanAudio) ? null : $"/api/attempts/{attempt.MaKetQua}/groups/{g.MaNhomLuotLam}/audio",
             imageUrl = string.IsNullOrWhiteSpace(g.DuongDanAnh) ? null : $"/api/attempts/{attempt.MaKetQua}/groups/{g.MaNhomLuotLam}/image",
+            translation = (isReview || attempt.CauHoiLuotLam.Any(q => q.MaNhomLuotLam == g.MaNhomLuotLam) &&
+                !attempt.CauHoiLuotLam.Any(q => q.MaNhomLuotLam == g.MaNhomLuotLam &&
+                    string.IsNullOrWhiteSpace(q.ChiTietKetQua?.DapAnChon))) ? g.NoiDungDich : null,
             documents = (isReview || part >= 5 ? ExamDocumentCodec.Decode(g.TaiLieuJson) : []).Select(d => new { d.Order, d.Type, content = ExamDocumentCodec.ToContent(d),
                 imageUrl = string.IsNullOrWhiteSpace(d.ImagePath) ? null : $"/api/attempts/{attempt.MaKetQua}/groups/{g.MaNhomLuotLam}/documents/{d.Order}/image" })
         }).ToArray();

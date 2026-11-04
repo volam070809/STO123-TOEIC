@@ -1,6 +1,7 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using STO123.Models;
+using STO123.Services.Exam;
 
 namespace STO123.Services.Payment;
 
@@ -132,6 +133,23 @@ public sealed class PaymentConfirmationService(
             }
 
             var activatedAt = clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime;
+            var purchasedCourseIds = enrollment.MaGoiHoc is null
+                ? enrollment.ChiTietDangKyKhoaHoc.Select(d => d.MaKhoaHoc).ToArray()
+                : await db.GoiHoc.AsNoTracking().Where(g => g.MaGoiHoc == enrollment.MaGoiHoc)
+                    .SelectMany(g => g.MaKhoaHoc.Select(c => c.MaKhoaHoc)).ToArrayAsync(cancellationToken);
+            // A delayed success for an older checkout may arrive after a retry was
+            // paid. Record the charge, but never create a second overlapping grant.
+            if (purchasedCourseIds.Length > 0 && await CourseEntitlement.ActiveCourseIds(db, learnerId.Value, activatedAt)
+                .AnyAsync(id => purchasedCourseIds.Contains(id), cancellationToken))
+            {
+                payment.TrangThai = "THANH_CONG";
+                payment.NgayThanhToan = activatedAt;
+                await db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                logger.LogWarning("Paid checkout {PaymentId} overlaps an active entitlement; refund reconciliation required.",
+                    payment.MaGiaoDich);
+                return PaymentConfirmationResult.NeedsReconciliation;
+            }
             payment.TrangThai = "THANH_CONG";
             payment.NgayThanhToan = activatedAt;
             // Once VNPay has confirmed the charge, the purchased enrollment must

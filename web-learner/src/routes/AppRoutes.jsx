@@ -30,6 +30,7 @@ import { adminRouteModules } from "./adminRouteModules";
 import GuestAuthPromptProvider from "../components/auth/GuestAuthPrompt";
 import SessionBoundary from "../components/auth/SessionBoundary";
 import { useAuth } from "../contexts/AuthState";
+import { ContentRevisionWatcher } from "../services/contentRevisions";
 
 const AdminLayout = lazy(adminRouteModules.layout);
 const AdminLearnersPage = lazy(adminRouteModules.learners);
@@ -57,10 +58,13 @@ const AdminExamCriteriaPage = lazy(adminRouteModules.examCriteria);
 const AdminManualExamPage = lazy(adminRouteModules.manualExam);
 const AdminCurriculumPage = lazy(adminRouteModules.curriculum);
 const AdminVocabularyPage = lazy(adminRouteModules.vocabulary);
+const AdminReadOnlyPreviewPage = lazy(() => import("../pages/admin/AdminReadOnlyPreviewPage"));
 const AdminContactSettingsPage = lazy(adminRouteModules.contactSettings);
 const CourseStepPage = lazy(() => import("../pages/exam/CourseStepPage"));
 
 const MANAGEMENT_ROLES = ["ADMIN_QUAN_LY"];
+const CONTENT_ROLES = ["ADMIN_NOI_DUNG"];
+const contentOnly = page => <AdminRoute allowedRoles={CONTENT_ROLES}>{page}</AdminRoute>;
 
 function AdminShell() {
   return <Suspense fallback={<main className="admin-gate"><section className="admin-gate-card" role="status"><div className="admin-spinner" aria-hidden="true" /><h1>Đang tải trang quản trị</h1><p>Vui lòng chờ trong giây lát.</p></section></main>}>
@@ -116,7 +120,7 @@ function RouteScroll() {
 }
 
 export default function AppRoutes() {
-  return <BrowserRouter><GuestAuthPromptProvider><RouteScroll /><Routes>
+  return <BrowserRouter><GuestAuthPromptProvider><ContentRevisionWatcher /><RouteScroll /><Routes>
     <Route path="/" element={<HomePage />} />
     <Route path="/toeic/structure" element={<ToeicStructurePage />} />
     <Route path="/vocabulary" element={<VocabularyRoute />} />
@@ -151,31 +155,32 @@ export default function AppRoutes() {
     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
     <Route path="/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
     <Route path="/admin" element={<AdminShell />}>
+      <Route path="preview" element={<AdminReadOnlyPreviewPage />} />
       <Route index element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminDashboardPage /></AdminRoute>} />
       <Route path="reports" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminReportsPage /></AdminRoute>} />
       <Route path="learners" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminLearnersPage /></AdminRoute>} />
       <Route path="learners/new" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminLearnerCreatePage /></AdminRoute>} />
       <Route path="learners/:learnerId/edit" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminLearnerEditPage /></AdminRoute>} />
       <Route path="learners/:learnerId" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminLearnerDetailPage /></AdminRoute>} />
-      <Route path="courses" element={<AdminCoursesPage />} />
-      <Route path="courses/new" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminCourseCreatePage /></AdminRoute>} />
-      <Route path="courses/:courseId/edit" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminCourseEditPage /></AdminRoute>} />
-      <Route path="courses/:courseId" element={<AdminCourseDetailPage />} />
-      <Route path="courses/:courseId/content" element={<AdminCurriculumPage />} />
-      <Route path="content" element={<AdminContentDashboardPage />} />
-      <Route path="content/exams" element={<AdminExamManagementPage />} />
-      <Route path="content/exams/new" element={<AdminManualExamPage />} />
-      <Route path="content/questions" element={<Navigate to="/admin/content/questions/exams" replace />} />
-      <Route path="content/questions/exams" element={<AdminQuestionBankPage bank="DE_THI" />} />
-      <Route path="content/questions/exams/new" element={<AdminQuestionBankPage bank="DE_THI" />} />
-      <Route path="content/questions/exams/detail/:questionId" element={<AdminQuestionBankPage bank="DE_THI" />} />
-      <Route path="content/questions/practice" element={<AdminQuestionBankPage bank="LUYEN_TAP" />} />
-      <Route path="content/questions/practice/new" element={<AdminQuestionBankPage bank="LUYEN_TAP" />} />
-      <Route path="content/questions/practice/detail/:questionId" element={<AdminQuestionBankPage bank="LUYEN_TAP" />} />
-      <Route path="content/questions/new" element={<Navigate to="/admin/content/questions/exams/new" replace />} />
-      <Route path="content/media" element={<Navigate to="/admin/content/questions/exams" replace />} />
-      <Route path="content/exam-criteria" element={<AdminExamCriteriaPage />} />
-      <Route path="vocabulary" element={<AdminVocabularyPage />} />
+      <Route path="courses" element={contentOnly(<AdminCoursesPage />)} />
+      <Route path="courses/new" element={contentOnly(<AdminCourseCreatePage />)} />
+      <Route path="courses/:courseId/edit" element={contentOnly(<AdminCourseEditPage />)} />
+      <Route path="courses/:courseId" element={contentOnly(<AdminCourseDetailPage />)} />
+      <Route path="courses/:courseId/content" element={contentOnly(<AdminCurriculumPage />)} />
+      <Route path="content" element={contentOnly(<AdminContentDashboardPage />)} />
+      <Route path="content/exams" element={contentOnly(<AdminExamManagementPage />)} />
+      <Route path="content/exams/new" element={contentOnly(<AdminManualExamPage />)} />
+      <Route path="content/questions" element={contentOnly(<Navigate to="/admin/content/questions/exams" replace />)} />
+      <Route path="content/questions/exams" element={contentOnly(<AdminQuestionBankPage bank="DE_THI" />)} />
+      <Route path="content/questions/exams/new" element={contentOnly(<AdminQuestionBankPage bank="DE_THI" />)} />
+      <Route path="content/questions/exams/detail/:questionId" element={contentOnly(<AdminQuestionBankPage bank="DE_THI" />)} />
+      <Route path="content/questions/practice" element={contentOnly(<AdminQuestionBankPage bank="LUYEN_TAP" />)} />
+      <Route path="content/questions/practice/new" element={contentOnly(<AdminQuestionBankPage bank="LUYEN_TAP" />)} />
+      <Route path="content/questions/practice/detail/:questionId" element={contentOnly(<AdminQuestionBankPage bank="LUYEN_TAP" />)} />
+      <Route path="content/questions/new" element={contentOnly(<Navigate to="/admin/content/questions/exams/new" replace />)} />
+      <Route path="content/media" element={contentOnly(<Navigate to="/admin/content/questions/exams" replace />)} />
+      <Route path="content/exam-criteria" element={contentOnly(<AdminExamCriteriaPage />)} />
+      <Route path="vocabulary" element={contentOnly(<AdminVocabularyPage />)} />
       <Route path="contact-support" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminContactSettingsPage /></AdminRoute>} />
       <Route path="packages" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackagesPage /></AdminRoute>} />
       <Route path="packages/new" element={<AdminRoute allowedRoles={MANAGEMENT_ROLES}><AdminPackageCreatePage /></AdminRoute>} />

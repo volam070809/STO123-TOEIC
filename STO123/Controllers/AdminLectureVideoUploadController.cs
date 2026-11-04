@@ -17,7 +17,7 @@ namespace STO123.Controllers;
 public sealed record VideoStartRequest(string FileName, long Size, int? ResourceId);
 
 [ApiController]
-[Authorize(Roles = "ADMIN_NOI_DUNG,ADMIN_QUAN_LY")]
+[Authorize(Roles = "ADMIN_NOI_DUNG")]
 [Route("api/admin/content/lectures/{lectureId:int}/video-upload")]
 public sealed class AdminLectureVideoUploadController(ToeicDbContext db, LectureResourceStorage storage,
     CourseBlobSynchronizer sync, IConfiguration config, ILogger<AdminLectureVideoUploadController> logger) : ControllerBase

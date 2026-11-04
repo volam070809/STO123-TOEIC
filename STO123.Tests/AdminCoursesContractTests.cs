@@ -13,23 +13,23 @@ namespace STO123.Tests;
 public sealed class AdminCoursesContractTests
 {
     [Fact]
-    public void Read_controller_uses_course_read_policy()
+    public void Course_read_requires_content_role()
     {
         var authorize = Assert.Single(typeof(AdminCoursesController)
             .GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
 
-        Assert.Equal(AdminAuthorization.CourseReadPolicy, authorize.Policy);
+        Assert.Equal(AdminAuthorization.ContentRole, authorize.Roles);
         Assert.Equal("ADMIN_QUAN_LY", AdminAuthorization.ManagementRole);
         Assert.Equal("ADMIN_NOI_DUNG", AdminAuthorization.ContentRole);
     }
 
     [Fact]
-    public void Mutation_controller_requires_management_policy()
+    public void Course_mutation_requires_content_role()
     {
         var authorize = Assert.Single(typeof(AdminCourseMutationsController)
             .GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
 
-        Assert.Equal(AdminAuthorization.ManagementPolicy, authorize.Policy);
+        Assert.Equal(AdminAuthorization.ContentRole, authorize.Roles);
     }
 
     [Fact]

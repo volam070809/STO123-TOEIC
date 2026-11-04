@@ -1,23 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from "../../contexts/AuthState";
 import { apiRequest } from "../../services/api";
+import websiteFeatures from "../../data/websiteFeatures.json";
 import "../../styles/ai-toeic-chat.css";
 
 const api = "/api/ai/conversations";
-const suggestions = ["Giải thích Part 5 cho người mới", "Phân biệt affect và effect", "Cho tôi mẹo làm Part 7"];
+const suggestions = ["Tôi nên học gì tiếp?", "Tìm bài học về thì hiện tại hoàn thành",
+  "Tôi có thể thanh toán lại khi nào?", "Luyện Part 5 ở đâu?"];
 const activeKey = id => `sto123-ai-active-${id}`;
-const openKey = id => `sto123-ai-open-${id}`;
 const dateText = value => value ? new Date(value).toLocaleDateString("vi-VN") : "";
 const contextLabel = context => context?.type === "VOCABULARY" ? "Theo từ đang học" :
   context?.type === "LESSON" ? "Theo bài học hiện tại" :
-    context?.type === "PRACTICE" ? "Theo câu luyện tập" : null;
+    context?.type === "PRACTICE" ? "Theo câu luyện tập" :
+      context?.type === "COURSE_EXERCISE" ? "Theo câu bài tập đang học" : null;
 
 function Markdown({ text }) {
+  const allowed = href => typeof href === "string" &&
+    (/^\/(?:vocabulary\?topic=[1-9]\d*|courses\?paymentId=[1-9]\d*|courses\/[1-9]\d*(?:\/steps\/[1-9]\d*)?)$/.test(href) ||
+      websiteFeatures.some(feature => feature.link === href));
   return <ReactMarkdown components={{
-    a: ({ href, children }) => href?.startsWith("https://") ?
-      <a href={href} target="_blank" rel="noopener noreferrer">{children}</a> : <span>{children}</span>,
+    a: ({ href, children }) => allowed(href) ? <Link to={href}>{children}</Link> : <span>{children}</span>,
     img: ({ alt }) => <span>{alt || "Hình ảnh"}</span>,
   }}>{text}</ReactMarkdown>;
 }
@@ -26,7 +30,7 @@ function Sparkle({ size = 24 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 2 1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7L12 2Z" fill="currentColor"/><path d="m19 17 .7 2.3L22 20l-2.3.7L19 23l-.7-2.3L16 20l2.3-.7L19 17Z" fill="currentColor"/></svg>;
 }
 
-export default function AiToeicChatWidget({ learningContext }) {
+export default function AiToeicChatWidget({ learningContext, embedded = false, active = false, onMinimize }) {
   const { pathname } = useLocation();
   const { user, token } = useAuth();
   const learnerId = user?.vaiTro === "HOC_VIEN" ? user.maNguoiDung : null;
@@ -49,7 +53,6 @@ export default function AiToeicChatWidget({ learningContext }) {
     if (!learnerId || !token || hidden) return undefined;
     let live = true;
     const savedId = Number(sessionStorage.getItem(activeKey(learnerId))) || null;
-    setOpen(sessionStorage.getItem(openKey(learnerId)) === "1");
     setLoading(true);
     Promise.all([apiRequest(api, { token }), savedId ? apiRequest(`${api}/${savedId}`, { token }).catch(() => null) : null])
       .then(([list, detail]) => {
@@ -65,12 +68,13 @@ export default function AiToeicChatWidget({ learningContext }) {
     return () => { live = false; };
   }, [learnerId, token, hidden]);
 
-  useEffect(() => { if (open) endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" }); }, [open, messages, pending]);
+  const visible = embedded ? active : open;
+  useEffect(() => { if (visible) endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" }); }, [visible, messages, pending]);
 
   function toggle() {
+    if (embedded) { onMinimize?.(); return; }
     const next = !open;
     setOpen(next);
-    if (learnerId) sessionStorage.setItem(openKey(learnerId), next ? "1" : "0");
     if (next) setTimeout(() => inputRef.current?.focus(), 80);
   }
   function activate(id) { setActiveId(id); sessionStorage.setItem(activeKey(learnerId), String(id)); }
@@ -154,7 +158,7 @@ export default function AiToeicChatWidget({ learningContext }) {
 
   if (hidden) return null;
   return <div className="ai-chat-shell">
-    {open && <section className="ai-chat-panel" role="dialog" aria-label="Trợ lý AI TOEIC">
+    {visible && <section className="ai-chat-panel" role="dialog" aria-label="Trợ lý AI TOEIC">
       <header className="ai-chat-head"><span className="ai-chat-avatar"><Sparkle /></span><div><strong>Trợ lý AI TOEIC</strong><small>Giải thích dễ hiểu, học theo nhịp của bạn</small></div>
         <button type="button" className="ai-chat-head-button" aria-label="Lịch sử hội thoại" title="Lịch sử" onClick={() => setHistoryOpen(value => !value)}>☷</button>
         <button type="button" className="ai-chat-head-button" aria-label="Thu nhỏ chatbot" title="Thu nhỏ" onClick={toggle}>−</button></header>
@@ -167,17 +171,17 @@ export default function AiToeicChatWidget({ learningContext }) {
         <div className="ai-chat-toolbar"><span>{contextLabel(learningContext) || "Gia sư TOEIC của bạn"}</span><button type="button" onClick={newConversation} disabled={busy || loading}>+ Hội thoại mới</button></div>
         <div className="ai-chat-messages" aria-live="polite">
           {loading && <p className="ai-chat-state">Đang tải hội thoại…</p>}
-          {!loading && messages.length === 0 && !pending && <div className="ai-chat-welcome"><div className="ai-chat-welcome-icon"><Sparkle size={30} /></div><h2>Hôm nay bạn muốn học gì?</h2><p>Hỏi về từ vựng, ngữ pháp, dịch thuật hoặc cách làm TOEIC Part 1–7.</p><div className="ai-chat-suggestions">{suggestions.map(text => <button type="button" key={text} onClick={() => { setDraft(text); inputRef.current?.focus(); }}>{text} <span>↗</span></button>)}</div></div>}
+          {!loading && messages.length === 0 && !pending && <div className="ai-chat-welcome"><div className="ai-chat-welcome-icon"><Sparkle size={30} /></div><h2>Hôm nay bạn muốn học gì?</h2><p>Hỏi về bài học, từ vựng, lộ trình hoặc cách dùng STO123.</p><div className="ai-chat-suggestions">{suggestions.map(text => <button type="button" key={text} onClick={() => { setDraft(text); inputRef.current?.focus(); }}>{text} <span>↗</span></button>)}</div></div>}
           {messages.map(row => <article key={row.id} className={`ai-chat-message ${row.role === "MODEL" ? "is-ai" : "is-user"}`}><div className="ai-chat-bubble">{row.role === "MODEL" ? <Markdown text={row.text} /> : <p>{row.text}</p>}</div>{row.role === "MODEL" && <button className="ai-chat-copy" type="button" onClick={() => copy(row.text, row.id)}>{copiedId === row.id ? "Đã sao chép" : "Sao chép"}</button>}</article>)}
           {pending && <article className="ai-chat-message is-user"><div className="ai-chat-bubble"><p>{pending.text}</p></div>{pending.status === "failed" && <button className="ai-chat-retry" type="button" onClick={() => send(pending)}>Thử gửi lại</button>}</article>}
           {pending?.status === "sending" && <div className="ai-chat-typing" role="status"><span /><span /><span /><small>AI đang suy nghĩ…</small></div>}
           <div ref={endRef} />
         </div>
         {error && <p className="ai-chat-error" role="alert">{error} {!pending && <button type="button" onClick={retryLoad}>Thử lại</button>}</p>}
-        <form className="ai-chat-compose" onSubmit={submit}><textarea ref={inputRef} rows={2} maxLength={3000} value={draft} placeholder="Hỏi AI về TOEIC…" onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(event); } }} aria-label="Câu hỏi cho AI" /><button type="submit" disabled={!draft.trim() || busy} aria-label="Gửi câu hỏi">➤</button></form>
+        <form className="ai-chat-compose" onSubmit={submit}><textarea ref={inputRef} rows={2} maxLength={3000} value={draft} placeholder="Hỏi về bài học hoặc cách dùng STO123…" onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(event); } }} aria-label="Câu hỏi cho AI" /><button type="submit" disabled={!draft.trim() || busy} aria-label="Gửi câu hỏi">➤</button></form>
         <p className="ai-chat-footnote">AI có thể nhầm lẫn. Hãy đối chiếu với bài học khi cần.</p>
       </>}
     </section>}
-    <button type="button" className="ai-chat-launcher" aria-label={open ? "Thu nhỏ AI TOEIC" : "Hỏi AI TOEIC"} aria-expanded={open} onClick={toggle}><Sparkle /><span>Hỏi AI TOEIC</span></button>
+    {!embedded && <button type="button" className="ai-chat-launcher" aria-label={open ? "Thu nhỏ AI TOEIC" : "Hỏi AI TOEIC"} aria-expanded={open} onClick={toggle}><Sparkle /><span>Hỏi AI TOEIC</span></button>}
   </div>;
 }

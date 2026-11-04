@@ -10,6 +10,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using STO123.Controllers;
 using STO123.Models;
+using STO123.Services.Ai;
 
 namespace STO123.Tests;
 
@@ -34,6 +35,7 @@ public sealed class AdminCurriculumIntegrationTests
             CREATE TABLE DanhMucBaiGiang (MaDanhMuc INTEGER PRIMARY KEY, TrangThai TEXT NOT NULL);
             CREATE TABLE BaiGiang (MaBaiGiang INTEGER PRIMARY KEY, MaDanhMuc INTEGER, TrangThai TEXT NOT NULL,
                 TieuDe TEXT NOT NULL, NoiDungTomTat TEXT, NoiDung TEXT);
+            CREATE TABLE ChuDe (MaChuDe INTEGER PRIMARY KEY, TrangThai TEXT NOT NULL);
             CREATE TABLE TaiNguyenBaiGiang (MaTaiNguyen INTEGER PRIMARY KEY, MaBaiGiang INTEGER NOT NULL,
                 LoaiTaiNguyen TEXT NOT NULL, TenTaiNguyen TEXT NOT NULL, DuongDanTep TEXT NOT NULL, ThuTu INTEGER NOT NULL, IsArchived INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE BuocLoTrinh (MaBuoc INTEGER PRIMARY KEY AUTOINCREMENT, MaLesson INTEGER NOT NULL,
@@ -107,6 +109,16 @@ public sealed class AdminCurriculumIntegrationTests
             ["LectureResources:ContainerName"] = "isolated-test",
             ["Jwt:Key"] = "isolated-step1-test-signing-key-2026"
         }).Build();
+        var adminPreview = new AdminReadOnlyPreviewController(db,
+            new STO123.Services.Admin.AdminLectureMediaTicket(configuration, TimeProvider.System)) {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+        adminPreview.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity([
+            new Claim(ClaimTypes.NameIdentifier, "7"), new Claim(ClaimTypes.Role, "ADMIN_QUAN_LY")], "test"));
+        Assert.IsType<OkObjectResult>(await adminPreview.Courses(default));
+        Assert.IsType<OkObjectResult>(await adminPreview.Course(1, default));
+        Assert.IsType<OkObjectResult>(await adminPreview.Step(1, stepId, default));
+        Assert.IsType<NotFoundResult>(await adminPreview.Step(2, stepId, default));
         var blobs = new BlobServiceClient(new Uri("https://isolated.invalid.blob.core.windows.net"), new DefaultAzureCredential());
         var learner = new CourseLearningController(db, new STO123.Services.Admin.LectureResourceStorage(blobs, configuration),
             new STO123.Services.Admin.LectureMediaTicket(configuration, TimeProvider.System), TimeProvider.System) {
@@ -132,6 +144,8 @@ public sealed class AdminCurriculumIntegrationTests
             INSERT INTO TaiNguyenBaiGiang (MaTaiNguyen,MaBaiGiang,LoaiTaiNguyen,TenTaiNguyen,DuongDanTep,ThuTu)
             VALUES (83,10,'VIDEO','Video','lecture-resources/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.mp4',2);
             """);
+        Assert.IsType<OkObjectResult>(await adminPreview.ResourceTicket(1, stepId, 83, default));
+        Assert.IsType<NotFoundResult>(await adminPreview.ResourceTicket(2, stepId, 83, default));
         Assert.IsType<ConflictObjectResult>(await learner.Complete(1, stepId, default,
             new ResourceCompletionRequest(83, "DISPLAYED")));
         var issued = Assert.IsType<OkObjectResult>(await learner.ResourceTicket(1, stepId, 81, default));
@@ -190,10 +204,19 @@ public sealed class AdminCurriculumIntegrationTests
         var attemptVersion = await db.LuotBaiTapKhoaHoc.Select(x => x.MaPhienBan).SingleAsync();
         var questionId = await db.CauHoiBaiTapKhoaHoc.Where(x => x.MaPhienBan == attemptVersion)
             .Select(x => x.MaCauHoi).FirstAsync();
+        var tutorContext = new AiLearningContextService(db, TimeProvider.System);
+        var beforeCheck = await tutorContext.ResolveAsync(99,
+            new AiLearningContext("COURSE_EXERCISE", null, 1, exerciseStep.MaBuoc, attemptId, questionId), default);
+        Assert.True(beforeCheck.UncheckedPractice);
+        Assert.DoesNotContain("B:", beforeCheck.Text);
         var key = Guid.NewGuid();
         var checkedAnswer = Assert.IsType<OkObjectResult>(await learner.CheckExercise(1, exerciseStep.MaBuoc, attemptId,
             new ExerciseCheckRequest(questionId, "A", key), default));
         Assert.Contains("false", JsonSerializer.Serialize(checkedAnswer.Value));
+        var afterCheck = await tutorContext.ResolveAsync(99,
+            new AiLearningContext("COURSE_EXERCISE", null, 1, exerciseStep.MaBuoc, attemptId, questionId), default);
+        Assert.False(afterCheck.UncheckedPractice);
+        Assert.Contains("đáp án lúc kiểm tra", afterCheck.Text);
         var repeatedCheck = Assert.IsType<OkObjectResult>(await learner.CheckExercise(1, exerciseStep.MaBuoc, attemptId,
             new ExerciseCheckRequest(questionId, "A", key), default));
         var repeatedJson = JsonDocument.Parse(JsonSerializer.Serialize(repeatedCheck.Value)).RootElement;
@@ -210,7 +233,7 @@ public sealed class AdminCurriculumIntegrationTests
         Assert.IsType<ConflictObjectResult>(await api.DeleteUnit(1, unitId, default));
         api.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
         api.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity([
-            new Claim(ClaimTypes.NameIdentifier, "7"), new Claim(ClaimTypes.Role, "ADMIN_QUAN_LY")], "test"));
+            new Claim(ClaimTypes.NameIdentifier, "7"), new Claim(ClaimTypes.Role, "ADMIN_NOI_DUNG")], "test"));
         var duplicated = Assert.IsType<CreatedResult>(await api.DuplicateStep(1, unitId, lessonId, exerciseStep.MaBuoc, default));
         var duplicatedStepId = JsonDocument.Parse(JsonSerializer.Serialize(duplicated.Value)).RootElement.GetProperty("id").GetInt32();
         var duplicatedExerciseId = await db.BuocLoTrinh.Where(x => x.MaBuoc == duplicatedStepId).Select(x => x.MaBaiTap).SingleAsync();

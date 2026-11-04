@@ -5,8 +5,10 @@ import SessionBoundary from "../../components/auth/SessionBoundary";
 import { useAuth } from "../../contexts/AuthState";
 import { apiRequest } from "../../services/api";
 import { practiceRead } from "../../services/practiceRead";
+import { useContentRevision } from "../../services/contentRevisions";
 import { answerViewed, canNavigateTo, checked, restoredFeedback } from "./practiceFlow.mjs";
 import DocumentRenderer from "../exam/DocumentRenderer";
+import PartSevenTranslationView from "../exam/PartSevenTranslationView";
 import { examMediaBlob } from "../../services/examApi";
 import "../../styles/exam.css";
 import "../../styles/vocabulary.css";
@@ -17,6 +19,7 @@ const parts = ["Photographs", "Question-Response", "Conversations", "Talks", "In
 
 export default function PracticePartsPage() {
   const { token } = useAuth();
+  const contentRevision = useContentRevision("PRACTICE");
   const [searchParams, setSearchParams] = useSearchParams();
   const routeAttemptId = Number(searchParams.get("attempt")) || null;
   const queryPart = Number(searchParams.get("part"));
@@ -80,7 +83,7 @@ export default function PracticePartsPage() {
       loadAvailability(); loadActiveList();
     }
     return () => { live = false; };
-  }, [token, routeAttemptId, loadAvailability, loadActiveList]);
+  }, [token, routeAttemptId, loadAvailability, loadActiveList, contentRevision]);
 
   useEffect(() => {
     if (routeAttemptId) return;
@@ -119,6 +122,12 @@ export default function PracticePartsPage() {
       const result = await apiRequest(`${api}/${attempt.attemptId}/questions/${id}/check`,
         { method: "POST", body: { selectedOption }, token });
       setFeedback(current => ({ ...current, [id]: { ...result, checked: true, result: true } }));
+      if (attempt.part === 7) {
+        try {
+          const fresh = await practiceRead(`${api}/${attempt.attemptId}`, token);
+          setAttempt(current => current?.attemptId === fresh.attemptId ? { ...current, groups: fresh.groups } : current);
+        } catch { /* Đáp án đã được lưu; bản dịch sẽ tải lại khi mở bài luyện. */ }
+      }
     } catch (e) { setError(e.data?.message || "Không thể kiểm tra đáp án. Vui lòng thử lại."); }
     finally { unlockQuestion(id); }
   }
@@ -139,6 +148,10 @@ export default function PracticePartsPage() {
     try {
       await apiRequest(`${api}/${attempt.attemptId}/questions/${questionId}/redo`, { method: "POST", token });
       setFeedback(current => ({ ...current, [questionId]: { checked: false, selectedOption: null } }));
+      const groupId = attempt.questions.find(item => item.questionOccurrenceId === questionId)?.groupId;
+      if (attempt.part === 7 && groupId) setAttempt(current => current && { ...current,
+        groups: current.groups.map(group => group.groupId === groupId ?
+          { ...group, translation: null } : group) });
     } catch (e) { setError(e.data?.message || "Không thể làm lại câu này. Vui lòng thử lại."); }
     finally { unlockQuestion(questionId); }
   }
@@ -277,6 +290,8 @@ export function PracticeGroup({ group, part, token, revealedContext }) {
     {part > 2 && (group.context || revealedContext) && <p className="practice-part-context">{group.context || revealedContext}</p>}
     {group.documents?.map(document => <DocumentRenderer key={document.order} document={document} token={token}
       ImageComponent={PracticeImage} />)}
+    {part === 7 && <PartSevenTranslationView translation={group.translation} documents={group.documents}
+      token={token} ImageComponent={PracticeImage} />}
   </section>;
 }
 

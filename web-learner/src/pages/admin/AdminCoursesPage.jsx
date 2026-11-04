@@ -22,7 +22,7 @@ export default function AdminCoursesPage() {
   const [request, setRequest] = useState({ key: null, result: null, error: "" });
   const current = request.key === requestKey ? request : { result: null, error: "" };
   const loading = request.key !== requestKey;
-  const canManage = user?.vaiTro === "ADMIN_QUAN_LY";
+  const canManage = user?.vaiTro === "ADMIN_NOI_DUNG";
 
   useEffect(() => {
     let active = true;
@@ -51,7 +51,6 @@ export default function AdminCoursesPage() {
 
     <AdminSectionStats endpoint="courses" title="Thống kê khóa học" revision={revision} />
     {location.state?.notice && <div className="admin-feedback is-success" role="status">{location.state.notice}</div>}
-    {!canManage && <div className="admin-feedback is-info">Admin Nội dung có quyền xem cấu trúc khóa học. Các thao tác thay đổi khóa học chỉ dành cho Admin Quản lý.</div>}
 
     <section className="admin-panel">
       <div className="admin-toolbar admin-list-toolbar admin-course-toolbar">

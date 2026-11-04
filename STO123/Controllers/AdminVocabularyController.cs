@@ -9,7 +9,7 @@ using STO123.Models;
 namespace STO123.Controllers;
 
 [ApiController]
-[Authorize(Roles = "ADMIN_NOI_DUNG,ADMIN_QUAN_LY")]
+[Authorize(Roles = "ADMIN_NOI_DUNG")]
 [Route("api/admin/vocabulary")]
 public sealed class AdminVocabularyController(ToeicDbContext db, BlobServiceClient blobs, IConfiguration config) : ControllerBase
 {

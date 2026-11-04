@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
+import AdminLearnerAvatar from "../../components/admin/AdminLearnerAvatar";
 import { adminLearnerApi } from "../../services/adminLearnerApi";
 import { AdminMessage } from "./AdminLearnersPage";
 import { formatDate, formatMoney, statusLabel, statusTone } from "./adminFormat";
@@ -26,6 +27,11 @@ export default function AdminLearnerDetailPage() {
   const mockPage = positivePage(searchParams.get("mockPage"));
   const placementPage = positivePage(searchParams.get("placementPage"));
   const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision(value => value + 1);
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
   const [tabRevision, setTabRevision] = useState(0);
   const overviewKey = `${token}|${learnerId}|${revision}`;
   const [overviewRequest, setOverviewRequest] = useState({ key: null, data: null, error: "" });
@@ -141,7 +147,7 @@ export default function AdminLearnerDetailPage() {
 
 function LearnerHeader({ learner, learnerId, onAction }) {
   return <section className="admin-profile-card admin-learner-profile">
-    <span className="admin-profile-avatar">{initials(learner.fullName)}</span>
+    <AdminLearnerAvatar learner={learner} token={token} className="admin-profile-avatar" />
     <div className="admin-profile-title"><div><p className="admin-eyebrow">Hồ sơ học viên · ID #{learner.learnerId}</p>
       <h1>{learner.fullName}</h1></div><div className="admin-profile-controls">
         <span className={`admin-status is-${statusTone(learner.status)}`}>{statusLabel(learner.status)}</span>
@@ -388,10 +394,6 @@ function TabLoading() {
 
 function Stat({ label, value, note }) {
   return <article className="admin-stat"><span>{label}</span><strong>{value}</strong><small>{note}</small></article>;
-}
-
-function initials(name) {
-  return name?.split(/\s+/).filter(Boolean).slice(-2).map(part => part[0]).join("").toUpperCase() || "HV";
 }
 
 function percent(value) {

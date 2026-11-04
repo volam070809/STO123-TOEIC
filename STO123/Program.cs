@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using STO123.Models;
 using STO123.Middleware;
+using STO123.Services;
 using STO123.Services.Admin;
 using STO123.Services.Ai;
 using STO123.Services.Auth;
@@ -102,6 +103,7 @@ builder.Services.AddOptions<VNPayOptions>()
     .Validate(VNPayOptions.IsValid, "VNPay configuration is invalid or incomplete.")
     .ValidateOnStart();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ContentRevisionStore>();
 builder.Services.AddScoped<IPaymentGateway, VNPayGateway>();
 builder.Services.AddScoped<PaymentCreationService>();
 builder.Services.AddHostedService<PaymentExpiryWorker>();
@@ -136,6 +138,7 @@ builder.Services.AddSingleton<AvatarStorage>();
 builder.Services.AddSingleton<CourseImageStorage>();
 builder.Services.AddSingleton<LectureResourceStorage>();
 builder.Services.AddSingleton<LectureMediaTicket>();
+builder.Services.AddSingleton<AdminLectureMediaTicket>();
 builder.Services.AddHostedService<AdminContentPendingCleanupService>();
 builder.Services.AddScoped<CourseBlobSynchronizer>();
 builder.Services.AddScoped<CourseBlobSyncFilter>();
@@ -160,6 +163,8 @@ builder.Services.AddSingleton<IToeicScoreCalculator, EstimatedLinearToeicScoreCa
 builder.Services.AddSingleton<SupportContactStore>();
 builder.Services.AddHttpClient<AiToeicService>(client => client.Timeout = TimeSpan.FromSeconds(35));
 builder.Services.AddScoped<AiLearningContextService>();
+builder.Services.AddScoped<AiKnowledgeService>();
+builder.Services.AddScoped<AiPdfTextService>();
 
 builder.Services.AddDbContext<ToeicDbContext>((services, options) =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("ToeicDb"))

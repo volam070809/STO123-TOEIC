@@ -54,7 +54,7 @@ export function checkoutErrorMessage(error) {
 }
 
 export function startPaymentPolling({ load, paymentId, onView, schedule = setTimeout,
-  cancel = clearTimeout, intervalMs = 4_000, maxRequests = 10 }) {
+  cancel = clearTimeout, intervalMs = 4_000, maxRequests = Number.POSITIVE_INFINITY }) {
   let live = true;
   let timer;
   let requests = 0;
@@ -71,10 +71,15 @@ export function startPaymentPolling({ load, paymentId, onView, schedule = setTim
       }
       const kind = paymentState(response.trangThai, response.trangThaiDangKy);
       const polling = kind === "pending" && requests < maxRequests;
-      onView({ kind, polling });
+      onView({ kind, polling, ...(response.checkoutExpiresAt && { checkoutExpiresAt: response.checkoutExpiresAt }),
+        ...(response.retryAvailableAt && { retryAvailableAt: response.retryAvailableAt }) });
       if (polling) timer = schedule(check, intervalMs);
     } catch (error) {
-      if (live) onView({ kind: paymentError(error), polling: false });
+      if (!live) return;
+      const kind = paymentError(error);
+      const polling = kind === "network-error" && requests < maxRequests;
+      onView({ kind, polling });
+      if (polling) timer = schedule(check, intervalMs);
     }
   }
 

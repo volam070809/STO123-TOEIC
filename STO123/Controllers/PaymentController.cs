@@ -13,7 +13,8 @@ namespace STO123.Controllers;
 public sealed record CreatePaymentRequest(int MaGoiHoc);
 public sealed record CoursePurchaseRequest(int[] CourseIds, decimal ExpectedTotal);
 public sealed record CreatePaymentResponse(int MaGiaoDich, string CheckoutUrl);
-public sealed record PaymentStatusDto(int MaGiaoDich, string TrangThai, string TrangThaiDangKy);
+public sealed record PaymentStatusDto(int MaGiaoDich, string TrangThai, string TrangThaiDangKy,
+    DateTimeOffset CheckoutExpiresAt, DateTimeOffset RetryAvailableAt);
 public sealed record PaymentHistoryDto(int MaGiaoDich, int? MaGoiHoc, string TenGoiHoc,
     decimal SoTien, DateTime NgayTao, DateTime? NgayThanhToan,
     string TrangThai, string TrangThaiDangKy, IReadOnlyList<int> CourseIds);
@@ -165,10 +166,15 @@ public sealed class PaymentController(
         await payments.ExpirePendingAsync(learnerId, cancellationToken);
         var result = await db.GiaoDichThanhToan.AsNoTracking()
             .Where(item => item.MaGiaoDich == id && item.MaDangKyNavigation.MaNguoiDung == learnerId)
-            .Select(item => new PaymentStatusDto(item.MaGiaoDich, item.TrangThai,
-                item.MaDangKyNavigation.TrangThai))
+            .Select(item => new { item.MaGiaoDich, item.TrangThai,
+                TrangThaiDangKy = item.MaDangKyNavigation.TrangThai, item.NgayTao })
             .SingleOrDefaultAsync(cancellationToken);
-        return result is null ? NotFound() : Ok(result);
+        if (result is null) return NotFound();
+        var createdAt = new DateTimeOffset(DateTime.SpecifyKind(result.NgayTao, DateTimeKind.Unspecified),
+            TimeSpan.FromHours(7));
+        return Ok(new PaymentStatusDto(result.MaGiaoDich, result.TrangThai,
+            result.TrangThaiDangKy, createdAt.AddMinutes(PaymentExpiry.CheckoutMinutes),
+            createdAt.AddMinutes(PaymentExpiry.PendingMinutes)));
     }
 
     [HttpGet("history")]

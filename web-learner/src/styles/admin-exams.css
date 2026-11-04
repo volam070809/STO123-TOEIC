@@ -251,6 +251,7 @@
 .exam-author-doc > summary { cursor: pointer; padding: 14px 16px; color: #24466e; }
 .exam-author-doc[open] > summary { border-bottom: 1px solid #e9eef5; }
 .exam-author-doc-body { display: grid; gap: 12px; padding: 16px; }
+.exam-document-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}.exam-document-pair>.exam-author-doc{min-width:0;margin:0}.exam-translation-doc .exam-translation-preview{max-height:220px;overflow:auto;border:1px solid #e5edf4;border-radius:8px;background:#f8fbfd}.exam-translation-doc .exam-translation-preview .exam-author-doc{margin:0;border:0}.exam-translation-table{width:100%;border-collapse:collapse}.exam-translation-table th,.exam-translation-table td{min-width:130px;padding:6px;border:1px solid #dce5ee}.exam-translation-table input{width:100%}.practice-part-translation{margin-top:12px;padding:10px 12px;border-left:3px solid #26799f;background:#f3f9fc}.exam-translation-doc .exam-author-doc-body>.exam-author-doc{background:#f7fbff}@media(max-width:700px){.exam-document-pair{grid-template-columns:1fr}}
 .exam-doc-remove { justify-self: end; }
 .exam-doc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .exam-doc-entry { padding: 12px; border: 1px solid #e5ebf3; border-radius: 8px; background: #fbfdff; }

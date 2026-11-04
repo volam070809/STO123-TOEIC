@@ -179,6 +179,42 @@ public sealed class PaymentCallbackTests
     }
 
     [Fact]
+    public async Task PaidRetryAndLateSuccessDoNotCreateDuplicateCourseEntitlements()
+    {
+        await using var fixture = await PaymentDb.CreateAsync();
+        var localNow = Now.ToOffset(TimeSpan.FromHours(7)).DateTime;
+        var course = new KhoaHoc { MaKhoaHoc = 1, TenKhoaHoc = "Course", GiaiDoan = 1,
+            DiemMucTieuToiDa = 450, TrangThai = "DANG_MO", NgayTao = localNow };
+        fixture.Db.KhoaHoc.Add(course);
+        var package = await fixture.Db.GoiHoc.SingleAsync();
+        package.MaKhoaHoc.Add(course);
+        fixture.Db.DangKyGoiHoc.Add(new DangKyGoiHoc
+        {
+            MaDangKy = 2, MaNguoiDung = 1, MaGoiHoc = 1, GiaDangKy = 120_000m,
+            SoNgaySuDung = 90, NgayDangKy = localNow,
+            NgayBatDau = localNow, NgayKetThuc = localNow.AddDays(90),
+            TrangThai = "DANG_SU_DUNG"
+        });
+        await fixture.Db.SaveChangesAsync();
+        fixture.Db.GiaoDichThanhToan.Add(new GiaoDichThanhToan
+        {
+            MaGiaoDich = 2, MaDangKy = 2, MaCongThanhToan = 7,
+            SoTien = 120_000m, MaGiaoDichCongThanhToan = "paid-retry",
+            TrangThai = "THANH_CONG", NgayTao = localNow, NgayThanhToan = localNow
+        });
+        await fixture.Db.SaveChangesAsync();
+        fixture.Db.ChangeTracker.Clear();
+
+        Assert.Equal("99", RspCode(await fixture.Controller().Ipn(CancellationToken.None)));
+        var older = await fixture.Db.DangKyGoiHoc.AsNoTracking().SingleAsync(x => x.MaDangKy == 1);
+        Assert.Equal("CHO_THANH_TOAN", older.TrangThai);
+        Assert.Null(older.NgayBatDau);
+        Assert.Equal("THANH_CONG", (await fixture.Db.GiaoDichThanhToan.AsNoTracking()
+            .SingleAsync(x => x.MaGiaoDich == 1)).TrangThai);
+        Assert.Single(await CourseEntitlement.ActiveCourseIds(fixture.Db, 1, localNow).ToListAsync());
+    }
+
+    [Fact]
     public async Task HistoryIsOwnerScopedAndIncludesPackageAndAmount()
     {
         await using var fixture = await PaymentDb.CreateAsync();

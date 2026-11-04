@@ -15,7 +15,7 @@ export async function apiRequest(endpoint, { method = "GET", body = null, token 
   try {
     const response = await fetch(API_BASE_URL + endpoint, {
       method, headers, body: body !== null ? (multipart ? body : JSON.stringify(body)) : undefined,
-      signal: controller.signal, cache,
+      signal: controller.signal, cache: cache ?? (method === "GET" ? "no-store" : undefined),
     });
     let data = null;
     if (response.headers.get("content-type")?.includes("json")) {

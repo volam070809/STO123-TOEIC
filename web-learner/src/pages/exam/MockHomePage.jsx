@@ -6,12 +6,14 @@ import SessionBoundary from "../../components/auth/SessionBoundary";
 import SiteLayout from "../../layouts/SiteLayout";
 import { examApi } from "../../services/examApi";
 import { publicMockTestApi } from "../../services/publicMockTestApi";
+import { useContentRevision } from "../../services/contentRevisions";
 import "../../styles/exam.css";
 
 export default function MockHomePage() {
   const { token, isAuthenticated, loading, sessionError } = useAuth();
   const { requireAuthentication } = useGuestAuthPrompt();
   const navigate = useNavigate();
+  const contentRevision = useContentRevision("EXAMS");
   const [catalog, setCatalog] = useState({ key: null, exams: null, error: "" });
   const [actionError, setActionError] = useState("");
   const [pending, setPending] = useState(null);
@@ -27,7 +29,7 @@ export default function MockHomePage() {
       .catch(() => { if (live) setCatalog({ key: catalogKey, exams: null,
         error: "Không thể tải danh sách đề thi thử." }); });
     return () => { live = false; };
-  }, [token, isAuthenticated, loading, sessionError, catalogKey]);
+  }, [token, isAuthenticated, loading, sessionError, catalogKey, contentRevision]);
   async function start(examId) {
     if (!isAuthenticated) {
       requireAuthentication("/mock-test");

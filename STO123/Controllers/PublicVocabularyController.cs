@@ -93,6 +93,7 @@ public sealed class PublicVocabularyController : ControllerBase
 
         var blob = container.GetBlobClient(path);
         if (!await blob.ExistsAsync(ct)) return NotFound();
+        Response.Headers.CacheControl = "no-store";
         return File(await blob.OpenReadAsync(cancellationToken: ct), "audio/mpeg", enableRangeProcessing: true);
     }
 }

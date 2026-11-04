@@ -14,6 +14,8 @@ export default function SiteHeader() {
   const { token, user, loading, sessionError, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const adminHome = user?.vaiTro === "ADMIN_QUAN_LY" ? "/admin" :
+    user?.vaiTro === "ADMIN_NOI_DUNG" ? "/admin/content" : null;
   function signOut() {
     logout();
     setMenuOpen(false);
@@ -31,11 +33,12 @@ export default function SiteHeader() {
         <Link className={pathname.startsWith("/courses") ? "site-nav-active" : undefined} to="/courses" onClick={() => setMenuOpen(false)}>Khóa học</Link>
         <Link className={pathname === "/vocabulary" ? "site-nav-active" : undefined} to="/vocabulary" state={{ vocabularyRoot: true }} onClick={() => setMenuOpen(false)}>Từ vựng</Link>
         <Link className={pathname.startsWith("/practice") ? "site-nav-active" : undefined} to="/practice" onClick={() => setMenuOpen(false)}>Luyện tập</Link>
-        {user && <Link className={pathname === "/placement" ? "site-nav-active" : undefined} to="/placement" onClick={() => setMenuOpen(false)}>Lộ trình học</Link>}
+        {user?.vaiTro === "HOC_VIEN" && <Link className={pathname === "/placement" ? "site-nav-active" : undefined} to="/placement" onClick={() => setMenuOpen(false)}>Lộ trình học</Link>}
         <Link className={pathname.startsWith("/mock-test") ? "site-nav-active" : undefined} to="/mock-test" onClick={() => setMenuOpen(false)}>Thi thử</Link>
       </nav>
       <div className={"site-account" + (menuOpen ? " is-open" : "")}>
         {loading ? <span className="site-account-loading">Đang tải...</span> : token && sessionError ? <span className="site-account-loading">Không thể tải tài khoản</span> : user ? <>
+          {adminHome && <Link className="site-account-login" to={adminHome} onClick={() => setMenuOpen(false)}>Về trang quản trị</Link>}
           <span className="site-account-identity"><Avatar user={user} /><span>{user.hoTen}</span></span>
           <Link className={pathname === "/profile" || pathname === "/change-password" ? "site-nav-active" : undefined}
             to="/profile" onClick={() => setMenuOpen(false)}>Hồ sơ</Link>

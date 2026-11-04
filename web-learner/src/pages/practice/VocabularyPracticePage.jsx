@@ -4,7 +4,8 @@ import SiteLayout from "../../layouts/SiteLayout";
 import SessionBoundary from "../../components/auth/SessionBoundary";
 import { useAuth } from "../../contexts/AuthState";
 import { useGuestAuthPrompt } from "../../contexts/GuestAuthPromptState";
-import { apiRequest } from "../../services/api";
+import { apiRequest, API_BASE_URL } from "../../services/api";
+import { useContentRevision } from "../../services/contentRevisions";
 import { buildPracticeQuestions, practiceReducer, practiceResult } from "./vocabularyPractice";
 import { INITIAL_TOPIC_COUNT, topicCatalogView, topicGridStyle, useMobileTopicCatalog } from "./topicCatalog";
 import "../../styles/vocabulary.css";
@@ -24,7 +25,10 @@ export default function VocabularyPracticePage() {
         <p>Kiểm tra khả năng nhớ từ với câu hỏi trắc nghiệm. Kết quả hoàn thành được lưu trong lịch sử luyện tập.</p>
         <Link className="outline-button vocabulary-back" to="/practice"><BackArrow />Quay lại chọn hình thức</Link>
       </div>
-      {user && token ? <LearnerPractice key={token} token={token} /> :
+      {user?.vaiTro === "HOC_VIEN" && token ? <LearnerPractice key={token} token={token} /> :
+        user ? <section className="vocab-panel"><h2>Chế độ xem trước quản trị</h2>
+          <p>Tài khoản quản trị có thể xem từ vựng nhưng không tạo lượt luyện tập.</p>
+          <Link className="primary-button" to="/vocabulary">Xem chủ đề từ vựng</Link></section> :
         <section className="vocab-panel">
           <h2>Đăng nhập để luyện từ vựng</h2>
           <p>Chọn chủ đề và luyện những từ bạn muốn ôn sau khi đăng nhập.</p>
@@ -40,6 +44,7 @@ export default function VocabularyPracticePage() {
 
 function LearnerPractice({ token }) {
   const navigate = useNavigate();
+  const contentRevision = useContentRevision("VOCABULARY");
   const { logout } = useAuth();
   const [topics, setTopics] = useState([]);
   const [topicQuery, setTopicQuery] = useState("");
@@ -66,7 +71,7 @@ function LearnerPractice({ token }) {
       .catch(() => { if (active) setError(LOAD_ERROR); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [token, reload]);
+  }, [token, reload, contentRevision]);
 
   const hasUnsavedAnswers = !!session && !session.finished && session.answers.length > 0;
   const { filteredTopics, shownTopics, hasMore } = topicCatalogView(topics, topicQuery, visibleCount, mobileCatalog);
@@ -205,7 +210,7 @@ function LearnerPractice({ token }) {
       </div>}
       <div className="vocab-topic-grid" style={topicGridStyle(filteredTopics.length)}>{shownTopics.map(item =>
         <article className="vocab-topic-card" key={item.maChuDe}>
-          <PracticeTopicCover name={item.tenChuDe} />
+          {item.duongDanAnhBia ? <div className="vocabulary-topic-cover"><img src={`${API_BASE_URL}/api/admin/vocabulary/topics/${item.maChuDe}/cover`} alt="" width="600" height="240" /><h2>{item.tenChuDe}</h2></div> : <PracticeTopicCover name={item.tenChuDe} />}
           <div className="vocabulary-topic-details">
           <span className="vocab-pill available">{item.status}</span>
           <p className="vocabulary-topic-count"><strong>{item.totalWords}</strong> từ</p>

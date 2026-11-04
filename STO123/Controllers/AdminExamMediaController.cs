@@ -11,7 +11,7 @@ using STO123.Services.Exam;
 
 namespace STO123.Controllers;
 
-[Authorize(Roles = "ADMIN_NOI_DUNG,ADMIN_QUAN_LY")]
+[Authorize(Roles = "ADMIN_NOI_DUNG")]
 [ApiController]
 [Route("api/admin/content/media")]
 public sealed class AdminExamMediaController(ToeicDbContext db, BlobServiceClient blobs,

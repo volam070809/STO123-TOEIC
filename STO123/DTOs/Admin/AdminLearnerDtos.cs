@@ -23,7 +23,8 @@ public sealed record AdminLearnerListItemDto(
     int EnrollmentCount,
     int ActiveEnrollmentCount,
     int AttemptCount,
-    DateTime? LastLearningAt);
+    DateTime? LastLearningAt,
+    string? AvatarReference = null);
 
 public sealed record AdminPagedLearnersDto(
     IReadOnlyList<AdminLearnerListItemDto> Items,
@@ -77,7 +78,8 @@ public sealed record AdminLearnerDetailDto(
     DateTime CreatedAt,
     DateTime? LastLoginAt,
     IReadOnlyList<AdminLearnerEnrollmentDto> Enrollments,
-    AdminLearnerLearningSummaryDto Learning);
+    AdminLearnerLearningSummaryDto Learning,
+    string? AvatarReference = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed class AdminCreateLearnerRequest

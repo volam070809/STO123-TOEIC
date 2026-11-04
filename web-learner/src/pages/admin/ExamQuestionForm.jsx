@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../../services/api";
 import PartSevenDocumentForm from "./PartSevenDocumentForm";
+import PartSevenTranslationForm from "./PartSevenTranslationForm";
 import { documentPayload, newDocument } from "./partSevenDocumentData";
+import { serializePart7Translation } from "./partSevenTranslationData";
 
 const emptyQuestion = () => ({ text: "", translation: "", a: "", b: "", c: "", d: "", correct: "A", difficulty: 2, explanation: "" });
 const questionCount = part => ({ 1: 1, 2: 1, 3: 3, 4: 3, 5: 1, 6: 4, 7: 2 })[Number(part)] || 1;
@@ -14,6 +16,7 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
   const [audioPath, setAudioPath] = useState("");
   const [imagePath, setImagePath] = useState("");
   const [documents, setDocuments] = useState(() => Number(initialPart) === 7 ? [newDocument()] : []);
+  const [part7Translation, setPart7Translation] = useState({ legacyText: "", documents: [] });
   const [questions, setQuestions] = useState(() =>
     Array.from({ length: initialCount || questionCount(initialPart) }, emptyQuestion));
   const [busy, setBusy] = useState(false);
@@ -54,6 +57,7 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
     setFieldErrors({});
     setQuestions(Array.from({ length: questionCount(next) }, emptyQuestion));
     setDocuments(next === 7 ? [newDocument()] : []);
+    setPart7Translation({ legacyText: "", documents: [] });
     setText(""); setTranslation(""); setAudioPath(""); setImagePath("");
     setPreviews({});
   }
@@ -115,11 +119,16 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
     if (part === 7 && (documents.length < 1 || documents.length > 3)) {
       setError("Part 7 cần từ 1 đến 3 tài liệu."); return;
     }
+    let structuredTranslation = null;
+    if (part === 7) {
+      try { structuredTranslation = serializePart7Translation(part7Translation, documents); }
+      catch (failure) { setError(failure.message); return; }
+    }
     setBusy(true);
     try {
       const payload = {
         part, bank, text: part === 5 ? null : text || null,
-        translation: part === 5 ? null : translation || null,
+        translation: part === 7 ? structuredTranslation : part === 5 ? null : translation || null,
         audioPath: part === 5 ? null : audioPath || null,
         imagePath: part === 5 ? null : imagePath || null,
         documents: part === 7 ? documents.map(documentPayload) : [],
@@ -154,11 +163,22 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
             {Number(part) === 1 && fileField("Hình ảnh", imagePath, setImagePath, ".jpg,.jpeg,.png,.webp,image/*")}</div>}
           {part === 7 && <div className="exam-author-docs"><div className="exam-drawer-head"><h3>Tài liệu đọc</h3><button type="button" disabled={documents.length >= 3} onClick={() => { setDocuments(old => [...old, newDocument()]); setDirty(true); }}>Thêm tài liệu</button></div>
             {documents.map((doc, index) => <PartSevenDocumentForm key={index} index={index} value={doc} fileField={fileField}
-              canRemove={documents.length > 1} onRemove={() => { setDocuments(old => old.filter((_, at) => at !== index)); setDirty(true); }}
+              canRemove={documents.length > 1} onRemove={() => { setDocuments(old => old.filter((_, at) => at !== index));
+                setPart7Translation(old => ({ ...old, documents: old.documents.filter((_, at) => at !== index) })); setDirty(true); }}
               onChange={next => { setDocuments(old => old.map((item, at) => at === index ? next : item)); setDirty(true); }}/>)}</div>}
+          {part === 7 && <section className="exam-author-docs"><h3>Bản dịch tiếng Việt theo từng tài liệu</h3>
+            {documents.map((doc, index) => <PartSevenTranslationForm key={index} original={doc} token={token} bank={bank}
+              value={part7Translation.documents[index]} index={index} onChange={next => {
+                setPart7Translation(old => ({ ...old, documents: documents.map((_, at) =>
+                  at === index ? next : old.documents[at]) })); setDirty(true);
+              }} />)}
+            <label>Bản dịch văn bản chung hoặc bản dịch cũ (nếu có)<textarea rows={3}
+              value={part7Translation.legacyText} onChange={event => { setPart7Translation(old =>
+                ({ ...old, legacyText: event.target.value })); setDirty(true); }} /></label>
+          </section>}
           {[3, 4, 6, 7].includes(Number(part)) && <details className="exam-optional-fields"><summary>Thông tin bổ sung</summary>
             {Number(part) === 7 && <label>Ngữ liệu chung nếu có<textarea value={text} onChange={event => { setText(event.target.value); setDirty(true); }} rows={3}/></label>}
-            {Number(part) !== 6 && <label>Bản dịch nếu có<textarea value={translation} onChange={event => { setTranslation(event.target.value); setDirty(true); }} rows={2}/></label>}
+            {Number(part) !== 6 && Number(part) !== 7 && <label>Bản dịch nếu có<textarea value={translation} onChange={event => { setTranslation(event.target.value); setDirty(true); }} rows={2}/></label>}
           </details>}
         </section>}
         <section><h3>Câu hỏi và đáp án</h3>{questions.map((item, index) => <div className="exam-author-question" key={index}><h4>Câu {index + 1}</h4><label>Nội dung câu hỏi<textarea value={item.text} rows={2} aria-invalid={!!fieldErrors[`${index}-text`]} onChange={event => changeQuestion(index, "text", event.target.value)}/>{fieldErrors[`${index}-text`] && <small className="exam-field-error" role="alert">{fieldErrors[`${index}-text`]}</small>}</label>

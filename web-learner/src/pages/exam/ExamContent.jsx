@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { PrivateImage, PrivateAudio } from "./ExamMedia";
 import DocumentRenderer from "./DocumentRenderer";
+import PartSevenTranslationView from "./PartSevenTranslationView";
 import PlacementIcon from "./PlacementIcon";
 
 function materialLayout(group, imageSize) {
@@ -78,6 +79,8 @@ export default function ExamContent({ group, independentQuestion, attemptId, tok
       {group.context && <p className="exam-preserve-lines">{group.context}</p>}
       {group.documents?.map(document =>
         <DocumentRenderer key={document.order} document={document} token={token} />)}
+      {review && mode !== "PLACEMENT" && group.part === 7 &&
+        <PartSevenTranslationView translation={group.translation} documents={group.documents} token={token} />}
       {partOne && group.hasAudio && <PrivateAudio key={base} endpoint={base + "/audio"} token={token} mode={review ? "REVIEW" : mode} />}
       {partOne && group.hasImage && <div className="exam-part-one-image-frame">
         <PrivateImage endpoint={base + "/image"} token={token} alt="Hình minh họa câu hỏi" />

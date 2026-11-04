@@ -92,6 +92,7 @@
 .exam-image { max-width: 100%; width: auto; height: auto; max-height: min(70vh, 42rem); object-fit: contain; display: block; margin: 1rem auto; }
 .exam-preserve-lines { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
 .exam-document + .exam-document { border-top: 1px solid #e3eaef; margin-top: 1.2rem; padding-top: 1.2rem; }
+.exam-translation-view{margin-top:1rem;padding:1rem;border-left:3px solid #26799f;border-radius:0 8px 8px 0;background:#f3f9fc}.exam-translation-view>h3{margin:0 0 .8rem;color:#145876;font-size:1rem}.exam-translation-view>.exam-document{margin-top:.8rem}
 .exam-document h3 { font-size: 1rem; margin: 0 0 .8rem; color: #145876; }
 .exam-document h4 { margin: 0 0 .7rem; }
 .exam-document-body { margin: .6rem 0; }

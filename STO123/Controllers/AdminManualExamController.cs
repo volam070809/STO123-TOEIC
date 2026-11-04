@@ -8,7 +8,7 @@ using STO123.Services.Exam;
 
 namespace STO123.Controllers;
 
-[Authorize(Roles = "ADMIN_NOI_DUNG,ADMIN_QUAN_LY")]
+[Authorize(Roles = "ADMIN_NOI_DUNG")]
 [ApiController]
 [Route("api/admin/content/exams/manual")]
 public sealed class AdminManualExamController(ToeicDbContext db, ExamGenerationService generation,
