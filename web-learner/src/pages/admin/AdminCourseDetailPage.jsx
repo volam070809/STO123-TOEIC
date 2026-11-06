@@ -5,6 +5,7 @@ import { adminCourseApi } from "../../services/adminCourseApi";
 import AdminSectionStats from "../../components/admin/AdminSectionStats";
 import { AdminMessage } from "./AdminLearnersPage";
 import { formatDate, formatMoney, statusLabel, statusTone } from "./adminFormat";
+import AdminCourseCoverManager from "./AdminCourseCoverManager";
 
 export default function AdminCourseDetailPage() {
   const { courseId } = useParams();
@@ -80,9 +81,13 @@ export default function AdminCourseDetailPage() {
         <div><dt>Giá bán lẻ</dt><dd>{course.retailPrice == null ? "Chưa đặt giá" : formatMoney(course.retailPrice)}</dd></div>
         <div><dt>Ngày tạo</dt><dd>{formatDate(course.createdAt, true)}</dd></div>
         <div><dt>Admin nội dung</dt><dd>{course.contentAdminName || "Chưa gán"}</dd></div>
-        <div><dt>Ảnh đại diện</dt><dd>{course.coverImageUrl || "Chưa có"}</dd></div></dl>
+        <div><dt>Ảnh bìa</dt><dd>{course.coverImageUrl ? "Đã có ảnh" : "Chưa có"}</dd></div></dl>
       {course.description && <p className="admin-course-description">{course.description}</p>}
     </section>
+
+    {canManage && <AdminCourseCoverManager course={course} token={token} onSaved={message => {
+      setNotice(message); setRevision(value => value + 1);
+    }} />}
 
     <nav className="admin-course-workflow" aria-label="Quy trình quản lý khóa học"><div><span>01</span><strong>Tổng quan</strong><small>Thông tin và trạng thái</small></div><Link to={`/admin/courses/${courseId}/content`}><span>02</span><strong>Biên soạn Studio →</strong><small>Unit, Lesson, hoạt động và tài nguyên</small></Link><Link to={`/courses/${courseId}`}><span>03</span><strong>Xem trang khóa học →</strong><small>Kiểm tra hành trình học viên</small></Link></nav>
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { buildCourseImageFormData, validateCourse } from "./adminCourseFormData.js";
+import { buildCourseImageFormData, courseImageUpdatePayload, validateCourse } from "./adminCourseFormData.js";
 
 const valid = {
   name: "TOEIC Giai đoạn 1", stage: "1", maxTargetScore: "450", retailPrice: "99000",
@@ -32,6 +32,18 @@ test("course image upload uses multipart fields without persisting a local path"
   assert.equal(form.get("RetailPrice"), "99000");
   assert.equal(form.get("File").name, "course.jpg");
   assert.equal(form.has("CoverImageUrl"), false);
+});
+
+test("cover removal changes only the course image reference", () => {
+  const course = { ...valid, courseId: 7, coverImageUrl: "/api/public/course-images/old.jpg" };
+  const payload = courseImageUpdatePayload(course, null);
+  assert.equal(payload.coverImageUrl, null);
+  assert.equal(payload.name, course.name);
+  assert.equal(payload.stage, course.stage);
+  assert.equal(payload.status, course.status);
+  assert.equal(payload.retailPrice, course.retailPrice);
+  assert.equal(payload.description, course.description);
+  assert.equal(Object.hasOwn(payload, "courseId"), false);
 });
 
 test("course form exposes upload and real-library choices instead of a manual path input", () => {

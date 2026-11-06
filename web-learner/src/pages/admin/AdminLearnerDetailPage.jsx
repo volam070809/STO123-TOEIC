@@ -113,7 +113,7 @@ export default function AdminLearnerDetailPage() {
   return <div className="admin-page admin-learner-analytics">
     <Link className="admin-back-link" to="/admin/learners">← Danh sách học viên</Link>
     {notice && <div className="admin-feedback is-success" role="status">{notice}</div>}
-    <LearnerHeader learner={overview} learnerId={learnerId} onAction={openAction} />
+    <LearnerHeader learner={overview} learnerId={learnerId} token={token} onAction={openAction} />
     {overview.status === "CHO_XAC_THUC" && <div className="admin-feedback is-info">
       Tài khoản đang chờ xác thực email. Không thể khóa hoặc mở khóa cho đến khi học viên xác thực.
     </div>}
@@ -145,7 +145,7 @@ export default function AdminLearnerDetailPage() {
   </div>;
 }
 
-function LearnerHeader({ learner, learnerId, onAction }) {
+function LearnerHeader({ learner, learnerId, token, onAction }) {
   return <section className="admin-profile-card admin-learner-profile">
     <AdminLearnerAvatar learner={learner} token={token} className="admin-profile-avatar" />
     <div className="admin-profile-title"><div><p className="admin-eyebrow">Hồ sơ học viên · ID #{learner.learnerId}</p>

@@ -12,6 +12,18 @@ export function buildCourseImageFormData(data, file) {
   return form;
 }
 
+export function courseImageUpdatePayload(course, coverImageUrl) {
+  return {
+    name: course.name,
+    stage: course.stage,
+    maxTargetScore: course.maxTargetScore,
+    retailPrice: course.retailPrice,
+    description: course.description,
+    status: course.status,
+    coverImageUrl,
+  };
+}
+
 export function validateCourse(values) {
   const errors = {};
   const name = values.name.trim();
