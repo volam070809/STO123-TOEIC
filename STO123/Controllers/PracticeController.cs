@@ -10,7 +10,7 @@ namespace STO123.Controllers;
 [Route("api/practice")]
 public sealed class PracticeController(PracticePartService practice) : ControllerBase
 {
-    public sealed record StartRequest(int Part, int Difficulty, string? Preset);
+    public sealed record StartRequest(int Part, int Difficulty, string? Preset, bool FromRecommendation = false);
     public sealed record CheckRequest(string? SelectedOption);
 
     [HttpGet("availability")]
@@ -19,7 +19,8 @@ public sealed class PracticeController(PracticePartService practice) : Controlle
 
     [HttpPost("start")]
     public async Task<IActionResult> Start(StartRequest request, CancellationToken ct) =>
-        await WithLearner(id => practice.StartAsync(id, request.Part, request.Difficulty, request.Preset, ct));
+        await WithLearner(id => practice.StartAsync(id, request.Part, request.Difficulty, request.Preset,
+            ct, request.FromRecommendation));
 
     [HttpGet("active")]
     public async Task<IActionResult> Active(CancellationToken ct) =>

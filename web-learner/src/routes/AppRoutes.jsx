@@ -24,6 +24,7 @@ import PlacementPage from "../pages/exam/PlacementPage";
 import CoursePage from "../pages/exam/CoursePage";
 import CourseListPage from "../pages/exam/CourseListPage";
 import ToeicStructurePage from "../pages/toeic/ToeicStructurePage";
+import SmartLearningPage from "../pages/learning/SmartLearningPage";
 import { paymentIdFromSearch } from "../services/paymentFlow";
 import AdminRoute from "./AdminRoute";
 import { adminRouteModules } from "./adminRouteModules";
@@ -62,6 +63,8 @@ const AdminVocabularyPage = lazy(adminRouteModules.vocabulary);
 const AdminReadOnlyPreviewPage = lazy(() => import("../pages/admin/AdminReadOnlyPreviewPage"));
 const AdminContactSettingsPage = lazy(adminRouteModules.contactSettings);
 const CourseStepPage = lazy(() => import("../pages/exam/CourseStepPage"));
+const ArenaLobbyPage = lazy(() => import("../pages/learning/ArenaPage").then(module => ({ default: module.ArenaLobbyPage })));
+const ArenaMatchPage = lazy(() => import("../pages/learning/ArenaPage").then(module => ({ default: module.ArenaMatchPage })));
 
 const MANAGEMENT_ROLES = ["ADMIN_QUAN_LY"];
 const CONTENT_ROLES = ["ADMIN_NOI_DUNG"];
@@ -71,6 +74,11 @@ function AdminShell() {
   return <Suspense fallback={<main className="admin-gate"><section className="admin-gate-card" role="status"><div className="admin-spinner" aria-hidden="true" /><h1>Đang tải trang quản trị</h1><p>Vui lòng chờ trong giây lát.</p></section></main>}>
     <AdminRoute><AdminLayout /></AdminRoute>
   </Suspense>;
+}
+
+function ArenaRoute({ children }) {
+  return <ProtectedRoute><Suspense fallback={<main className="site-container" role="status">Đang tải đấu trường…</main>}>
+    {children}</Suspense></ProtectedRoute>;
 }
 
 function VocabularyRoute() {
@@ -138,6 +146,9 @@ export default function AppRoutes() {
     <Route path="/mock-test/history/random" element={<Navigate to="/mock-test/history" replace />} />
     <Route path="/mock-test/history/part/:part" element={<Navigate to="/mock-test/history" replace />} />
     <Route path="/placement" element={<PlacementPage />} />
+    <Route path="/smart-learning" element={<ProtectedRoute><SmartLearningPage /></ProtectedRoute>} />
+    <Route path="/arena" element={<ArenaRoute><ArenaLobbyPage /></ArenaRoute>} />
+    <Route path="/arena/matches/:id" element={<ArenaRoute><ArenaMatchPage /></ArenaRoute>} />
     <Route path="/courses" element={<CourseListPage />} />
     <Route path="/courses/:courseId" element={<CoursePage />} />
     <Route path="/courses/:courseId/steps/:stepId" element={<ProtectedRoute><CourseStepPage /></ProtectedRoute>} />

@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import SiteLayout from "../../layouts/SiteLayout";
 import SessionBoundary from "../../components/auth/SessionBoundary";
 import { useAuth } from "../../contexts/AuthState";
@@ -8,6 +8,7 @@ import { apiRequest, API_BASE_URL } from "../../services/api";
 import { useContentRevision } from "../../services/contentRevisions";
 import { buildPracticeQuestions, practiceReducer, practiceResult } from "./vocabularyPractice";
 import { INITIAL_TOPIC_COUNT, topicCatalogView, topicGridStyle, useMobileTopicCatalog } from "./topicCatalog";
+import { vocabularyTopicFromSearch } from "../vocabulary/guestVocabularyPreview";
 import "../../styles/vocabulary.css";
 import "../../styles/vocabulary-practice.css";
 
@@ -16,6 +17,8 @@ const LOAD_ERROR = "Không thể tải dữ liệu luyện tập.";
 
 export default function VocabularyPracticePage() {
   const { user, token } = useAuth();
+  const { search } = useLocation();
+  const requestedTopicId = vocabularyTopicFromSearch(search);
   const { requireAuthentication } = useGuestAuthPrompt();
   return <SiteLayout className="vocab-page"><SessionBoundary>
     <div className="site-container practice-page vocabulary-practice-page">
@@ -25,7 +28,7 @@ export default function VocabularyPracticePage() {
         <p>Kiểm tra khả năng nhớ từ với câu hỏi trắc nghiệm. Kết quả hoàn thành được lưu trong lịch sử luyện tập.</p>
         <Link className="outline-button vocabulary-back" to="/practice"><BackArrow />Quay lại chọn hình thức</Link>
       </div>
-      {user?.vaiTro === "HOC_VIEN" && token ? <LearnerPractice key={token} token={token} /> :
+      {user?.vaiTro === "HOC_VIEN" && token ? <LearnerPractice key={token} token={token} requestedTopicId={requestedTopicId} /> :
         user ? <section className="vocab-panel"><h2>Chế độ xem trước quản trị</h2>
           <p>Tài khoản quản trị có thể xem từ vựng nhưng không tạo lượt luyện tập.</p>
           <Link className="primary-button" to="/vocabulary">Xem chủ đề từ vựng</Link></section> :
@@ -42,7 +45,7 @@ export default function VocabularyPracticePage() {
   </SessionBoundary></SiteLayout>;
 }
 
-function LearnerPractice({ token }) {
+function LearnerPractice({ token, requestedTopicId }) {
   const navigate = useNavigate();
   const contentRevision = useContentRevision("VOCABULARY");
   const { logout } = useAuth();
@@ -67,11 +70,13 @@ function LearnerPractice({ token }) {
   useEffect(() => {
     let active = true;
     apiRequest(ROOT + "/topics", { token })
-      .then(data => { if (active) setTopics(data); })
+      .then(data => { if (active) { setTopics(data);
+        if (requestedTopicId) setTopic(data.find(item => item.maChuDe === requestedTopicId) || null);
+      } })
       .catch(() => { if (active) setError(LOAD_ERROR); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [token, reload, contentRevision]);
+  }, [token, reload, contentRevision, requestedTopicId]);
 
   const hasUnsavedAnswers = !!session && !session.finished && session.answers.length > 0;
   const { filteredTopics, shownTopics, hasMore } = topicCatalogView(topics, topicQuery, visibleCount, mobileCatalog);

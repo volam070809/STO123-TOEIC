@@ -1,6 +1,7 @@
 import { clearSharedReadCache } from "./sharedRequest";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+// Empty base uses the current origin and the Vite /api proxy in development.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, "") || "";
 
 export async function apiRequest(endpoint, { method = "GET", body = null, token = null,
   timeoutMs = 30_000, cache, idempotencyKey, headers: extraHeaders = {} } = {}) {

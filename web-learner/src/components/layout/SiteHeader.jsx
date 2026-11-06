@@ -34,6 +34,8 @@ export default function SiteHeader() {
         <Link className={pathname === "/vocabulary" ? "site-nav-active" : undefined} to="/vocabulary" state={{ vocabularyRoot: true }} onClick={() => setMenuOpen(false)}>Từ vựng</Link>
         <Link className={pathname.startsWith("/practice") ? "site-nav-active" : undefined} to="/practice" onClick={() => setMenuOpen(false)}>Luyện tập</Link>
         {user?.vaiTro === "HOC_VIEN" && <Link className={pathname === "/placement" ? "site-nav-active" : undefined} to="/placement" onClick={() => setMenuOpen(false)}>Lộ trình học</Link>}
+        {user?.vaiTro === "HOC_VIEN" && <Link className={pathname === "/smart-learning" ? "site-nav-active" : undefined} to="/smart-learning" onClick={() => setMenuOpen(false)}>Học thông minh</Link>}
+        {user?.vaiTro === "HOC_VIEN" && <Link className={pathname.startsWith("/arena") ? "site-nav-active" : undefined} to="/arena" onClick={() => setMenuOpen(false)}>Đấu trường</Link>}
         <Link className={pathname.startsWith("/mock-test") ? "site-nav-active" : undefined} to="/mock-test" onClick={() => setMenuOpen(false)}>Thi thử</Link>
       </nav>
       <div className={"site-account" + (menuOpen ? " is-open" : "")}>

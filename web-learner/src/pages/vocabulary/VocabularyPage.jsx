@@ -10,6 +10,7 @@ import { publicVocabularyApi } from "../../services/publicVocabularyApi";
 import { useContentRevision } from "../../services/contentRevisions";
 import { guestPreviewHasMore, vocabularyReturnTo, vocabularyTopicFromSearch } from "./guestVocabularyPreview";
 import "../../styles/vocabulary.css";
+import "../../styles/vocabulary-studio.css";
 
 const ROOT = "/api/tu-vung";
 const COMPLETED = "DA_THUOC";
@@ -218,26 +219,31 @@ export default function VocabularyPage() {
     if (audioRef.current) {
       audioRef.current.pause();
       URL.revokeObjectURL(audioRef.current.src);
+      audioRef.current = null;
     }
-  }, []);
+  }, [word?.maTuVung, stage]);
 
   const doneInSession = Object.values(answers).filter(Boolean).length;
   const missedInSession = Object.values(answers).filter(value => !value).length;
-  const title = topic?.tenChuDe || "Office Essentials";
+  const completedCount = words.filter(item => item.trangThai === COMPLETED).length;
+  const completionPercent = words.length ? Math.round(completedCount / words.length * 100) : 0;
+  const wordLength = [...(word?.word || "")].length;
+  const wordSize = wordLength > 20 ? "very-long" : wordLength > 13 ? "long" : "normal";
+  const title = topic?.tenChuDe || "Chủ đề từ vựng";
   const catalogTopics = topics;
   const { filteredTopics, shownTopics, hasMore } = topicCatalogView(catalogTopics, topicQuery, visibleCount, mobileCatalog);
   const previewHasMore = !isLearner && guestPreviewHasMore(topic, words);
   const authReturnTo = vocabularyReturnTo(topic?.maChuDe);
 
   return <SiteLayout className="vocab-page" aiContext={stage === "cards" && word ? { type: "VOCABULARY", wordId: word.maTuVung } : null}><SessionBoundary><div className={"site-container" + (stage === "topics" ? " vocabulary-topics-page" : "")}>
-    <div className="page-heading">
+    {(stage === "topics" || stage === "result") && <div className="page-heading">
       <span>Web / {isLearner ? "Học viên" : "Khách vãng lai"} / Từ vựng</span>
       <h1>{stage === "topics" ? "Từ vựng theo chủ đề" :
         stage === "list" ? title : stage === "cards" ? "Học từ vựng" : "Kết quả học"}</h1>
       <p>{isLearner
         ? "Học theo chủ đề, nghe phát âm và lưu tiến độ của bạn."
         : "Khám phá các chủ đề và học thử tối đa 10 từ trong mỗi chủ đề."}</p>
-    </div>
+    </div>}
 
     {loading && <p role="status">Đang tải từ vựng...</p>}
     {error && <p role="alert" className="vocab-error">{error}</p>}
@@ -295,101 +301,99 @@ export default function VocabularyPage() {
       {!isLearner && <p className="vocab-note">Đăng nhập để học toàn bộ từ và lưu tiến độ của bạn.</p>}
     </>}
 
-    {!loading && stage === "list" && <>
-      <div className="vocab-list-back">
-        <button type="button" className="vocab-text-button" onClick={() => {
-          setStage("topics"); navigate("/vocabulary");
-        }}>← Quay lại chủ đề</button>
-      </div>
-      <div className="vocab-banner">
-        <strong>{title}</strong>
-        <span>{words.length} từ {isLearner
-          ? "· " + topic.completedWords + "/" + words.length + " đã hoàn thành · " + topic.progressPercent + "%"
-          : "· Kết quả học thử chưa được lưu"}</span>
-      </div>
-      <div className="vocab-list-grid">
-        <section className="vocab-panel vocab-word-list">
-          <h2>Danh sách: {title}</h2>
-          <div className="vocab-word-scroll" role="region" aria-label={`Danh sách từ ${title}`} tabIndex={0}>
-            <ol>{words.map((item, index) => <li key={item.maTuVung}>
-              <button type="button" className="vocab-word-row" onClick={() => start("all", index)}
-                aria-label={`Mở thẻ ${item.word}`}>
-                <strong>{item.word}</strong>
-                {isLearner && <span className="vocab-list-status">
-                  {item.trangThai === COMPLETED ? "Đã nhớ" : item.trangThai === LEARNING ? "Đang học" : "Chưa học"}
-                </span>}
-              </button>
-            </li>)}</ol>
-          </div>
-          <div className="vocab-list-actions">
-            <button type="button" className="primary-button" disabled={!words.length}
-              onClick={() => start(isLearner && topic.completedWords > 0 && topic.completedWords < words.length
-                ? "continue" : "all")}>{isLearner
-                  ? topic.completedWords === words.length && words.length > 0 ? "Học lại"
-                    : topic.completedWords > 0 ? "Tiếp tục học" : "Bắt đầu học"
-                  : "Bắt đầu học thử"}</button>
-            {isLearner && topic.completedWords > 0 && <button type="button" className="outline-button"
-              onClick={() => start("all")}>Học lại toàn bộ</button>}
-          </div>
-        </section>
-        {!isLearner && <aside className="vocab-panel vocab-unlock">
-          <h2>Học đầy đủ và lưu tiến độ</h2>
-          <p>Đăng ký tài khoản để học toàn bộ từ trong chủ đề và lưu kết quả học.</p>
-          <Link className="primary-button" to="/register" state={{ returnTo: authReturnTo }}>Đăng ký miễn phí</Link>
-        </aside>}
-      </div>
-    </>}
-
-    {!loading && stage === "cards" && word && <div className="vocabulary-flashcard-view">
-      <button type="button" className="outline-button vocab-flashcard-back" onClick={returnToList}><FlashcardIcon kind="previous" />Quay lại danh sách</button>
-      <div className="vocab-study-grid">
-        <div className="vocab-study-heading">
-          <strong>{title}</strong>
-          <div className="vocab-study-progress"><span>Từ {position + 1}/{order.length}</span>
-            <progress value={position + 1} max={order.length} aria-label="Tiến độ lượt học từ vựng" /></div>
+    {!loading && stage === "list" && <div className="vocab-studio-intro">
+      <button type="button" className="vocab-studio-back" onClick={() => {
+        setStage("topics"); navigate("/vocabulary");
+      }}>← Tất cả chủ đề</button>
+      <section className="vocab-studio-hero">
+        {topic?.duongDanAnhBia && <img className="vocab-studio-cover" src={`${API_BASE_URL}/api/admin/vocabulary/topics/${topic.maChuDe}/cover`} alt="" />}
+        <div className="vocab-studio-hero-content"><span className="vocab-studio-kicker">IMMERSIVE VOCABULARY STUDIO · {words.length} TỪ</span>
+          <h2>{title}</h2>{topic?.moTa && <p>{topic.moTa}</p>}
+          <div className="vocab-studio-hero-meta"><span>{isLearner ? `${completedCount}/${words.length} từ đã nhớ` : "Học thử miễn phí"}</span>
+            {isLearner && <strong>{completionPercent}% hoàn thành</strong>}</div>
+          {isLearner && <progress value={completedCount} max={words.length || 1} aria-label={`Tiến độ chủ đề ${title}`} />}
+          <div className="vocab-studio-hero-actions"><button type="button" className="vocab-studio-primary" disabled={!words.length}
+            onClick={() => start(isLearner && completedCount > 0 && completedCount < words.length ? "continue" : "all")}>
+            {isLearner ? completedCount > 0 && completedCount < words.length ? "Tiếp tục hành trình" :
+              completedCount === words.length && words.length > 0 ? "Học lại chủ đề" : "Bắt đầu khám phá" : "Bắt đầu học thử"} <span aria-hidden="true">→</span></button>
+            {isLearner && completedCount > 0 && <button type="button" className="vocab-studio-secondary" onClick={() => start("all")}>Học lại từ đầu</button>}
+            {isLearner && <Link className="vocab-studio-secondary" to={`/practice/vocabulary?topic=${topic.maChuDe}`}>Luyện tập chủ đề</Link>}</div>
         </div>
-        <section className="vocab-panel vocab-flashcard-panel">
-          <p className="vocab-flip-hint">Bấm vào thẻ để lật xem nghĩa / ví dụ</p>
-          <button type="button" className={"vocab-flashcard" + (revealed ? " is-revealed" : "")}
-            aria-label={`${word.word}: ${revealed ? "xem mặt trước" : "xem nghĩa và ví dụ"}`}
-            onClick={() => setRevealed(value => !value)}>
-            {!revealed ? <span className="vocab-flashcard-face vocab-flashcard-front">
-              <span className="vocab-card-label">MẶT TRƯỚC</span>
-              <strong>{word.word}</strong>
-              {word.pronunciation && <span className="vocab-flashcard-pronunciation">{word.pronunciation}</span>}
-              {word.partOfSpeech && <span className="vocab-flashcard-part-of-speech">{word.partOfSpeech}</span>}
-            </span> : <span className="vocab-flashcard-face vocab-flashcard-reverse">
-              <span className="vocab-card-label">MẶT SAU · {word.word}</span>
-              <strong className="vocab-flashcard-meaning">{word.meaning}</strong>
-              {word.example && <span className="vocab-flashcard-example"><span>Ví dụ</span>{word.example}</span>}
-              {word.exampleMeaning && <span className="vocab-flashcard-translation"><span>Bản dịch</span>{word.exampleMeaning}</span>}
-            </span>}
-          </button>
-          <div className="vocab-card-actions">
-            {(word.hasAudio || (revealed && word.hasExampleAudio)) && <div className="vocab-flashcard-tools">
-              {word.hasAudio && <button type="button" className="outline-button" onClick={() => playAudio()}><FlashcardIcon kind="audio" />Nghe từ</button>}
-              {revealed && word.hasExampleAudio && <button type="button" className="outline-button" onClick={() => playAudio(true)}><FlashcardIcon kind="audio" />Nghe câu ví dụ</button>}
-            </div>}
-            <div className="vocab-flashcard-navigation">
-              <button type="button" className="outline-button" disabled={position === 0}
-                onClick={() => { setPosition(value => value - 1); setRevealed(false); }}><FlashcardIcon kind="previous" />Từ trước</button>
-              <button type="button" className="outline-button"
-                disabled={position + 1 === order.length && !previewHasMore}
-                onClick={() => {
-                  if (position + 1 < order.length) { setPosition(value => value + 1); setRevealed(false); }
-                  else if (previewHasMore) requireAuthentication(authReturnTo);
-                }}>Từ tiếp theo<FlashcardIcon kind="next" /></button>
-            </div>
-            {isLearner && <div className="vocab-decision-actions">
-              <button type="button" className="outline-button vocab-memory-forgotten" disabled={busy} aria-pressed={word.trangThai === LEARNING}
-                onClick={() => answer(false)}><FlashcardIcon kind="retry" />Chưa nhớ</button>
-              <button type="button" className="primary-button vocab-memory-remembered" disabled={busy} aria-pressed={word.trangThai === COMPLETED}
-                onClick={() => answer(true)}><FlashcardIcon kind="check" />Đã nhớ</button>
-            </div>}
-          </div>
-          {!isLearner && <p className="vocab-aside-note">Học thử không lưu tiến độ.</p>}
-        </section>
-      </div></div>}
+      </section>
+      <div className="vocab-journey-heading"><div><span>LỘ TRÌNH TỪ VỰNG</span><h3>Chọn một từ để bắt đầu</h3></div><small>Cuộn ngang để xem toàn bộ</small></div>
+      <div className="vocab-journey" role="region" aria-label={`Các từ trong chủ đề ${title}`} tabIndex={0}>
+        {words.map((item, index) => <button type="button" className="vocab-journey-item" key={item.maTuVung}
+          onClick={() => start("all", index)}><span>{String(index + 1).padStart(2, "0")}</span><strong>{item.word}</strong>
+          <small>{isLearner ? item.trangThai === COMPLETED ? "Đã nhớ" : item.trangThai === LEARNING ? "Đang học" : "Chưa học" : "Học thử"}</small></button>)}
+      </div>
+      {!words.length && <p className="vocab-studio-empty">Chủ đề này chưa có từ vựng để học.</p>}
+      {!isLearner && <div className="vocab-studio-guest"><p>Đăng nhập để học toàn bộ từ và lưu tiến độ của bạn.</p>
+        <Link to="/register" state={{ returnTo: authReturnTo }}>Đăng ký miễn phí →</Link></div>}
+    </div>}
+
+    {!loading && stage === "cards" && word && <div className="vocab-studio">
+      <div className="vocab-studio-topbar"><button type="button" className="vocab-studio-back" onClick={returnToList}>← {title}</button>
+        <span>STO123 VOCABULARY STUDIO</span>{isLearner && <Link to={`/practice/vocabulary?topic=${topic.maChuDe}`}>Luyện tập chủ đề →</Link>}</div>
+      <div className="vocab-studio-learning-heading"><div><span>HÀNH TRÌNH TỪ VỰNG</span><h2>{title}</h2></div>
+        <div className="vocab-studio-progress"><span>TỪ HIỆN TẠI</span><strong>{String(currentIndex + 1).padStart(2, "0")} <i>/ {String(words.length).padStart(2, "0")}</i></strong>
+          <small>Trong lượt: {position + 1}/{order.length}</small></div></div>
+      {isLearner && <div className="vocab-studio-completion"><span>Đã nhớ <strong>{completedCount}/{words.length} từ</strong></span>
+        <progress value={completedCount} max={words.length || 1} aria-label={`Đã nhớ ${completedCount} trên ${words.length} từ`} />
+        <strong>{completionPercent}%</strong></div>}
+      <div className="vocab-studio-scene"><span className="vocab-studio-light" aria-hidden="true" />
+        <p className="vocab-studio-flip-hint">Chạm hoặc bấm vào thẻ để {revealed ? "xem lại từ" : "khám phá nghĩa"}</p>
+        <button type="button" key={word.maTuVung} className={"vocab-flashcard" + (revealed ? " is-revealed" : "")}
+          aria-label={revealed ? `${word.word}, nghĩa ${word.meaning}. Bấm để xem mặt trước` : `${word.word}. Bấm để xem nghĩa và ví dụ`}
+          aria-pressed={revealed} onClick={() => setRevealed(value => !value)}>
+          <span className="vocab-flashcard-inner">
+            <span className="vocab-flashcard-face vocab-flashcard-front" aria-hidden={revealed}>
+              <span className="vocab-face-content vocab-face-content-front">
+                <span className="vocab-card-label">TỪ VỰNG · {String(position + 1).padStart(2, "0")}</span>
+                <strong className={`vocab-word-size-${wordSize}`}>{word.word}</strong>
+                {word.pronunciation && <span className="vocab-flashcard-pronunciation">{word.pronunciation}</span>}
+                {word.partOfSpeech && <span className="vocab-flashcard-part-of-speech">{word.partOfSpeech}</span>}
+                <span className="vocab-studio-card-cue">Lật thẻ để khám phá <span aria-hidden="true">↗</span></span>
+              </span>
+            </span>
+            <span className="vocab-flashcard-face vocab-flashcard-reverse" aria-hidden={!revealed}>
+              <span className="vocab-face-content vocab-face-content-back">
+                <span className="vocab-card-label">NGHĨA VÀ NGỮ CẢNH</span>
+                <strong className={`vocab-flashcard-word vocab-word-size-${wordSize}`}>{word.word}</strong>
+                {word.pronunciation && <span className="vocab-flashcard-pronunciation">{word.pronunciation}</span>}
+                <strong className="vocab-flashcard-meaning">{word.meaning}</strong>
+                {(word.example || word.exampleMeaning) && <span className="vocab-example-panel">
+                  {word.example && <span className="vocab-example-row"><span className="vocab-example-label">VÍ DỤ</span><span className="vocab-example-text">{word.example}</span></span>}
+                  {word.exampleMeaning && <span className="vocab-example-row vocab-example-translation"><span className="vocab-example-label">BẢN DỊCH</span><span className="vocab-example-text">{word.exampleMeaning}</span></span>}
+                </span>}
+              </span>
+            </span>
+          </span>
+        </button>
+      </div>
+      <div className="vocab-studio-controls">
+        <div className="vocab-studio-audio">{word.hasAudio && <button type="button" onClick={() => playAudio()}><FlashcardIcon kind="audio" />Nghe phát âm</button>}
+          {revealed && word.hasExampleAudio && <button type="button" onClick={() => playAudio(true)}><FlashcardIcon kind="audio" />Nghe ví dụ</button>}
+          {!word.hasAudio && <span>Chưa có âm thanh cho từ này</span>}</div>
+        <div className="vocab-studio-navigation"><button type="button" disabled={position === 0 || busy}
+          onClick={() => { setPosition(value => value - 1); setRevealed(false); }}><FlashcardIcon kind="previous" />Từ trước</button>
+          <button type="button" disabled={busy || position + 1 === order.length && !previewHasMore}
+            onClick={() => { if (position + 1 < order.length) { setPosition(value => value + 1); setRevealed(false); }
+              else if (previewHasMore) requireAuthentication(authReturnTo); }}>Từ tiếp theo<FlashcardIcon kind="next" /></button></div>
+        {isLearner && <div className="vocab-studio-decisions"><button type="button" disabled={busy} aria-pressed={word.trangThai === LEARNING}
+          onClick={() => answer(false)}><FlashcardIcon kind="retry" />Chưa nhớ</button>
+          <button type="button" disabled={busy} aria-pressed={word.trangThai === COMPLETED}
+            onClick={() => answer(true)}><FlashcardIcon kind="check" />{busy ? "Đang lưu…" : "Đã nhớ"}</button></div>}
+      </div>
+      <div className="vocab-journey-heading"><div><span>ĐANG HỌC</span><h3>Hành trình của bạn</h3></div><small>Chọn từ để xem lại</small></div>
+      <div className="vocab-journey vocab-journey-compact" role="region" aria-label="Chọn từ trong lượt học" tabIndex={0}>
+        {order.map((index, journeyPosition) => <button type="button" key={words[index].maTuVung}
+          className={journeyPosition === position ? "vocab-journey-item is-active" : "vocab-journey-item"}
+          aria-current={journeyPosition === position ? "step" : undefined} disabled={busy}
+          onClick={() => { setPosition(journeyPosition); setRevealed(false); }}>
+          <span>{String(journeyPosition + 1).padStart(2, "0")}</span><strong>{words[index].word}</strong></button>)}
+      </div>
+      {!isLearner && <p className="vocab-studio-trial">Học thử không lưu tiến độ. <Link to="/register" state={{ returnTo: authReturnTo }}>Tạo tài khoản để học đầy đủ →</Link></p>}
+    </div>}
 
     {!loading && stage === "result" && <div className="vocab-result-grid">
       <section className="vocab-panel vocab-result-panel">

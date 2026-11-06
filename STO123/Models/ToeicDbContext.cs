@@ -20,6 +20,8 @@ public partial class ToeicDbContext : DbContext
     public virtual DbSet<BuocLoTrinh> BuocLoTrinh { get; set; }
 
     public virtual DbSet<CauHoi> CauHoi { get; set; }
+    public virtual DbSet<ArenaMatch> ArenaMatch { get; set; }
+    public virtual DbSet<SmartLearningFollowUp> SmartLearningFollowUp { get; set; }
 
     public virtual DbSet<CauHoiDeThi> CauHoiDeThi { get; set; }
 
@@ -94,6 +96,45 @@ public partial class ToeicDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<SmartLearningFollowUp>(entity =>
+        {
+            entity.ToTable("SmartLearningFollowUp");
+            entity.HasKey(x => new { x.MaHocVien, x.MaPart });
+            entity.Property(x => x.TyLeTruocDangLuyen).HasColumnType("decimal(5,2)");
+            entity.Property(x => x.TyLeTruocGanNhat).HasColumnType("decimal(5,2)");
+            entity.Property(x => x.TyLeSauGanNhat).HasColumnType("decimal(5,2)");
+            entity.HasOne<NguoiDung>().WithMany().HasForeignKey(x => x.MaHocVien)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<PartTOEIC>().WithMany().HasForeignKey(x => x.MaPart)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+        modelBuilder.Entity<ArenaMatch>(entity =>
+        {
+            entity.ToTable("ArenaMatch");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Status).HasMaxLength(16).IsUnicode(false);
+            entity.Property(x => x.RoomCode).HasMaxLength(12).IsUnicode(false);
+            entity.Property(x => x.QuestionsJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.AnswersJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.RowVersion).IsRowVersion();
+            entity.HasIndex(x => new { x.Status, x.Part, x.CreatedUtc })
+                .HasDatabaseName("IX_ArenaMatch_StatusPartCreated");
+            entity.HasIndex(x => new { x.OwnerId, x.CompletedUtc })
+                .HasDatabaseName("IX_ArenaMatch_OwnerCompleted")
+                .IsDescending(false, true).IncludeProperties(x => new { x.OpponentId, x.Part, x.Status });
+            entity.HasIndex(x => new { x.OpponentId, x.CompletedUtc })
+                .HasDatabaseName("IX_ArenaMatch_OpponentCompleted")
+                .IsDescending(false, true).HasFilter("[OpponentId] IS NOT NULL")
+                .IncludeProperties(x => new { x.OwnerId, x.Part, x.Status });
+            entity.HasIndex(x => x.RoomCode).IsUnique().HasFilter("[RoomCode] IS NOT NULL")
+                .HasDatabaseName("UX_ArenaMatch_RoomCode");
+            entity.HasOne<NguoiDung>().WithMany().HasForeignKey(x => x.OwnerId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<NguoiDung>().WithMany().HasForeignKey(x => x.OpponentId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<NguoiDung>().WithMany().HasForeignKey(x => x.ForfeitById)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
         modelBuilder.Entity<ThongKeLuyenPart>(entity =>
         {
             entity.ToTable("ThongKeLuyenPart");

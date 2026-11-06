@@ -104,7 +104,9 @@ export default function PracticePartsPage() {
     if (startLock.current) return;
     startLock.current = true; setBusy(true); setError(""); setFeedback({}); setSummary(null);
     try {
-      const data = await apiRequest(api + "/start", { method: "POST", body: { part, difficulty, preset }, token });
+      const fromRecommendation = searchParams.get("recommended") === "1" && queryPart === part;
+      const data = await apiRequest(api + "/start", { method: "POST",
+        body: { part, difficulty, preset, fromRecommendation }, token });
       showAttempt(data);
       setSearchParams({ attempt: String(data.attemptId) });
     } catch (e) {

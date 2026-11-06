@@ -11,6 +11,7 @@ using STO123.Services;
 using STO123.Services.Admin;
 using STO123.Services.Ai;
 using STO123.Services.Auth;
+using STO123.Services.Arena;
 using STO123.Services.Exam;
 using STO123.Services.Knn;
 using STO123.Services.Payment;
@@ -31,7 +32,8 @@ builder.Services.AddCors(options =>
     options.AddPolicy(frontendCorsPolicy, policy =>
         policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod()));
+            .AllowAnyMethod()
+            .AllowCredentials()));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -64,6 +66,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
         options.Events = new JwtBearerEvents
         {
+            OnMessageReceived = context =>
+            {
+                if (context.Request.Path.StartsWithSegments("/hubs/arena") &&
+                    context.Request.Query.TryGetValue("access_token", out var token))
+                    context.Token = token;
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async context =>
             {
                 var idValue = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -155,6 +164,11 @@ builder.Services.AddScoped<ExamPartLookup>();
 builder.Services.AddScoped<ExamAttemptService>();
 builder.Services.AddScoped<ExamSnapshotQueryService>();
 builder.Services.AddScoped<PracticePartService>();
+builder.Services.AddScoped<STO123.Services.SmartLearning.SmartLearningService>();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<ArenaPresence>();
+builder.Services.AddScoped<ArenaService>();
+builder.Services.AddHostedService<ArenaTickWorker>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ExamGradingService>();
 builder.Services.AddSingleton<IKnnClassifier, KnnClassifier>();
@@ -200,5 +214,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<ArenaHub>("/hubs/arena");
 
 app.Run();

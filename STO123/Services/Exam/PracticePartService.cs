@@ -61,7 +61,28 @@ public sealed class PracticePartService(ToeicDbContext db)
         }) };
     }
 
-    public async Task<object> StartAsync(int learnerId, int part, int difficulty, string? preset, CancellationToken ct)
+    public async Task<IReadOnlyList<ArenaQuestionSnapshot>> SelectArenaQuestionsAsync(int part, CancellationToken ct)
+    {
+        if (part is < 1 or > 7)
+            throw new ExamProblem("INVALID_PART", "Part không hợp lệ.");
+        var units = await LoadUnitsAsync(part, null, ct);
+        var grouped = PracticeQuestionBank.GroupedParts.Contains(part);
+        var targetUnits = grouped ? 2 : part == 5 ? 8 : 5;
+        if (units.Count < (grouped ? 1 : 3))
+            throw new ExamProblem("ARENA_NO_QUESTIONS", "Part này chưa có đủ câu hỏi luyện tập hợp lệ cho một trận.", 409);
+        var selected = units.OrderBy(_ => Random.Shared.Next()).Take(targetUnits).ToArray();
+        return selected.SelectMany(unit => unit.Questions.Select(question =>
+            new ArenaQuestionSnapshot(question.MaCauHoi, part, unit.ResourceId,
+                question.NoiDung, question.PhuongAnA, question.PhuongAnB, question.PhuongAnC,
+                question.PhuongAnD, question.PhuongAnDung, question.GiaiThich,
+                unit.Resource?.NoiDungNguLieu, unit.Resource?.DuongDanAudio,
+                unit.Resource?.DuongDanAnh,
+                unit.Documents.OrderBy(d => d.ThuTu).Select(d => new ArenaDocumentSnapshot(
+                    d.ThuTu, d.LoaiTaiLieu, d.NoiDung, d.DuongDanAnh)).ToArray()))).ToArray();
+    }
+
+    public async Task<object> StartAsync(int learnerId, int part, int difficulty, string? preset,
+        CancellationToken ct, bool fromRecommendation = false)
     {
         if (difficulty is < 1 or > 3 || !PracticeQuestionBank.TryTarget(part, preset, out var target))
             throw new ExamProblem("INVALID_REQUEST", "Part, độ khó hoặc mức luyện tập không hợp lệ.");
@@ -110,6 +131,23 @@ public sealed class PracticePartService(ToeicDbContext db)
         }
         db.KetQuaLamBai.Add(attempt);
         await db.SaveChangesAsync(ct);
+        if (fromRecommendation)
+        {
+            var previous = await db.ThongKeLuyenPart.AsNoTracking().FirstOrDefaultAsync(
+                x => x.MaHocVien == learnerId && x.MaPart == part, ct);
+            var followUp = await db.SmartLearningFollowUp.FirstOrDefaultAsync(
+                x => x.MaHocVien == learnerId && x.MaPart == part, ct);
+            if (followUp is null)
+            {
+                followUp = new SmartLearningFollowUp { MaHocVien = learnerId, MaPart = part };
+                db.SmartLearningFollowUp.Add(followUp);
+            }
+            followUp.MaLuotDangLuyen = attempt.MaKetQua;
+            followUp.TyLeTruocDangLuyen = previous is { SoCauLanCuoi: > 0 } ?
+                PracticeHistoryMetrics.Accuracy(previous.SoDungLanCuoi, previous.SoCauLanCuoi) : null;
+            followUp.CapNhatLucUtc = now;
+            await db.SaveChangesAsync(ct);
+        }
         await transaction.CommitAsync(ct);
         return Payload(attempt, part, difficulty, preset, target, isReview: false);
     }
@@ -282,6 +320,19 @@ public sealed class PracticePartService(ToeicDbContext db)
         stat.SoDungLanCuoi = correct;
         stat.MaKetQuaCuoi = attemptId;
         stat.LanLuyenGanNhat = DateTime.UtcNow;
+        var followUp = await db.SmartLearningFollowUp.FirstOrDefaultAsync(
+            x => x.MaHocVien == learnerId && x.MaPart == partIds[0] &&
+                 x.MaLuotDangLuyen == attemptId, ct);
+        if (followUp is not null)
+        {
+            followUp.TyLeTruocGanNhat = followUp.TyLeTruocDangLuyen;
+            followUp.TyLeSauGanNhat = answered > 0 ? PracticeHistoryMetrics.Accuracy(correct, answered) : null;
+            followUp.SoCauSauGanNhat = answered;
+            followUp.HoanThanhLucUtc = DateTime.UtcNow;
+            followUp.MaLuotDangLuyen = null;
+            followUp.TyLeTruocDangLuyen = null;
+            followUp.CapNhatLucUtc = DateTime.UtcNow;
+        }
         await db.SaveChangesAsync(ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE d FROM dbo.ChiTietKetQua d JOIN dbo.CauHoiLuotLam q
