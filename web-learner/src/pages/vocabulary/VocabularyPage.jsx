@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import SiteLayout from "../../layouts/SiteLayout";
+import DisclosureToggle from "../../components/layout/DisclosureToggle";
 import { useAuth } from "../../contexts/AuthState";
 import SessionBoundary from "../../components/auth/SessionBoundary";
 import { apiRequest, API_BASE_URL } from "../../services/api";
@@ -15,6 +16,7 @@ import "../../styles/vocabulary-studio.css";
 const ROOT = "/api/tu-vung";
 const COMPLETED = "DA_THUOC";
 const LEARNING = "DANG_HOC";
+const WORD_JOURNEY_BATCH = 12;
 
 export default function VocabularyPage() {
   const { user, token } = useAuth();
@@ -37,6 +39,9 @@ export default function VocabularyPage() {
   const [position, setPosition] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [answers, setAnswers] = useState({});
+  const [journeyQuery, setJourneyQuery] = useState("");
+  const [journeyFilter, setJourneyFilter] = useState("ALL");
+  const [journeyVisibleCount, setJourneyVisibleCount] = useState(WORD_JOURNEY_BATCH);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -135,12 +140,25 @@ export default function VocabularyPage() {
     const chosen = isLearner && mode === "continue"
       ? indices.filter(i => words[i].trangThai !== COMPLETED) : indices;
     if (!chosen.length) return;
+    setJourneyQuery("");
+    setJourneyFilter("ALL");
+    setJourneyVisibleCount(WORD_JOURNEY_BATCH);
     setOrder(chosen);
     setPosition(fromIndex);
     setRevealed(false);
     setAnswers({});
     setError("");
     setStage("cards");
+  }
+
+  function openJourneyWord(index) {
+    const existingPosition = order.indexOf(index);
+    if (existingPosition >= 0) setPosition(existingPosition);
+    else {
+      setOrder(current => [...current.slice(0, position + 1), index, ...current.slice(position + 1)]);
+      setPosition(position + 1);
+    }
+    setRevealed(false);
   }
 
   const currentIndex = order[position];
@@ -227,6 +245,13 @@ export default function VocabularyPage() {
   const missedInSession = Object.values(answers).filter(value => !value).length;
   const completedCount = words.filter(item => item.trangThai === COMPLETED).length;
   const completionPercent = words.length ? Math.round(completedCount / words.length * 100) : 0;
+  const normalizedJourneyQuery = journeyQuery.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("vi-VN");
+  const journeyWords = words.map((item, index) => ({ item, index })).filter(({ item }) => {
+    const matchesFilter = journeyFilter === "ALL" ||
+      (journeyFilter === "REVIEW" ? item.trangThai !== COMPLETED : item.trangThai === COMPLETED);
+    const searchable = `${item.word || ""} ${item.meaning || ""}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("vi-VN");
+    return matchesFilter && (!normalizedJourneyQuery || searchable.includes(normalizedJourneyQuery));
+  });
   const wordLength = [...(word?.word || "")].length;
   const wordSize = wordLength > 20 ? "very-long" : wordLength > 13 ? "long" : "normal";
   const title = topic?.tenChuDe || "Chủ đề từ vựng";
@@ -384,14 +409,29 @@ export default function VocabularyPage() {
           <button type="button" disabled={busy} aria-pressed={word.trangThai === COMPLETED}
             onClick={() => answer(true)}><FlashcardIcon kind="check" />{busy ? "Đang lưu…" : "Đã nhớ"}</button></div>}
       </div>
-      <div className="vocab-journey-heading"><div><span>ĐANG HỌC</span><h3>Hành trình của bạn</h3></div><small>Chọn từ để xem lại</small></div>
-      <div className="vocab-journey vocab-journey-compact" role="region" aria-label="Chọn từ trong lượt học" tabIndex={0}>
-        {order.map((index, journeyPosition) => <button type="button" key={words[index].maTuVung}
-          className={journeyPosition === position ? "vocab-journey-item is-active" : "vocab-journey-item"}
-          aria-current={journeyPosition === position ? "step" : undefined} disabled={busy}
-          onClick={() => { setPosition(journeyPosition); setRevealed(false); }}>
-          <span>{String(journeyPosition + 1).padStart(2, "0")}</span><strong>{words[index].word}</strong></button>)}
-      </div>
+      <details className="vocab-progress-details"><summary><span><small>HÀNH TRÌNH CỦA BẠN</small><strong>Hành trình từ vựng</strong><em>Tìm từ, xem trạng thái và mở thẻ học ngay</em></span><DisclosureToggle /></summary>
+        <div className="vocab-word-journey">
+          <div className="vocab-word-journey-overview">
+            <div className="vocab-word-journey-ring" style={{ "--journey-progress": `${completionPercent}%` }} role="img"
+              aria-label={`${completedCount} trên ${words.length} từ đã nhớ, ${completionPercent}%`}><span>{completionPercent}%</span></div>
+            <div className="vocab-word-journey-copy"><strong>{isLearner ? `${completedCount}/${words.length} từ đã nhớ` : `${words.length} từ trong chủ đề`}</strong>
+              <span>{isLearner ? `${Math.max(0, words.length - completedCount)} từ còn lại` : "Học thử; tiến độ chưa được lưu"}</span></div>
+          </div>
+          <div className="vocab-word-journey-tools"><label className="vocab-word-journey-search"><span className="sr-only">Tìm từ vựng</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input type="search" value={journeyQuery} placeholder="Tìm từ hoặc nghĩa..." onChange={event => { setJourneyQuery(event.target.value); setJourneyVisibleCount(WORD_JOURNEY_BATCH); }}/></label>
+            <div className="vocab-word-journey-filters" role="group" aria-label="Lọc từ vựng">{[["ALL", "Tất cả"], ["REVIEW", "Cần ôn"], ["REMEMBERED", "Đã nhớ"]].map(([value, label]) =>
+              <button type="button" key={value} aria-pressed={journeyFilter === value} onClick={() => { setJourneyFilter(value); setJourneyVisibleCount(WORD_JOURNEY_BATCH); }}>{label}</button>)}</div>
+          </div>
+          <div className="vocab-word-journey-count" aria-live="polite">{journeyWords.length} từ phù hợp</div>
+          {journeyWords.length ? <div className="vocab-word-journey-grid" role="group" aria-label="Các từ trong chủ đề">
+            {journeyWords.slice(0, journeyVisibleCount).map(({ item, index }) => <button type="button" key={item.maTuVung}
+              className={`vocab-word-tile${index === currentIndex ? " is-current" : ""}${item.trangThai === COMPLETED ? " is-remembered" : ""}`}
+              aria-current={index === currentIndex ? "step" : undefined} disabled={busy} onClick={() => openJourneyWord(index)}>
+              <span className="vocab-word-tile-top"><span>{String(index + 1).padStart(2, "0")}</span><span aria-hidden="true">{item.trangThai === COMPLETED ? "✓" : index === currentIndex ? "●" : "○"}</span></span>
+              <strong>{item.word}</strong><small>{isLearner ? item.trangThai === COMPLETED ? "Đã nhớ" : item.trangThai === LEARNING ? "Cần ôn" : "Chưa học" : "Học thử"}</small>
+            </button>)}</div> : <p className="vocab-word-journey-empty">Không tìm thấy từ phù hợp. Hãy thử từ khóa hoặc bộ lọc khác.</p>}
+          {journeyWords.length > journeyVisibleCount && <button type="button" className="vocab-word-journey-more" onClick={() => setJourneyVisibleCount(count => count + WORD_JOURNEY_BATCH)}>Khám phá thêm từ <span aria-hidden="true">↓</span></button>}
+        </div>
+      </details>
       {!isLearner && <p className="vocab-studio-trial">Học thử không lưu tiến độ. <Link to="/register" state={{ returnTo: authReturnTo }}>Tạo tài khoản để học đầy đủ →</Link></p>}
     </div>}
 

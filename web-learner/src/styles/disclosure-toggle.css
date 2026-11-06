@@ -1,0 +1,24 @@
+:is(.learner-disclosure, .practice-progress-details, .vocab-progress-details) > summary > .learner-disclosure-toggle {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  flex: none; min-width: 124px; min-height: 39px; padding: 8px 12px;
+  border: 1px solid #cedeed; border-radius: 10px; background: #f7fafd;
+  color: #245f98; font-size: 12px; font-weight: 750; line-height: 1.2;
+  transition: background .18s ease, border-color .18s ease, color .18s ease;
+}
+:is(.learner-disclosure, .practice-progress-details, .vocab-progress-details) > summary:hover > .learner-disclosure-toggle {
+  border-color: #a9c7e2; background: #eef5fb;
+}
+.learner-disclosure-toggle svg { flex: none; width: 18px; height: 18px; transition: transform .2s ease; }
+.learner-disclosure-toggle .learner-toggle-open { display: none; }
+:is(.learner-disclosure, .practice-progress-details, .vocab-progress-details)[open] .learner-disclosure-toggle .learner-toggle-closed { display: none; }
+:is(.learner-disclosure, .practice-progress-details, .vocab-progress-details)[open] .learner-disclosure-toggle .learner-toggle-open { display: inline; }
+:is(.learner-disclosure, .practice-progress-details, .vocab-progress-details)[open] .learner-disclosure-toggle svg { transform: rotate(180deg); }
+:is(.learner-disclosure, .practice-progress-details, .vocab-progress-details) > summary:focus-visible { outline: 2px solid #3179b7; outline-offset: 3px; }
+@media (max-width: 420px) {
+  :is(.learner-disclosure, .practice-progress-details, .vocab-progress-details) > summary > .learner-disclosure-toggle {
+    min-width: 104px; padding-inline: 9px; font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .learner-disclosure-toggle,.learner-disclosure-toggle svg { transition: none; }
+}

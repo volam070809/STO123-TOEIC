@@ -210,7 +210,7 @@ export default function CourseListPage() {
       {!isGuest && <section className="course-section course-payment-history" aria-label="Lịch sử thanh toán">
         <details><summary className="course-history-toggle"><span className="course-history-heading"><small>GIAO DỊCH CỦA BẠN</small>
           <strong>Lịch sử thanh toán</strong><span>{history?.length ? `${history.length} giao dịch` : "Chưa có giao dịch"}</span></span>
-          <span className="course-history-open"><span className="course-history-open-closed">Xem chi tiết</span><span className="course-history-open-expanded">Thu gọn</span><span aria-hidden="true">⌄</span></span></summary>
+          <span className="course-history-open"><span className="course-history-open-closed">Xem chi tiết</span><span className="course-history-open-expanded">Thu gọn</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg></span></summary>
           {history?.length ? <div className="course-history-list">{history.map(item => <article className="course-history-item" key={item.maGiaoDich}>
             <div className="course-history-item-head"><div><strong>Giao dịch #{item.maGiaoDich}</strong>
               <span>{item.tenGoiHoc || "Khóa học đã chọn"}</span></div>

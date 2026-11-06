@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import SiteLayout from "../../layouts/SiteLayout";
 import SessionBoundary from "../../components/auth/SessionBoundary";
+import DisclosureToggle from "../../components/layout/DisclosureToggle";
 import { useAuth } from "../../contexts/AuthState";
 import { apiRequest } from "../../services/api";
 import { practiceRead } from "../../services/practiceRead";
@@ -13,9 +14,13 @@ import { examMediaBlob } from "../../services/examApi";
 import "../../styles/exam.css";
 import "../../styles/vocabulary.css";
 import "../../styles/practice-parts.css";
+import "../../styles/learner-journey.css";
+import "../../styles/practice-parts-studio.css";
 
 const api = "/api/practice";
-const parts = ["Photographs", "Question-Response", "Conversations", "Talks", "Incomplete Sentences", "Text Completion", "Reading Comprehension"];
+const partLabels = ["Mô tả tranh", "Hỏi và đáp", "Hội thoại", "Bài nói ngắn", "Hoàn thành câu", "Hoàn thành đoạn văn", "Đọc hiểu"];
+const difficultyLabels = { 1: "Dễ", 2: "Vừa", 3: "Khó" };
+const presetLabels = { SHORT: "Bài ngắn", MEDIUM: "Bài vừa", LONG: "Bài dài" };
 
 export default function PracticePartsPage() {
   const { token } = useAuth();
@@ -106,7 +111,7 @@ export default function PracticePartsPage() {
     try {
       const fromRecommendation = searchParams.get("recommended") === "1" && queryPart === part;
       const data = await apiRequest(api + "/start", { method: "POST",
-        body: { part, difficulty, preset, fromRecommendation }, token });
+        body: { part, difficulty: selectedDifficulty, preset: selectedPreset, fromRecommendation }, token });
       showAttempt(data);
       setSearchParams({ attempt: String(data.attemptId) });
     } catch (e) {
@@ -174,63 +179,89 @@ export default function PracticePartsPage() {
 
   const questions = attempt?.questions || [];
   const counts = available?.find(x => x.part === part)?.difficulties || [];
-  const selectedAvailability = counts.find(x => x.difficulty === difficulty);
-  const canStart = selectedAvailability?.presets?.find(x => x.preset === preset)?.available === true;
+  const hasReadyPreset = row => row.presets?.some(option => option.available) === true;
+  const selectedAvailability = counts.find(row => row.difficulty === difficulty && hasReadyPreset(row)) ||
+    counts.find(hasReadyPreset) || counts.find(row => row.difficulty === difficulty) || counts[0];
+  const selectedDifficulty = selectedAvailability?.difficulty ?? difficulty;
+  const availablePresets = selectedAvailability?.presets?.filter(option => option.available) || [];
+  const selectedPreset = availablePresets.some(option => option.preset === preset) ? preset : availablePresets[0]?.preset ?? preset;
+  const canStart = availablePresets.length > 0;
+  const selectedStats = stats?.find(row => row.part === part);
+  const choosePart = nextPart => { setSelectedPart(nextPart); setPreset("SHORT"); };
   const activeQuestion = questions[current];
   const activeGroup = attempt?.groups?.find(g => g.groupId === activeQuestion?.groupId);
   const currentUnlocked = activeQuestion && (checked(activeQuestion, feedback) ||
     feedback[activeQuestion.questionOccurrenceId]?.viewed);
   const leave = () => { setAttempt(null); setSummary(null); setSearchParams({}); };
   return <SiteLayout className="vocab-page" aiContext={attempt && activeQuestion ? { type: "PRACTICE", attemptId: attempt.attemptId, questionId: activeQuestion.questionOccurrenceId } : null}><SessionBoundary><div className="site-container practice-page practice-parts">
-    <div className="page-heading"><span><Link to="/practice">Luyện tập</Link> / TOEIC theo Part</span>
-      <h1>Luyện tập TOEIC theo Part</h1><p>Luyện không giới hạn thời gian, kiểm tra từng câu và xem lại lời giải.</p>
-      <Link className="outline-button" to="/practice">← Quay lại chọn hình thức</Link></div>
+    <div className="page-heading practice-hub-heading"><span><Link to="/practice">Luyện tập</Link> / Theo Part</span>
+      <h1><span className="practice-heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 6.5c-2.2-1.7-5.1-2.2-8-1.5v12c2.9-.7 5.8-.2 8 1.5 2.2-1.7 5.1-2.2 8-1.5V5c-2.9-.7-5.8-.2-8 1.5Z"/><path d="M12 6.5v12"/></svg></span>Hôm nay bạn muốn luyện gì?</h1>
+      <p>Chọn Part và bắt đầu với một bài luyện vừa sức.</p>
+      <Link className="practice-back-link" to="/practice">← Các hình thức luyện tập</Link></div>
     {error && <p className="vocab-error" role="alert">{error}</p>}
     {error && !attempt && !routeAttemptId && <button className="outline-button" type="button"
       onClick={() => { setError(""); loadAvailability(); loadActiveList(); setStatsRetry(value => value + 1); }}>Thử tải lại</button>}
     {busy && !attempt && routeAttemptId && <p role="status">Đang tải bài luyện tập…</p>}
-    {summary && <section className="vocab-panel practice-finish-summary" role="status"><h2>Đã hoàn thành Part {summary.part}</h2>
-      <p>Đúng {summary.correct}/{summary.attempted} câu đã làm · Chính xác {summary.accuracy}%</p>
-      <button className="outline-button" type="button" onClick={() => setSummary(null)}>Đóng</button></section>}
+    {summary && <section className="practice-complete" role="status"><span className="practice-kicker">HOÀN THÀNH BÀI LUYỆN</span><h2>Part {summary.part} · {partLabels[summary.part - 1]}</h2>
+      <div className="practice-complete-score"><strong>{summary.accuracy}%</strong><span>{summary.correct}/{summary.attempted} câu đúng</span></div>
+      <p>Bạn có thể chọn một bài mới bất cứ lúc nào. Thống kê Part đã được cập nhật.</p>
+      <button className="primary-button" type="button" onClick={() => setSummary(null)}>Tiếp tục luyện tập →</button></section>}
     {!attempt && !routeAttemptId && <div className="practice-parts-hub">
-      <section className="vocab-panel practice-active-panel"><h2><span className="practice-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></svg></span>Bài đang làm</h2>
-        {activeAttempts === null ? <p role="status">Đang tải…</p> : activeAttempts.length === 0 ?
-          <p>Chưa có bài luyện nào đang làm.</p> : activeAttempts.map(row =>
-            <article className="practice-part-history" key={row.attemptId}>
-              <div className="practice-active-details"><span className="practice-active-part">Part {row.part}</span><span className="practice-active-progress">{row.checkedQuestions}/{row.totalQuestions} câu đã kiểm tra</span><span className="practice-active-date">{new Date(row.startedAt).toLocaleString("vi-VN")}</span></div>
-              <button type="button" className="outline-button" onClick={() => { setError(""); setSearchParams({ attempt: String(row.attemptId) }); }}>Tiếp tục</button>
-            </article>)}</section>
-      <section className="vocab-panel practice-selection-panel"><h2><span className="practice-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h3" /></svg></span>Chọn bài luyện</h2>
-        {available === null && <p role="status">Đang tải số lượng câu hỏi và nhóm hợp lệ…</p>}
-        <div className="practice-selection-fields"><label>Part<select value={part} onChange={e => { setSelectedPart(Number(e.target.value)); setPreset("SHORT"); }}>{parts.map((name, i) =>
-          <option key={i + 1} value={i + 1}>Part {i + 1} · {name}</option>)}</select></label>
-        <label>Độ khó<select value={difficulty} onChange={e => { setDifficulty(Number(e.target.value)); setPreset("SHORT"); }}>{[1,2,3].map(x =>
-          <option key={x} value={x}>Mức {x} · {counts.find(c => c.difficulty === x)?.validUnitCount || 0} {counts.find(c => c.difficulty === x)?.unitType === "GROUP" ? "nhóm" : "câu"} hợp lệ</option>)}</select></label></div>
-        <fieldset className="practice-part-presets"><legend>Mức luyện tập</legend>
-          {(selectedAvailability?.presets || []).map(option => <label key={option.preset}>
-            <input type="radio" name="practice-preset" value={option.preset} checked={preset === option.preset}
-              disabled={!option.available} onChange={() => setPreset(option.preset)} />
-            <span className="practice-preset-content"><strong>{option.preset}</strong><span>{option.targetUnitCount} {selectedAvailability.unitType === "GROUP" ? "nhóm" : "câu"}</span></span>
-          </label>)}
-        </fieldset>
-        <div className="practice-selection-action">{!canStart && <p>Chưa đủ nội dung hợp lệ cho mức luyện tập này.</p>}
-        <button className="primary-button" disabled={busy || !canStart} onClick={start}>Bắt đầu luyện<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 12h14m-5-5 5 5-5 5" /></svg></button></div>
-      </section>
-      <section className="vocab-panel practice-stats-panel"><div className="practice-stats-heading"><div>
-        <h2>Tiến bộ theo Part</h2><p>Thống kê tích lũy từ các bài đã hoàn thành.</p></div>
-        {statsError && <button type="button" className="outline-button" onClick={() => { setStatsError(""); setStatsRetry(value => value + 1); }}>Thử lại</button>}
+      <div className="practice-parts-main">
+        <section className="practice-part-select" aria-labelledby="practice-select-title"><div className="practice-select-heading"><div><span className="practice-kicker">CHỌN NỘI DUNG</span><h2 id="practice-select-title">Bảy Part, hai kỹ năng</h2></div><p>Chạm vào một Part để xem bài luyện phù hợp.</p></div>
+          {available === null && <p role="status" className="practice-data-loading">Đang kiểm tra bài luyện hiện có…</p>}
+          {[{ label: "Listening", range: "PART 1–4", start: 1, end: 4, icon: "♫" }, { label: "Reading", range: "PART 5–7", start: 5, end: 7, icon: "Aa" }].map(group =>
+            <div className="practice-skill-group" key={group.label}><div className="practice-skill-heading"><span className="practice-skill-icon" aria-hidden="true">{group.icon}</span><h3>{group.label}</h3><small>{group.range}</small></div>
+              <div className="practice-part-picker" role="group" aria-label={`Chọn Part ${group.label}`}>{partLabels.slice(group.start - 1, group.end).map((name, index) => {
+                const number = group.start + index;
+                const ready = available?.find(item => item.part === number)?.difficulties?.some(row => row.presets?.some(option => option.available)) === true;
+                return <button type="button" key={number} aria-pressed={part === number} disabled={available !== null && !ready} onClick={() => choosePart(number)}>
+                  <span className="practice-tile-number">{String(number).padStart(2, "0")}</span><span className="practice-tile-copy"><strong>Part {number}</strong><small>{name}</small></span>
+                  {part === number && <span className="practice-tile-check" aria-hidden="true">✓</span>}</button>;
+              })}</div></div>)}
+        </section>
+        <section className="practice-config-panel" aria-labelledby="practice-config-title"><span className="practice-kicker">BÀI LUYỆN CỦA BẠN</span>
+          <h2 id="practice-config-title">Part {part} <span>· {partLabels[part - 1]}</span></h2>
+          <div className="practice-performance" aria-label={`Kết quả Part ${part}`}>
+            {statsError ? <div className="practice-performance-empty" role="alert">{statsError} <button type="button" onClick={() => { setStatsError(""); setStatsRetry(value => value + 1); }}>Thử lại</button></div> :
+              stats === null ? <p role="status" className="practice-performance-empty">Đang tải kết quả gần nhất…</p> :
+              selectedStats?.completedSessions > 0 ? <><div><small>Lần gần nhất</small><strong>{selectedStats.latestAccuracy}%</strong><span>chính xác</span></div>
+                <div><small>Tích lũy</small><strong>{selectedStats.totalCorrect}/{selectedStats.totalQuestions}</strong><span>câu đúng</span></div></> :
+              <p className="practice-performance-empty">Chưa có kết quả <span>Hoàn thành một bài để xem tiến bộ của bạn.</span></p>}
+          </div>
+          <div className="practice-config-fields"><label htmlFor="practice-difficulty">Độ khó</label>
+            <select id="practice-difficulty" value={selectedDifficulty} disabled={!counts.length} onChange={event => { setDifficulty(Number(event.target.value)); setPreset("SHORT"); }}>
+              {counts.length ? counts.map(row => <option key={row.difficulty} value={row.difficulty} disabled={!hasReadyPreset(row)}>
+                {difficultyLabels[row.difficulty] || `Mức ${row.difficulty}`} · {row.validUnitCount} {row.unitType === "GROUP" ? "nhóm" : "câu"} sẵn có</option>) : <option value={difficulty}>Chưa có mức độ</option>}
+            </select></div>
+          <fieldset className="practice-part-presets"><legend>Độ dài bài luyện</legend>
+            {availablePresets.length > 0 ? availablePresets.map(option => <label key={option.preset}>
+              <input type="radio" name="practice-preset" value={option.preset} checked={selectedPreset === option.preset} onChange={() => setPreset(option.preset)} />
+              <span className="practice-preset-content"><strong>{presetLabels[option.preset] || option.preset}</strong><span>{option.targetUnitCount} {selectedAvailability.unitType === "GROUP" ? "nhóm" : "câu"}</span></span>
+            </label>) : <p className="practice-no-presets">{available === null ? "Đang tải các bài luyện…" : "Chưa có bài luyện phù hợp với Part này."}</p>}
+          </fieldset>
+          <div className="practice-selection-action"><button className="primary-button" disabled={busy || !canStart} onClick={start}>{busy ? "Đang bắt đầu…" : "Bắt đầu luyện tập"}<span aria-hidden="true">→</span></button></div>
+        </section>
       </div>
-        {statsError && <p className="vocab-error" role="alert">{statsError}</p>}
+      {activeAttempts?.length > 0 && <section className="practice-active-panel"><div><span className="practice-kicker">TIẾP TỤC</span><h2>Bài đang làm</h2></div><div className="practice-active-list">{activeAttempts.map(row =>
+        <article className="practice-part-history" key={row.attemptId}><div className="practice-active-details"><strong>Part {row.part} · {partLabels[row.part - 1]}</strong><span>{row.checkedQuestions}/{row.totalQuestions} câu đã kiểm tra</span></div>
+          <button type="button" onClick={() => { setError(""); setSearchParams({ attempt: String(row.attemptId) }); }}>Tiếp tục →</button></article>)}</div></section>}
+      <details className="practice-progress-details"><summary><span><small>NHÌN LẠI QUÁ TRÌNH HỌC</small><strong>Tiến bộ của bạn</strong><em>So sánh kết quả và xem thống kê từng Part</em></span><DisclosureToggle /></summary><div className="practice-progress-body">
+        {statsError && <div className="practice-progress-error" role="alert">{statsError} <button type="button" onClick={() => { setStatsError(""); setStatsRetry(value => value + 1); }}>Thử lại</button></div>}
         {!stats && !statsError && <p role="status">Đang tải thống kê…</p>}
-        {stats && <div className="practice-stats-grid">{stats.map(row => <article key={row.part}>
-          <div className="practice-stats-title"><strong>Part {row.part}</strong><span>{parts[row.part - 1]}</span></div>
-          <div className="practice-stats-values"><span><b>{row.completedSessions}</b> lượt</span>
-            <span><b>{row.totalQuestions}</b> câu đã làm</span><span><b>{row.totalCorrect}</b> câu đúng</span></div>
-          <div className="practice-stats-rates"><span>Tích lũy <b>{row.overallAccuracy}%</b></span>
-            <span>Lần gần nhất <b>{row.latestAccuracy}%</b></span></div>
-          <small>{row.lastPracticedAt ? `Lần gần nhất: ${new Date(row.lastPracticedAt).toLocaleString("vi-VN")}` : "Chưa có bài hoàn thành"}</small>
-        </article>)}</div>}
-      </section>
+        {stats && !stats.some(row => row.completedSessions > 0) && <div className="practice-progress-empty"><strong>Chưa có kết quả luyện tập</strong><p>Sau khi hoàn thành bài đầu tiên, tiến bộ của bạn sẽ hiện ở đây.</p></div>}
+        {stats?.some(row => row.completedSessions > 0) && <div className="practice-progress-layout"><div className="practice-progress-comparison" role="group" aria-label="So sánh tiến bộ bảy Part">
+          {partLabels.map((name, index) => { const row = stats.find(item => item.part === index + 1); const completed = row?.completedSessions > 0;
+            return <button type="button" key={name} aria-pressed={part === index + 1} onClick={() => choosePart(index + 1)}><span>Part {index + 1} <small>{name}</small></span>
+              <span className="practice-comparison-track" aria-hidden="true"><i style={{ width: completed ? `${Math.max(0, Math.min(100, Number(row.overallAccuracy) || 0))}%` : "0%" }} /></span>
+              <strong>{completed ? `${row.overallAccuracy}%` : "Chưa luyện"}</strong></button>; })}</div>
+          <div className="practice-progress-focus"><span className="practice-kicker">CHI TIẾT PART {part}</span><h3>{partLabels[part - 1]}</h3>
+            {selectedStats?.completedSessions > 0 ? <><div className="practice-progress-metrics"><div><small>Lượt hoàn thành</small><strong>{selectedStats.completedSessions}</strong></div>
+              <div><small>Câu đã làm</small><strong>{selectedStats.totalQuestions}</strong></div><div><small>Câu đúng</small><strong>{selectedStats.totalCorrect}</strong></div>
+              <div><small>Chính xác tích lũy</small><strong>{selectedStats.overallAccuracy}%</strong></div><div><small>Lần gần nhất</small><strong>{selectedStats.latestAccuracy}%</strong></div></div>
+              <p>{selectedStats.lastPracticedAt ? `Luyện gần nhất: ${new Date(selectedStats.lastPracticedAt).toLocaleString("vi-VN")}` : ""}</p></> : <p className="practice-progress-empty-note">Chưa có kết quả hoàn thành cho Part này.</p>}
+          </div></div>}
+      </div></details>
     </div>}
     {!attempt && routeAttemptId && !busy && <button type="button" className="outline-button" onClick={leave}>← Quay lại chọn bài</button>}
     {attempt && !summary && <div className="practice-session" data-part={attempt.part}>

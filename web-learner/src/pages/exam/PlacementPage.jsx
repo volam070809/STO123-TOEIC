@@ -1,16 +1,17 @@
-﻿import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import { useGuestAuthPrompt } from "../../contexts/GuestAuthPromptState";
 import SessionBoundary from "../../components/auth/SessionBoundary";
 import SiteLayout from "../../layouts/SiteLayout";
+import DisclosureToggle from "../../components/layout/DisclosureToggle";
 import { placementApi } from "../../services/examApi";
 import PlacementAnalysisView from "./PlacementAnalysisView";
 import PlacementIcon from "./PlacementIcon";
-import { courseEntryReference, courseStage } from "./coursePresentationData";
 import { verifiedCurrentStage } from "./placementAttemptAnalysis";
 import "../../styles/exam.css";
 import "../../styles/placement.css";
+import "../../styles/learner-journey.css";
 import heroImage from "../../assets/placement/placement-hero.svg";
 import { useContentRevision } from "../../services/contentRevisions";
 
@@ -26,11 +27,12 @@ const partStructure = [
   { part: 6, name: "Hoàn thành đoạn", count: 16, icon: "book" },
   { part: 7, name: "Đọc hiểu", count: 54, icon: "book" },
 ];
+const stageNames = { 1: "Nền tảng", 2: "Phát triển", 3: "Nâng cao" };
 
 function PlacementHero({ primary, secondary }) {
   return <section className="placement-overview-hero" aria-labelledby="placement-hero-title">
     <div className="placement-overview-copy">
-      <span className="placement-hero-badge"><PlacementIcon name="sparkle" size={17} /> Đánh giá năng lực · Phân lớp KNN</span>
+      <span className="placement-hero-badge"><PlacementIcon name="sparkle" size={17} /> BÀI KIỂM TRA ĐẦU VÀO</span>
       <h1 id="placement-hero-title">Hiểu năng lực TOEIC.<br /><span>Học đúng lộ trình.</span></h1>
       <p>Hoàn thành bài kiểm tra 7 Part để xem kết quả Nghe, Đọc và giai đoạn học phù hợp với bạn.</p>
       <div className="placement-hero-actions">{primary}{secondary}</div>
@@ -45,51 +47,6 @@ function PlacementHero({ primary, secondary }) {
   </section>;
 }
 
-function PlacementVisualSections() {
-  return <>
-    <section className="placement-journey" aria-labelledby="placement-journey-title">
-      <div className="placement-section-heading"><span>Quy trình đơn giản</span><h2 id="placement-journey-title">Từ bài kiểm tra đến lộ trình học</h2></div>
-      <div className="placement-journey-grid">
-        {[
-          { icon: "file", number: "01", title: "Làm bài kiểm tra", text: "Trả lời câu hỏi ở 7 Part trong 120 phút. Tiến độ được lưu khi bạn tạm rời bài." },
-          { icon: "chart", number: "02", title: "Xem phân tích KNN", text: "Xem tỷ lệ đúng từng Part và giai đoạn được phân lớp từ kết quả của bạn." },
-          { icon: "route", number: "03", title: "Chọn lộ trình học", text: "Đặt mục tiêu, luyện Part cần cải thiện và xem các khóa học đang mở." },
-        ].map(step => <article key={step.number} className="placement-journey-card">
-          <div className="placement-step-top"><span className="placement-icon-tile"><PlacementIcon name={step.icon} size={27} /></span><b>{step.number}</b></div>
-          <h3>{step.title}</h3><p>{step.text}</p>
-        </article>)}
-      </div>
-    </section>
-    <section className="placement-prep" id="placement-prep" aria-labelledby="placement-prep-title">
-      <div className="placement-prep-guide"><div className="placement-section-heading"><span>Trước khi bắt đầu</span>
-        <h2 id="placement-prep-title">Chuẩn bị cho bài kiểm tra</h2><p>Một vài bước giúp bạn làm bài tập trung hơn.</p></div>
-        <div className="placement-guide-list">
-          <div><span className="placement-icon-tile"><PlacementIcon name="headphones" /></span><div><strong>Kiểm tra tai nghe</strong><p>Nghe thử âm thanh và chọn nơi yên tĩnh trước khi bắt đầu Listening.</p></div></div>
-          <div><span className="placement-icon-tile"><PlacementIcon name="clock" /></span><div><strong>Sắp xếp 120 phút</strong><p>Đồng hồ chạy trong lúc làm bài. Bạn có thể tạm dừng và tiếp tục theo trạng thái hệ thống.</p></div></div>
-          <div><span className="placement-icon-tile"><PlacementIcon name="flag" /></span><div><strong>Đánh dấu câu cần xem lại</strong><p>Dùng bảng điều hướng câu hỏi để quay lại trước khi nộp.</p></div></div>
-        </div>
-      </div>
-      <div className="placement-structure"><div className="placement-structure-head"><span className="placement-icon-tile"><PlacementIcon name="layers" size={27} /></span>
-        <div><span>Cấu trúc TOEIC</span><h3>7 Part · 200 câu</h3></div></div>
-        <div className="placement-structure-group is-listening"><div className="placement-structure-label"><PlacementIcon name="headphones" /><strong>Listening</strong><span>100 câu · Part 1–4</span></div>
-          {partStructure.slice(0, 4).map(PartStructureRow)}</div>
-        <div className="placement-structure-group is-reading"><div className="placement-structure-label"><PlacementIcon name="book" /><strong>Reading</strong><span>100 câu · Part 5–7</span></div>
-          {partStructure.slice(4).map(PartStructureRow)}</div>
-      </div>
-    </section>
-    <section className="placement-parts-overview" aria-labelledby="placement-parts-title"><div className="placement-section-heading"><span>Phạm vi đánh giá</span>
-      <h2 id="placement-parts-title">Bảy Part trong một bài kiểm tra</h2></div>
-      <div className="placement-parts-overview-grid">{partStructure.map(item => <article key={item.part} className={item.part < 5 ? "is-listening" : "is-reading"}>
-        <span className="placement-icon-tile"><PlacementIcon name={item.icon} size={19} /></span><div><strong>Part {item.part}</strong>
-          <span>{item.name}</span></div><b>{item.count} câu</b></article>)}</div>
-    </section>
-  </>;
-}
-
-function PartStructureRow(item) {
-  return <div className="placement-structure-row" key={item.part}><span>Part {item.part}</span><div aria-hidden="true"><i style={{ width: `${item.count / 54 * 100}%` }} /></div><b>{item.count}</b></div>;
-}
-
 export default function PlacementPage() {
   const { isAuthenticated } = useAuth();
   return <SessionBoundary>{isAuthenticated ? <LearnerPlacementPage /> : <GuestPlacementOverview />}</SessionBoundary>;
@@ -101,14 +58,10 @@ function GuestPlacementOverview() {
     <PlacementHero primary={<button className="primary-button" type="button" aria-haspopup="dialog"
       onClick={() => requireAuthentication("/placement")}>Bắt đầu kiểm tra <PlacementIcon name="arrow" size={18} /></button>}
       secondary={<a className="outline-button" href="#placement-prep">Xem cách chuẩn bị</a>} />
-    <PlacementVisualSections />
-    <section className="placement-public-roadmap" aria-labelledby="public-roadmap-title"><div className="placement-section-heading"><span>Sau bài kiểm tra</span>
-      <h2 id="public-roadmap-title">Lộ trình học theo giai đoạn</h2><p>Đây là giới thiệu chung; giai đoạn cá nhân chỉ xuất hiện sau khi phân lớp KNN.</p></div>
-      <div className="placement-public-roadmap-grid">{[1, 2, 3].map(stage => <div key={stage}>
-        <span className="placement-icon-tile"><PlacementIcon name="route" /></span><small>Giai đoạn {stage}</small>
-        <strong>{courseStage[stage].name}</strong><span>{courseEntryReference(stage)}</span>
-      </div>)}</div><Link className="outline-button" to="/courses">Khám phá khóa học <PlacementIcon name="arrow" size={17} /></Link>
-    </section>
+    <details className="learner-disclosure placement-intro-details" id="placement-prep"><summary><span><small>TRƯỚC KHI BẮT ĐẦU</small><strong>Cấu trúc và chuẩn bị</strong><em>7 Part · 200 câu · 120 phút</em></span><DisclosureToggle /></summary>
+      <div className="learner-disclosure-body"><div className="placement-intro-columns"><div><h3>Chuẩn bị</h3><p>Chọn nơi yên tĩnh, kiểm tra tai nghe và dành đủ 120 phút. Bạn có thể tạm dừng và tiếp tục bài đang làm.</p></div>
+        <div><h3>Cấu trúc bài thi</h3><p>Listening: Part 1–4 · 100 câu. Reading: Part 5–7 · 100 câu.</p></div></div>
+        <div className="placement-intro-parts">{partStructure.map(item => <span key={item.part}><b>Part {item.part}</b>{item.name}<small>{item.count} câu</small></span>)}</div></div></details>
   </div></SiteLayout>;
 }
 
@@ -116,8 +69,6 @@ function LearnerPlacementPage() {
   const { token } = useAuth();
   const contentRevision = useContentRevision("EXAMS", "COURSES", "ACCESS");
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const analysisTab = searchParams.get("tab") === "analysis";
   const [state, setState] = useState(null);
   const [history, setHistory] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -150,7 +101,7 @@ function LearnerPlacementPage() {
   }, [token, retryLoad, contentRevision]);
 
   useEffect(() => {
-    if (!analysisTab || !history?.completedCount) return;
+    if (!history?.completedCount) return;
     let live = true;
     Promise.resolve().then(async () => {
       if (!live) return;
@@ -170,9 +121,7 @@ function LearnerPlacementPage() {
       finally { if (live) setAnalysisLoading(false); }
     });
     return () => { live = false; };
-  }, [analysisTab, history?.completedCount, token, analysisRetry, contentRevision]);
-
-  function showAnalysis() { setSearchParams({ tab: "analysis" }); }
+  }, [history?.completedCount, token, analysisRetry, contentRevision]);
 
   async function reloadCourses() {
     if (analysisLoading) return;
@@ -217,38 +166,15 @@ function LearnerPlacementPage() {
 
   const hasActive = state?.status === "DANG_LAM" || state?.status === "BO_DO";
   const verifiedStage = latestStatus === "ready" ? verifiedCurrentStage(latestMetrics) : null;
-  const heroTarget = hasActive ? "#placement-active" : history?.completedCount ? "#placement-latest" : "#placement-start";
   return <SiteLayout><div className="site-container exam-home placement-page">
-    <nav className="placement-view-tabs" aria-label="Các thẻ kiểm tra đầu vào">
-      <button type="button" aria-current={!analysisTab ? "page" : undefined} onClick={() => setSearchParams({})}>
-        <PlacementIcon name="file" size={18} /> Tổng quan</button>
-      <button type="button" aria-current={analysisTab ? "page" : undefined} disabled={history && !history.completedCount}
-        onClick={showAnalysis}><PlacementIcon name="chart" size={18} /> Phân tích kết quả</button>
-    </nav>
-    {analysisTab ? <>
-      <div className="placement-analysis-tab-header"><div><span className="placement-eyebrow"><PlacementIcon name="chart" size={17} /> Phân tích năng lực</span>
-        <h1>Kết quả kiểm tra đầu vào</h1><p>Chỉ hiển thị kết quả hoàn thành gần nhất của bạn.</p></div></div>
-      {error && <p className="exam-error" role="alert">{error}</p>}
-      {!state && !error && <p role="status">Đang tải kết quả gần nhất…</p>}
-      {!state && error && <button className="outline-button" type="button" onClick={() => { setError(""); setRetryLoad(value => value + 1); }}>Thử tải lại</button>}
-      {state && history && !history.completedCount && <section className="exam-card placement-analysis-empty"><span className="placement-icon-tile"><PlacementIcon name="chart" /></span>
-        <div><h2>Chưa có kết quả để phân tích</h2><p>Hoàn thành bài kiểm tra đầu vào để xem tỷ lệ đúng từng Part và giai đoạn KNN.</p></div>
-        <button className="primary-button" type="button" disabled={pending} onClick={start}>Bắt đầu kiểm tra</button></section>}
-      {analysisLoading && !result && <p role="status">Đang tải phân tích KNN…</p>}
-      {!analysisLoading && !result && error && state && <button className="outline-button" type="button"
-        onClick={() => { setError(""); setAnalysisRetry(value => value + 1); }}>Thử tải lại phân tích</button>}
-      {result && <PlacementAnalysisView analysis={result} courses={recommendations} target={target}
-        onTargetChange={value => { setTarget(value); setTargetFeedback(null); setRecommendations(old => old.map(course =>
-          ({ ...course, recommended: false, recommendationOrder: null }))); }}
-        onTargetSubmit={confirmTarget} pending={pending} showAttemptHeader targetFeedback={targetFeedback}
-        coursesState={coursesState === "idle" && analysisLoading ? "loading" : coursesState}
-        onCoursesRetry={reloadCourses} onRetake={hasActive ? undefined : start} retakePending={pending} />}
-    </> : <>
-    <PlacementHero primary={<a className="primary-button" href={heroTarget}>{hasActive ? "Xem bài đang làm" : history?.completedCount ? "Xem kết quả gần nhất" : "Bắt đầu đánh giá"} <PlacementIcon name="arrow" size={18} /></a>}
-      secondary={<a className="outline-button" href="#placement-prep">Xem cách chuẩn bị</a>} />
+    {history?.completedCount ? <header className="placement-learner-heading"><span className="placement-eyebrow">KẾT QUẢ GẦN NHẤT</span>
+      <h1>Hành trình TOEIC của bạn bắt đầu từ đây</h1><p>Hiểu điểm mạnh của mình và chọn bước học tiếp theo.</p></header> :
+      <PlacementHero primary={hasActive ? <a className="primary-button" href="#placement-active">Tiếp tục bài kiểm tra →</a> :
+        <button className="primary-button" type="button" disabled={pending} onClick={start}>{pending ? "Đang bắt đầu…" : "Bắt đầu kiểm tra →"}</button>}
+        secondary={<a className="outline-button" href="#placement-prep">Xem cách chuẩn bị</a>} />}
     {error && <p className="exam-error" role="alert">{error}</p>}
     {!state && error && <button className="outline-button" type="button" onClick={() => { setError(""); setRetryLoad(value => value + 1); }}>Thử tải lại</button>}
-    {!state && !error && <p>Đang tải lộ trình học…</p>}
+    {!state && !error && <p role="status">Đang tải kết quả học tập…</p>}
     {hasActive && <section className="exam-card placement-action-card" id="placement-active"><span className="placement-icon-tile"><PlacementIcon name="progress" size={27} /></span><div><span className="placement-eyebrow">Bài đang làm</span><h2>Tiếp tục kiểm tra đầu vào</h2>
       <p>7 Part · {state.totalQuestions} câu · Đã trả lời {state.answered} / {state.totalQuestions}</p>
       <div className="placement-bar" role="progressbar" aria-label="Câu đã trả lời" aria-valuemin="0"
@@ -260,22 +186,23 @@ function LearnerPlacementPage() {
       <p>Kết quả 7 Part giúp đánh giá năng lực và chọn khóa học phù hợp.</p></div>
       <button className="primary-button" type="button" disabled={pending} onClick={start}>
         {pending ? "Đang bắt đầu…" : "Bắt đầu kiểm tra"}</button></section>}
-    {history?.completedCount > 0 && <section className="exam-card placement-latest-card" id="placement-latest"><span className="placement-icon-tile"><PlacementIcon name="award" size={27} /></span><div><span className="placement-eyebrow">Kết quả gần nhất</span>
-      <h2>{verifiedStage ? `Giai đoạn ${verifiedStage} · KNN đề xuất` : latestStatus === "loading" ? "Đang xác minh giai đoạn KNN…" :
+    {history?.completedCount > 0 && !result && <section className="exam-card placement-latest-card placement-stage-feature" id="placement-latest"><span className="placement-icon-tile"><PlacementIcon name="award" size={27} /></span><div><span className="placement-eyebrow">GIAI ĐOẠN HỌC CỦA BẠN</span>
+      <h2>{verifiedStage ? stageNames[verifiedStage] : latestStatus === "loading" ? "Đang xác minh giai đoạn…" :
         latestStatus === "error" ? "Chưa thể tải giai đoạn KNN" : "Chưa có kết quả phân lớp KNN"}</h2>
-      <p>Hoàn thành {date(history.latestCompletedAt)}</p>
-      {latestMetrics?.result?.overall?.total > 0 && <div className="placement-latest-metric"><strong>{latestMetrics.result.overall.correct}/{latestMetrics.result.overall.total} câu đúng</strong>
-        <div className="placement-bar" role="progressbar" aria-label="Tỷ lệ câu đúng lần gần nhất"
-          aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(100 * latestMetrics.result.overall.correct / latestMetrics.result.overall.total)}>
-          <span style={{ width: `${100 * latestMetrics.result.overall.correct / latestMetrics.result.overall.total}%` }} /></div></div>}</div>
-      <div className="placement-latest-actions">
-        <button className="outline-button" type="button" disabled={analysisLoading} onClick={showAnalysis}>
-          {analysisLoading ? "Đang tải…" : "Xem phân tích"}</button>
-        {!hasActive && <button className="primary-button" type="button" disabled={pending} onClick={start}>
-          {pending ? "Đang bắt đầu…" : "Làm lại kiểm tra"}</button>}
-        <Link className="outline-button" to="/courses">Xem lộ trình</Link>
-      </div></section>}
-    <PlacementVisualSections />
-    </>}
+      <p>{verifiedStage ? `Giai đoạn ${verifiedStage} · ` : ""}Hoàn thành {date(history.latestCompletedAt)}</p>
+      {latestMetrics?.result && <div className="placement-stage-scores"><span>TOEIC ước tính <strong>{latestMetrics.result.totalScore ?? "—"}<small> / 990</small></strong></span>
+        <span>Listening <strong>{latestMetrics.result.listening?.correct ?? "—"}/{latestMetrics.result.listening?.total ?? "—"}</strong></span>
+        <span>Reading <strong>{latestMetrics.result.reading?.correct ?? "—"}/{latestMetrics.result.reading?.total ?? "—"}</strong></span></div>}</div>
+      <div className="placement-latest-actions"><Link className="primary-button" to="/smart-learning">Xem gợi ý học tiếp →</Link></div></section>}
+    {history?.completedCount > 0 && analysisLoading && !result && <p role="status">Đang tải phân tích bài kiểm tra…</p>}
+    {history?.completedCount > 0 && !analysisLoading && !result && error && <button className="outline-button" type="button" onClick={() => { setError(""); setAnalysisRetry(value => value + 1); }}>Thử tải lại phân tích</button>}
+    {result && <PlacementAnalysisView analysis={result} courses={recommendations} target={target}
+          onTargetChange={value => { setTarget(value); setTargetFeedback(null); setRecommendations(old => old.map(course => ({ ...course, recommended: false, recommendationOrder: null }))); }}
+          onTargetSubmit={confirmTarget} pending={pending} showAttemptHeader targetFeedback={targetFeedback}
+          coursesState={coursesState === "idle" && analysisLoading ? "loading" : coursesState}
+          onCoursesRetry={reloadCourses} onRetake={hasActive ? undefined : start} retakePending={pending} />}
+    {!history?.completedCount && <details className="learner-disclosure placement-intro-details" id="placement-prep"><summary><span><small>TRƯỚC KHI BẮT ĐẦU</small><strong>Cấu trúc và chuẩn bị</strong><em>7 Part · 200 câu · 120 phút</em></span><DisclosureToggle /></summary>
+      <div className="learner-disclosure-body"><p>Chuẩn bị tai nghe, chỗ yên tĩnh và đủ thời gian. Bài đang làm có thể tiếp tục sau khi rời trang.</p>
+        <div className="placement-intro-parts">{partStructure.map(item => <span key={item.part}><b>Part {item.part}</b>{item.name}<small>{item.count} câu</small></span>)}</div></div></details>}
   </div></SiteLayout>;
 }

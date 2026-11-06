@@ -40,6 +40,15 @@
 .smart-comparison b { color: #174fb3; }
 .smart-part details { padding-top: 11px; border-top: 1px solid #e6edf7; color: #526582; font-size: 12px; }
 .smart-part summary { width: fit-content; color: #245eb9; font-weight: 700; cursor: pointer; }
+.smart-part details > summary { display: inline-flex; align-items: center; gap: 7px; list-style: none; }
+.smart-part details > summary::-webkit-details-marker { display: none; }
+.smart-part details > summary svg { width: 17px; height: 17px; transition: transform .18s ease; }
+.smart-part details > summary .smart-evidence-open { display: none; }
+.smart-part details[open] > summary .smart-evidence-closed { display: none; }
+.smart-part details[open] > summary .smart-evidence-open { display: inline; }
+.smart-part details[open] > summary svg { transform: rotate(180deg); }
+.smart-part details > summary:focus-visible { outline: 2px solid #3179b7; outline-offset: 3px; border-radius: 3px; }
+@media (prefers-reduced-motion: reduce) { .smart-part details > summary svg { transition: none; } }
 .smart-part ul { display: grid; gap: 5px; margin: 11px 0; padding: 0; list-style: none; }
 .smart-part li { display: flex; justify-content: space-between; gap: 12px; }
 .smart-part > a { display: inline-flex; margin-top: 15px; color: #1958c1; font-size: 13px; font-weight: 750; }

@@ -199,14 +199,14 @@ export function ArenaMatchPage() {
   return <SiteLayout focused={inMatch}><div className="arena-page site-container">
     <div className="arena-match-nav">{!inMatch ? <Link to="/arena">← Đấu trường</Link> :
       <strong>STO123 · TOEIC ARENA</strong>}
-      <span>{connectionStatus === "connected" ? "● Đang đồng bộ" : "○ Đang kết nối lại"}</span>
+      {state?.status !== "COMPLETED" && <span>{connectionStatus === "connected" ? "● Đang đồng bộ" : "○ Đang kết nối lại"}</span>}
       {inMatch && <button className="arena-quiet" type="button" onClick={() => setConfirmSurrender(true)}>Đầu hàng</button>}</div>
     {error && <div className="arena-error" role="alert">{error} <button type="button" onClick={() => refresh().catch(e => setError(e.message))}>Thử lại</button></div>}
     {notice && <p role="status" className="arena-info">{notice}</p>}
     {!state && !error && <p role="status" className="arena-panel">Đang tải trận đấu…</p>}
     {state && <>{(state.status === "WAITING" || state.status === "READY" || roomClosed) ?
       <header className="arena-room-heading"><div><span className="arena-eyebrow">ĐẤU TRƯỜNG · PART {state.part}</span><h1>{names[state.part - 1]}</h1></div>
-        <span className="arena-room-step">{roomClosed ? "PHÒNG ĐÃ ĐÓNG" : state.opponent ? "BƯỚC 03 · SẴN SÀNG" : "BƯỚC 02 · GHÉP TRẬN"}</span></header> :
+        <span className="arena-room-step">{roomClosed ? "PHÒNG ĐÃ ĐÓNG" : state.opponent ? "BƯỚC 03 · SẴN SÀNG" : "BƯỚC 02 · GHÉP TRẬN"}</span></header> : state.status === "COMPLETED" ? null :
       <header className="arena-match-header"><div><span className="arena-eyebrow">PART {state.part} · {names[state.part - 1]}</span><h1>{statusLabels[state.status] || state.status}</h1>
       <p>{state.status === "ACTIVE" ? `Câu ${state.questionIndex + 1} / ${state.totalQuestions}` : state.status === "REVEAL" ? "Cùng xem đáp án và điểm số" : "Hai người làm cùng bộ câu hỏi"}</p></div>
       <div className="arena-score" aria-label="Tỉ số hiện tại"><div className="arena-score-player"><ArenaPlayerAvatar player={state.you} token={token} size="small" />
@@ -254,13 +254,17 @@ export function ArenaMatchPage() {
             state.result?.leading === "YOU" ? "Bạn đang dẫn trước." : "Đối thủ đang dẫn trước."}</p>
           {question.explanation && <p>{question.explanation}</p>}</div>}
       </section>}
-      {state.status === "COMPLETED" && <section className="arena-panel"><h2>Kết quả trận đấu</h2><p className="arena-final">{state.you.score} – {state.opponent?.score ?? 0}</p>
-        <p>{state.you.score === state.opponent?.score ? "Hai bạn hòa nhau." : state.you.score > (state.opponent?.score ?? 0) ? "Bạn đã thắng!" : "Bạn đã hoàn thành trận đấu."}</p>
-        <div className="arena-actions"><button className="arena-primary" type="button" disabled={!!busy} onClick={playAgain}>{busy === "again" ? "Đang tìm trận…" : "Đấu lại Part này"}</button>
-          <Link className="arena-secondary" to="/arena">Chọn Part khác</Link><Link className="arena-quiet" to="/arena">Về đấu trường</Link></div>
-        <details className="arena-review"><summary>Xem lại từng câu</summary>{state.details?.map(item => <article key={item.number}><strong>Câu {item.number}: {item.youCorrect ? "Đúng" : "Sai"}</strong>
+      {state.status === "COMPLETED" && <section className="arena-panel arena-result-stage" data-outcome={state.you.score === state.opponent?.score ? "draw" : state.you.score > (state.opponent?.score ?? 0) ? "win" : "loss"}>
+        <span className="arena-eyebrow">PART {state.part} · TRẬN ĐẤU ĐÃ KẾT THÚC</span>
+        <h2>{state.you.score === state.opponent?.score ? "Một trận hòa đầy nỗ lực" : state.you.score > (state.opponent?.score ?? 0) ? "Chiến thắng thuộc về bạn!" : "Hẹn bạn ở trận tiếp theo"}</h2>
+        <p>{state.you.score === state.opponent?.score ? "Hai bạn đã có kết quả ngang nhau." : state.you.score > (state.opponent?.score ?? 0) ? "Bạn đã vượt qua đối thủ trong trận này." : "Bạn đã hoàn thành trận đấu. Thử sức thêm một lần nữa nhé."}</p>
+        <div className="arena-result-scoreboard"><div><span>BẠN</span><strong>{state.you.name || "Bạn"}</strong><b>{state.you.score}</b></div>
+          <span aria-hidden="true">—</span><div><span>ĐỐI THỦ</span><strong>{state.opponent?.name || "Đối thủ"}</strong><b>{state.opponent?.score ?? 0}</b></div></div>
+        <div className="arena-actions"><button className="arena-primary" type="button" disabled={!!busy} onClick={playAgain}>{busy === "again" ? "Đang tìm trận…" : "Chơi trận mới →"}</button>
+          <Link className="arena-secondary" to="/arena">Về đấu trường</Link></div>
+        <details className="arena-review"><summary>Chi tiết trận đấu</summary>{state.details?.length ? state.details.map(item => <article key={item.number}><strong>Câu {item.number}: {item.youCorrect ? "Đúng" : "Sai"}</strong>
           <p>{item.content}</p><small>Bạn: {item.youSelected || "Bỏ qua"} · Đối thủ: {item.opponentSelected || "Bỏ qua"} · Đúng: {item.correct}</small>
-          {item.explanation && <p>{item.explanation}</p>}</article>)}</details></section>}
+          {item.explanation && <p>{item.explanation}</p>}</article>) : <p>Chưa có chi tiết câu hỏi cho trận này.</p>}</details></section>}
       {(state.status === "SURRENDERED" || state.status === "ABANDONED") && <section className="arena-panel arena-ended">
         <span className="arena-eyebrow">KẾT QUẢ TRẬN ĐẤU</span>
         <h2>{roomClosed ? "Phòng chờ đã đóng" : state.status === "SURRENDERED" ? state.winnerId === state.you.id ? "Bạn thắng do đối thủ đầu hàng" : "Bạn đã đầu hàng" :

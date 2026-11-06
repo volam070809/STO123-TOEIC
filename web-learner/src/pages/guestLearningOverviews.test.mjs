@@ -37,14 +37,13 @@ test("guest can render Practice categories and the Part selector without protect
   assert.doesNotMatch(parts, /Đáp án đúng|Giải thích|transcript|attemptId/);
 });
 
-test("guest can render general Placement roadmap without personal KNN data", () => {
+test("guest can review concise Placement structure without personal KNN data", () => {
   const html = renderGuest(PlacementPage);
-  assert.match(html, /Lộ trình TOEIC ba giai đoạn/);
-  assert.match(html, /Foundation/);
-  assert.match(html, /Development/);
-  assert.match(html, /Advanced/);
+  assert.match(html, /placement-intro-details/);
+  assert.match(html, /7 Part/);
+  assert.match(html, /Part 1/);
   assert.match(html, /aria-haspopup="dialog"/);
-  assert.doesNotMatch(html, /Kết quả gần nhất|Lịch sử kiểm tra đầu vào|Tiếp tục kiểm tra/);
+  assert.doesNotMatch(html, /placement-latest-card|placement-stage-feature/);
 });
 
 test("guest can render Mock Test overview and no personal history action", () => {
