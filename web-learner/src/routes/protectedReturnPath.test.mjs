@@ -7,7 +7,13 @@ test("learner action links survive login without accepting unrelated paths", () 
   assert.equal(protectedReturnPath("/mock-test"), "/mock-test");
   assert.equal(protectedReturnPath("/practice"), "/practice");
   assert.equal(protectedReturnPath("/practice/parts"), "/practice/parts");
+  assert.equal(protectedReturnPath("/practice/parts?part=7"), "/practice/parts?part=7");
+  assert.equal(protectedReturnPath("/practice/parts?part=0"), null);
+  assert.equal(protectedReturnPath("/practice/parts?part=7&part=1"), null);
   assert.equal(protectedReturnPath("/practice/vocabulary"), "/practice/vocabulary");
+  assert.equal(protectedReturnPath("/smart-learning"), "/smart-learning");
+  assert.equal(protectedReturnPath("/arena"), "/arena");
+  assert.equal(protectedReturnPath("/arena/matches/5"), null);
   assert.equal(protectedReturnPath("/practice/parts?attempt=12"), null);
   assert.equal(protectedReturnPath("/practice?next=https://attacker.example"), null);
   assert.equal(protectedReturnPath("//attacker.example/practice"), null);

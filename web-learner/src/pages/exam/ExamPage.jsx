@@ -220,8 +220,8 @@ export default function ExamPage() {
           <button className="primary-button" disabled={pending} onClick={placement ? () => setSubmitConfirm(true) : submit}>Nộp bài</button></div></div>
       <p className="exam-card-note" role="status">Đồng hồ chạy khi bạn ở trong bài thi. Câu trả lời được tự động lưu.</p>
       <div className="exam-navigation">
-        {backDestination !== rootDestination && <button className="outline-button" type="button" disabled={pending}
-          onClick={() => setExitTarget({ destination: backDestination, signOut: false })}>← Quay lại</button>}
+        {backDestination !== rootDestination && <button className="site-back-path" type="button" disabled={pending}
+          onClick={() => setExitTarget({ destination: backDestination, signOut: false })}>‹ Danh sách bài thi</button>}
         <button className="outline-button" type="button" disabled={pending}
           onClick={() => setExitTarget({ destination: rootDestination, signOut: false })}>Thoát bài</button>
       </div>

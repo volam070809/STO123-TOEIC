@@ -11,7 +11,7 @@ const { default: HomePage, HomeFeatureGrid } = await vite.ssrLoadModule("/src/pa
 const { AuthContext } = await vite.ssrLoadModule("/src/contexts/AuthState.js");
 const { GuestAuthPromptContext } = await vite.ssrLoadModule("/src/contexts/GuestAuthPromptState.js");
 const expectedFeatures = [
-  ["Kiểm tra đầu vào", "/placement"], ["Thi thử TOEIC", "/mock-test"],
+  ["Thi đầu vào", "/placement"], ["Thi thử TOEIC", "/mock-test"],
   ["Luyện tập", "/practice"], ["Học từ vựng", "/vocabulary"],
   ["Khóa học", "/courses"], ["Cấu trúc đề thi TOEIC", "/toeic/structure"],
 ];
@@ -34,6 +34,11 @@ test("guest and learner use the correct role-specific homepage sections", () => 
   const guest = renderHome(null);
   const learner = renderHome({ hoTen: "Nguyễn An" });
   assert.match(guest, /Học TOEIC cùng STO123/);
+  assert.match(guest, /home-photo-note/);
+  assert.match(guest, /học thử một số từ vựng/);
+  assert.match(guest, /href="\/placement"[^>]*>Thi đầu vào<\/a>/);
+  assert.match(guest, /href="\/smart-learning"[^>]*>Gợi ý ôn luyện<\/a>/);
+  assert.match(guest, /href="\/arena"[^>]*>Đấu trường<\/a>/);
   assert.match(guest, /Xây dựng hành trình học phù hợp/);
   assert.doesNotMatch(guest, /Chào mừng,|Giai đoạn \d+|lần đã hoàn thành|đề đã hoàn thành/);
   assert.match(learner, /Chào mừng, Nguyễn An/);

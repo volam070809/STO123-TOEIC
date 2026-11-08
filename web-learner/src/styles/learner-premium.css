@@ -51,7 +51,11 @@
 .site-shell .site-account-identity { max-width: 155px; }
 .site-shell .site-footer { min-height: 0; background: #0d1934; color: #e0e8f9; }
 .site-shell .site-footer-inner { width: min(100% - 80px, 1280px); padding: 56px 0 26px; }
-.site-shell .site-footer-columns { grid-template-columns: minmax(230px, 1.5fr) repeat(3, minmax(140px, 1fr)); gap: 32px; }
+.site-shell .site-footer-columns { grid-template-columns: minmax(210px, 1.45fr) repeat(4, minmax(120px, 1fr)); gap: 28px; }
+.site-shell .site-footer-contact .contact-widget-embedded { width: 100%; min-width: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.site-shell .site-footer-contact .contact-widget-embedded a { color: #aab9d4; padding: 7px 0; }
+.site-shell .site-footer-contact .contact-widget-embedded a:hover { color: #fff; background: transparent; }
+.site-shell .site-footer-contact .contact-widget-embedded p { margin: 0; color: #aab9d4; }
 .site-shell .site-footer-columns > div { gap: 9px; color: #aab9d4; font-size: 14px; }
 .site-shell .site-footer-columns strong { margin-bottom: 8px; font-weight: 700; }
 .site-shell .site-footer-logo { height: auto; background: transparent; }
@@ -62,6 +66,15 @@
 .site-shell .site-footer-brand small { max-width: 28ch; line-height: 1.6; }
 .site-shell .site-footer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .site-shell .site-footer-bottom span { color: #7f94ba; font-size: 12px; }
+.site-shell .site-back-trail { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 10px 0 18px; color: #71819a; font-size: 13px; }
+.site-shell .site-back-path { display: inline-flex; align-items: center; width: max-content; max-width: 100%; min-height: 34px; padding: 4px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: #2765b9; font: inherit; font-size: 13px; font-weight: 750; text-decoration: none; cursor: pointer; }
+.site-shell .site-back-path:hover { color: #134888; text-decoration: underline; }
+.site-shell .site-back-path:focus-visible,.site-shell .page-heading span a:focus-visible { outline: 2px solid #397bea; outline-offset: 3px; border-radius: 4px; }
+.site-shell .site-back-path:disabled { opacity: .5; cursor: default; }
+.site-shell .page-heading span a { color: #2765b9; text-decoration: none; }
+.site-shell .page-heading span a:hover { text-decoration: underline; }
+.site-shell .vocab-studio-back,.site-shell .vocabulary-back,.site-shell .arena-match-nav>a { display: inline-flex; align-items: center; gap: 5px; width: max-content; min-height: 34px; padding: 3px 0; border: 0; background: transparent; box-shadow: none; color: #2765b9; font-size: 13px; font-weight: 750; text-decoration: none; }
+.site-shell .vocab-studio-back:hover,.site-shell .vocabulary-back:hover,.site-shell .arena-match-nav>a:hover { color: #134888; text-decoration: underline; background: transparent; }
 
 /* Shared typography, controls, surfaces */
 .site-shell .page-heading { position: relative; margin: 0 0 30px; padding: 34px 0 0; }
@@ -367,6 +380,19 @@
 .site-shell .course-player-context { border-color: #dce5f4; border-radius: 18px; background: #fff; box-shadow: 0 14px 34px rgb(22 53 116 / 7%); }
 .site-shell .course-player-context-current { border-left-color: #246be9; background: #eaf2ff; }
 .site-shell .course-player-context nav a:hover { border-color: #9abaf1; background: #eef5ff; }
+.site-shell .course-step-breadcrumb { align-items: center; gap: 7px; margin-bottom: 18px; color: #6e809b; font-size: 13px; }
+.site-shell .course-step-breadcrumb a { color: #3166ae; font-weight: 700; text-decoration: none; }
+.site-shell .course-step-breadcrumb a:hover { color: #134888; text-decoration: underline; }
+.site-shell .course-step-breadcrumb [aria-current="page"] { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #455b77; }
+.site-shell .course-player-subtitle { margin: 9px 0 0; color: #647995; font-size: 14px; }
+.site-shell .course-player-navigation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
+.site-shell .course-player-navigation .course-player-nav-item { display: flex; align-items: center; gap: 13px; width: 100%; max-width: none; min-width: 0; min-height: 76px; padding: 14px 17px; border: 1px solid #dce5f4; border-radius: 16px; background: #fff; color: #17385f; box-shadow: 0 8px 22px rgb(22 53 116 / 5%); text-decoration: none; transition: border-color .18s, background .18s, transform .18s; }
+.site-shell .course-player-navigation .course-player-nav-item:hover { transform: translateY(-2px); border-color: #9cbef1; background: #f8fbff; }
+.site-shell .course-player-nav-item > span:not(.course-player-nav-icon) { display: grid; min-width: 0; gap: 3px; }
+.site-shell .course-player-nav-item small { color: #677d99; font-size: 11px; font-weight: 700; }
+.site-shell .course-player-nav-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.site-shell .course-player-nav-icon { display: grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #eaf2ff; color: #1a5ac6; font-size: 25px; line-height: 1; }
+.site-shell .course-player-nav-item.is-next { justify-content: flex-end; text-align: right; }
 .site-shell .course-player-content > :is(section, article), .site-shell .course-exercise-passage, .site-shell .course-question-panel { border-radius: 20px; }
 .site-shell .course-exercise-option { border-radius: 12px; transition: border-color .18s, background .18s, transform .18s; }
 .site-shell .course-exercise-option:hover { transform: translateX(2px); border-color: #8db5f3; }
@@ -507,6 +533,8 @@
   .site-shell .home-feature-placement .home-learner-card-body { padding: 22px 24px 26px; }
   .site-shell .home-progress-card { padding: 23px; }
   .site-shell .course-page-heading { padding: 24px; }
+  .site-shell .course-player-navigation { grid-template-columns: 1fr; }
+  .site-shell .course-step-breadcrumb [aria-current="page"] { max-width: 32vw; }
   .site-shell .course-grid { grid-template-columns: 1fr; }
   .site-shell .course-grid .course-card-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .site-shell .course-history-toggle { min-height: 96px; padding: 17px; }

@@ -124,7 +124,7 @@ export default function ExamResultPage() {
         </>}
       </section>}
       <div className="exam-navigation">
-        <Link className="outline-button" to={navigation.back}>← Quay lại</Link>
+        <Link className="site-back-path" to={navigation.back}>‹ {navigation.mode === "PLACEMENT" ? "Thi đầu vào" : "Thi thử TOEIC"}</Link>
         {result.source === "PLACEMENT" && analysis?.status !== "available" &&
           <button className="outline-button" type="button" disabled={retrying} onClick={retry}>
             Làm lại kiểm tra</button>}

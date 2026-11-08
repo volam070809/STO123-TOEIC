@@ -11,7 +11,7 @@ function Icon({ kind }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3V5Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/><path d="M8 10h8M8 13h5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
 }
 
-export default function ContactSupportWidget({ embedded = false }) {
+export default function ContactSupportWidget({ embedded = false, showTitle = true }) {
   const { pathname } = useLocation();
   const hidden = !embedded && (/^\/exam\//.test(pathname) || pathname === "/placement" ||
     /^\/courses\/\d+\/steps\//.test(pathname) || pathname === "/practice/parts");
@@ -37,7 +37,7 @@ export default function ContactSupportWidget({ embedded = false }) {
   }, [load, hidden]);
   if (hidden) return null;
   if (embedded) return <div className="contact-widget-menu contact-widget-embedded">
-    <strong>Liên hệ hỗ trợ</strong>
+    {showTitle && <strong>Liên hệ hỗ trợ</strong>}
     {error && <p>Chưa tải được liên kết. <button type="button" onClick={load}>Thử lại</button></p>}
     {!error && !links?.zaloUrl && !links?.messengerUrl && <p>Chưa có kênh liên hệ nào được cấu hình.</p>}
     {links?.zaloUrl && <a href={links.zaloUrl} target="_blank" rel="noopener noreferrer"><Icon kind="zalo" /> Zalo</a>}

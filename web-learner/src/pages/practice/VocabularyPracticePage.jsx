@@ -26,7 +26,6 @@ export default function VocabularyPracticePage() {
         <span><Link to="/practice">Luyện tập</Link> / Luyện từ vựng</span>
         <h1>Luyện từ vựng</h1>
         <p>Kiểm tra khả năng nhớ từ với câu hỏi trắc nghiệm. Kết quả hoàn thành được lưu trong lịch sử luyện tập.</p>
-        <Link className="outline-button vocabulary-back" to="/practice"><BackArrow />Quay lại chọn hình thức</Link>
       </div>
       {user?.vaiTro === "HOC_VIEN" && token ? <LearnerPractice key={token} token={token} requestedTopicId={requestedTopicId} /> :
         user ? <section className="vocab-panel"><h2>Chế độ xem trước quản trị</h2>

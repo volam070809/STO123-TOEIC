@@ -329,7 +329,7 @@ export default function VocabularyPage() {
     {!loading && stage === "list" && <div className="vocab-studio-intro">
       <button type="button" className="vocab-studio-back" onClick={() => {
         setStage("topics"); navigate("/vocabulary");
-      }}>← Tất cả chủ đề</button>
+      }}>‹ Tất cả chủ đề</button>
       <section className="vocab-studio-hero">
         {topic?.duongDanAnhBia && <img className="vocab-studio-cover" src={`${API_BASE_URL}/api/admin/vocabulary/topics/${topic.maChuDe}/cover`} alt="" />}
         <div className="vocab-studio-hero-content"><span className="vocab-studio-kicker">IMMERSIVE VOCABULARY STUDIO · {words.length} TỪ</span>
@@ -357,7 +357,7 @@ export default function VocabularyPage() {
     </div>}
 
     {!loading && stage === "cards" && word && <div className="vocab-studio">
-      <div className="vocab-studio-topbar"><button type="button" className="vocab-studio-back" onClick={returnToList}>← {title}</button>
+      <div className="vocab-studio-topbar"><button type="button" className="vocab-studio-back" onClick={returnToList}>‹ {title}</button>
         <span>STO123 VOCABULARY STUDIO</span>{isLearner && <Link to={`/practice/vocabulary?topic=${topic.maChuDe}`}>Luyện tập chủ đề →</Link>}</div>
       <div className="vocab-studio-learning-heading"><div><span>HÀNH TRÌNH TỪ VỰNG</span><h2>{title}</h2></div>
         <div className="vocab-studio-progress"><span>TỪ HIỆN TẠI</span><strong>{String(currentIndex + 1).padStart(2, "0")} <i>/ {String(words.length).padStart(2, "0")}</i></strong>

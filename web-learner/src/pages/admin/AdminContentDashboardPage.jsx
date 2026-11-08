@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import { adminContentApi } from "../../services/adminContentApi";
+import AdminQuestionStatisticsPanel from "./AdminQuestionStatisticsPanel";
 
 export default function AdminContentDashboardPage() {
   const { token } = useAuth();
@@ -19,6 +20,7 @@ export default function AdminContentDashboardPage() {
         ["Khóa học", state.data.courses], ["Unit", state.data.units], ["Lesson", state.data.lessons],
         ["Bước lộ trình", state.data.steps], ["Bài giảng", state.data.lectures]
       ].map(([label, value]) => <article className="admin-stat" key={label}><span>{label}</span><strong>{value}</strong></article>)}</div>
+      <AdminQuestionStatisticsPanel data={state.data.questionStatistics} />
       <section className="admin-panel content-next"><h2>Bắt đầu biên soạn</h2><p>Thêm Unit, Lesson và hoạt động vào từng khóa học. Khóa học chưa có nội dung vẫn giữ nguyên trạng thái rỗng.</p>
         <div className="content-actions"><Link className="admin-button" to="/admin/courses">Chọn khóa học</Link></div></section>
     </>}

@@ -41,7 +41,7 @@ export default function ExamReviewPage() {
   const navigatorParts = [...new Set(filtered.map(item => item.question.part))];
   const partMock = result?.source === "PART";
   return <SiteLayout><div className="site-container exam-review">
-    <div className="page-heading"><span>{review?.source === "PLACEMENT" ? "Lộ trình học" : "Thi thử"} / Xem lại</span>
+    <div className="page-heading"><span>{review?.source === "PLACEMENT" ? "Thi đầu vào" : "Thi thử"} / Xem lại</span>
       <h1>{result?.examName || "Xem lại bài thi"}</h1></div>
     {error && <p className="exam-error" role="alert">{error}</p>}
     {!review && !error && <p>Đang tải phần xem lại…</p>}
@@ -96,9 +96,9 @@ export default function ExamReviewPage() {
         </details>
       </aside></div>
       <div className="exam-navigation">
-        <Link className="outline-button" to={`/exam/${attemptId}/result`}>← Quay lại kết quả</Link>
+        <Link className="site-back-path" to={`/exam/${attemptId}/result`}>‹ Kết quả bài thi</Link>
         <Link className="outline-button" to={review.source === "PLACEMENT" ? "/placement" : "/mock-test"}>
-          {review.source === "PLACEMENT" ? "Về Lộ trình học" : "Về trang Thi thử"}</Link>
+          {review.source === "PLACEMENT" ? "Về Thi đầu vào" : "Về trang Thi thử"}</Link>
       </div>
     </>}
   </div></SiteLayout>;

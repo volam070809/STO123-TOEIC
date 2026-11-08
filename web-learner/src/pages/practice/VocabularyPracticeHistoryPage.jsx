@@ -42,8 +42,8 @@ export default function VocabularyPracticeHistoryPage() {
       <h1>{id ? "Chi tiết lượt luyện" : "Lịch sử luyện từ"}</h1>
     </div>
     <div className="practice-actions">
-      <Link className="vocab-text-button" to={id ? "/practice/vocabulary/history" : "/practice/vocabulary"}>
-        ← {id ? "Lịch sử luyện từ" : "Luyện từ vựng"}
+      <Link className="site-back-path" to={id ? "/practice/vocabulary/history" : "/practice/vocabulary"}>
+        ‹ {id ? "Lịch sử luyện từ" : "Luyện từ vựng"}
       </Link>
       {id && <Link className="outline-button" to="/practice/vocabulary">Về trang Luyện tập</Link>}
     </div>

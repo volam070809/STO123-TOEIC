@@ -48,7 +48,7 @@ export default function PackageDetailPage() {
   const current = view.token === token && view.id === id ? view : { item: null, error: "" };
   const item = current.item;
   return <SiteLayout><main className="site-container package-page">
-    <Link className="package-back" to="/packages">← Tất cả gói học</Link>
+    <nav className="site-back-trail" aria-label="Đường dẫn"><Link className="site-back-path" to="/packages">Gói học</Link><span aria-hidden="true">/</span><span aria-current="page">Chi tiết gói</span></nav>
     {!packageId && <p role="alert" className="package-alert">Mã gói học không hợp lệ.</p>}
     {current.error && <p role="alert" className="package-alert">{current.error}</p>}
     {packageId && !item && !current.error && <p role="status">Đang tải gói học…</p>}

@@ -32,7 +32,12 @@ test("guest can render Practice categories and the Part selector without protect
   const parts = renderGuest(PracticePartsOverviewPage);
   assert.match(landing, /Luyện tập từ vựng/);
   assert.match(landing, /Luyện tập TOEIC theo Part/);
-  assert.match(parts, /Part 7 · Reading Comprehension/);
+  assert.match(parts, /Bảy Part, hai kỹ năng/);
+  assert.match(parts, /Listening/);
+  assert.match(parts, /Reading/);
+  assert.match(parts, /Đọc hiểu/);
+  assert.match(parts, /Đăng nhập để xem mức độ khả dụng/);
+  assert.doesNotMatch(parts, /Chọn quy mô bài luyện|SHORT|MEDIUM|FULL/);
   assert.match(parts, /aria-haspopup="dialog"/);
   assert.doesNotMatch(parts, /Đáp án đúng|Giải thích|transcript|attemptId/);
 });

@@ -33,7 +33,7 @@ export default function SmartLearningPage() {
   const hasEvidence = profile?.parts.some(part => part.evidenceQuestions > 0);
   const [primary, ...alternatives] = profile?.recommendations || [];
   return <SiteLayout><div className="site-container smart-page smart-journey">
-    <header className="smart-journey-heading"><span className="smart-eyebrow">GỢI Ý RIÊNG CHO BẠN</span><h1>Học đúng phần bạn cần</h1>
+    <header className="smart-journey-heading"><span className="smart-eyebrow">GỢI Ý RIÊNG CHO BẠN</span><h1>Gợi ý ôn luyện</h1>
       <p>Từ kết quả đã hoàn thành, chọn một bước học phù hợp để tiến bộ đều hơn.</p></header>
     {current.error && <div className="smart-error" role="alert"><p>{current.error}</p>
       <button className="outline-button" type="button" onClick={() => setRetry(value => value + 1)}>Thử lại</button></div>}

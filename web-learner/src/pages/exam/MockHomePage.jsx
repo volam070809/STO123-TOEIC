@@ -52,8 +52,7 @@ export default function MockHomePage() {
     <header className="mock-catalog-hero"><div>
       <div className="page-heading"><span>Học tập / Thi thử</span><h1>Thi thử TOEIC</h1>
         <p>Chọn đề phù hợp để kiểm tra năng lực. Bạn có thể làm lại mỗi đề; hệ thống hiển thị kết quả hoàn thành gần nhất.</p></div>
-      <div className="exam-navigation"><Link className="outline-button" to="/">← Quay lại</Link>
-        {isAuthenticated && <Link className="outline-button" to="/mock-test/history">Lịch sử thi</Link>}</div>
+      <div className="exam-navigation">{isAuthenticated && <Link className="outline-button" to="/mock-test/history">Lịch sử thi</Link>}</div>
     </div><div className="mock-catalog-art" aria-hidden="true"><span>STO123 · TOEIC</span>
       <div className="mock-art-sheet"><i /><i /><i /><i /><b>✓</b></div><strong>Luyện tập để tiến bộ</strong></div></header>
     {(catalogError || actionError) && <p className="exam-error" role="alert">{catalogError || actionError}</p>}

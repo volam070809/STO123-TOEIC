@@ -127,6 +127,7 @@ public sealed class AdminSectionStatisticsController(ToeicDbContext db, TimeProv
         var docsByGroup = docs.GroupBy(x => x.MaNguLieu).ToDictionary(g => g.Key, g => g.ToList());
         var groups = rows.Where(x => x.groupId != null)
             .GroupBy(x => x.groupId!.Value).ToArray();
+        var multiGroups = groups.Where(g => g.Count() > 1 && g.First().part is 3 or 4 or 6 or 7).ToArray();
         var invalidGroups = groups.Where(g => !ExamSourceValidator.ValidGroup(g.First().part,
             g.Select(x => new NhomCauHoi { MaNguLieu = g.Key, MaCauHoi = x.id, ThuTu = x.order }).ToList()))
             .Select(g => g.Key).ToHashSet();
@@ -153,18 +154,17 @@ public sealed class AdminSectionStatisticsController(ToeicDbContext db, TimeProv
                 correct = g.Count(a => a.DapAnChon == a.MaCauHoiLuotLamNavigation.PhuongAnDung) })
             .ToListAsync(ct) : [];
         var answerById = answerRows.ToDictionary(x => x.id);
-        var groupedIds = groups.SelectMany(g => g.Select(q => q.id)).ToHashSet();
+        var groupedIds = multiGroups.SelectMany(g => g.Select(q => q.id)).ToHashSet();
         var byPart = Enumerable.Range(1, 7).Select(part => {
             var subset = rows.Where(q => q.part == part).ToArray();
             var answers = subset.Sum(q => answerById.GetValueOrDefault(q.id)?.attempts ?? 0);
             var correct = subset.Sum(q => answerById.GetValueOrDefault(q.id)?.correct ?? 0);
             return new { part, questions = subset.Length,
-                groups = subset.Where(q => q.groupId != null && groupedIds.Contains(q.id))
-                    .Select(q => q.groupId).Distinct().Count(),
+                groups = multiGroups.Count(g => g.First().part == part),
                 attempts = answers, accuracy = answers == 0 ? (double?)null : 100d * correct / answers };
         }).ToArray();
         return Ok(new { metrics = new[] {
-            Metric("Tổng câu hỏi", rows.Count), Metric("Nhóm câu", groups.Length),
+            Metric("Tổng câu hỏi", rows.Count), Metric("Nhóm câu", multiGroups.Length),
             Metric("Câu riêng", rows.Count - groupedIds.Count),
             Metric("Câu trong nhóm", groupedIds.Count),
             Metric("Đang thuộc đề", rows.Count(x => x.usedInExam)),

@@ -11,6 +11,7 @@ import { answerViewed, canNavigateTo, checked, restoredFeedback } from "./practi
 import DocumentRenderer from "../exam/DocumentRenderer";
 import PartSevenTranslationView from "../exam/PartSevenTranslationView";
 import { examMediaBlob } from "../../services/examApi";
+import { partLabels, skillGroups } from "./practicePartLabels";
 import "../../styles/exam.css";
 import "../../styles/vocabulary.css";
 import "../../styles/practice-parts.css";
@@ -18,7 +19,6 @@ import "../../styles/learner-journey.css";
 import "../../styles/practice-parts-studio.css";
 
 const api = "/api/practice";
-const partLabels = ["Mô tả tranh", "Hỏi và đáp", "Hội thoại", "Bài nói ngắn", "Hoàn thành câu", "Hoàn thành đoạn văn", "Đọc hiểu"];
 const difficultyLabels = { 1: "Dễ", 2: "Vừa", 3: "Khó" };
 const presetLabels = { SHORT: "Bài ngắn", MEDIUM: "Bài vừa", LONG: "Bài dài" };
 
@@ -197,7 +197,7 @@ export default function PracticePartsPage() {
     <div className="page-heading practice-hub-heading"><span><Link to="/practice">Luyện tập</Link> / Theo Part</span>
       <h1><span className="practice-heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 6.5c-2.2-1.7-5.1-2.2-8-1.5v12c2.9-.7 5.8-.2 8 1.5 2.2-1.7 5.1-2.2 8-1.5V5c-2.9-.7-5.8-.2-8 1.5Z"/><path d="M12 6.5v12"/></svg></span>Hôm nay bạn muốn luyện gì?</h1>
       <p>Chọn Part và bắt đầu với một bài luyện vừa sức.</p>
-      <Link className="practice-back-link" to="/practice">← Các hình thức luyện tập</Link></div>
+      </div>
     {error && <p className="vocab-error" role="alert">{error}</p>}
     {error && !attempt && !routeAttemptId && <button className="outline-button" type="button"
       onClick={() => { setError(""); loadAvailability(); loadActiveList(); setStatsRetry(value => value + 1); }}>Thử tải lại</button>}
@@ -210,7 +210,7 @@ export default function PracticePartsPage() {
       <div className="practice-parts-main">
         <section className="practice-part-select" aria-labelledby="practice-select-title"><div className="practice-select-heading"><div><span className="practice-kicker">CHỌN NỘI DUNG</span><h2 id="practice-select-title">Bảy Part, hai kỹ năng</h2></div><p>Chạm vào một Part để xem bài luyện phù hợp.</p></div>
           {available === null && <p role="status" className="practice-data-loading">Đang kiểm tra bài luyện hiện có…</p>}
-          {[{ label: "Listening", range: "PART 1–4", start: 1, end: 4, icon: "♫" }, { label: "Reading", range: "PART 5–7", start: 5, end: 7, icon: "Aa" }].map(group =>
+          {skillGroups.map(group =>
             <div className="practice-skill-group" key={group.label}><div className="practice-skill-heading"><span className="practice-skill-icon" aria-hidden="true">{group.icon}</span><h3>{group.label}</h3><small>{group.range}</small></div>
               <div className="practice-part-picker" role="group" aria-label={`Chọn Part ${group.label}`}>{partLabels.slice(group.start - 1, group.end).map((name, index) => {
                 const number = group.start + index;
@@ -263,12 +263,12 @@ export default function PracticePartsPage() {
           </div></div>}
       </div></details>
     </div>}
-    {!attempt && routeAttemptId && !busy && <button type="button" className="outline-button" onClick={leave}>← Quay lại chọn bài</button>}
+    {!attempt && routeAttemptId && !busy && <button type="button" className="site-back-path" onClick={leave}>‹ Chọn bài luyện</button>}
     {attempt && !summary && <div className="practice-session" data-part={attempt.part}>
       <div className="practice-session-top"><div>
       <h2>Part {attempt.part} · {attempt.preset ? `${attempt.preset} · ` : ""}{attempt.selectedUnitCount} {attempt.part === 3 || attempt.part === 4 || attempt.part === 6 || attempt.part === 7 ? "nhóm" : "câu"} · {attempt.actualQuestionCount} câu hỏi</h2>
       <p>Câu {current + 1} / {questions.length}</p></div>
-      <button className="vocab-text-button" onClick={leave}>← Rời bài luyện</button></div>
+      <button className="site-back-path" onClick={leave}>‹ Chọn bài luyện</button></div>
       <div className="practice-session-layout"><div className="practice-session-content"><div className="practice-session-material">
       {activeGroup && <PracticeGroup key={activeGroup.groupId} group={activeGroup} part={attempt.part} token={token}
         revealedContext={questions.filter(q => q.groupId === activeGroup.groupId)

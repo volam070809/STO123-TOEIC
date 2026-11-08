@@ -43,7 +43,8 @@ public sealed class AdminCurriculumController(ToeicDbContext db) : ControllerBas
         units = await db.UnitKhoaHoc.CountAsync(ct),
         lessons = await db.LessonKhoaHoc.CountAsync(ct),
         steps = await db.BuocLoTrinh.CountAsync(ct),
-        lectures = await db.BaiGiang.CountAsync(ct)
+        lectures = await db.BaiGiang.CountAsync(ct),
+        questionStatistics = await AdminQuestionStatisticsQueries.Load(db, ct)
     });
 
     [HttpGet("courses/{courseId:int}/progress-summary")]

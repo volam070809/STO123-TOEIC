@@ -14,14 +14,14 @@ namespace STO123.Tests;
 public sealed class AdminAnalyticsContractTests
 {
     [Fact]
-    public void Controller_is_management_only_and_exposes_seven_read_endpoints()
+    public void Controller_is_management_only_and_exposes_eight_read_endpoints()
     {
         var authorize = Assert.Single(typeof(AdminAnalyticsController)
             .GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
         Assert.Equal(AdminAuthorization.ManagementPolicy, authorize.Policy);
         var methods = typeof(AdminAnalyticsController).GetMethods()
             .Where(method => method.DeclaringType == typeof(AdminAnalyticsController)).ToList();
-        Assert.Equal(7, methods.Count);
+        Assert.Equal(8, methods.Count);
         Assert.All(methods, method => Assert.NotEmpty(method.GetCustomAttributes(typeof(HttpGetAttribute), true)));
         var templates = methods.SelectMany(method => method.GetCustomAttributes(typeof(HttpGetAttribute), true)
             .Cast<HttpGetAttribute>()).Select(attribute => attribute.Template).ToHashSet();
@@ -32,6 +32,7 @@ public sealed class AdminAnalyticsContractTests
         Assert.Contains("reports/packages-courses", templates);
         Assert.Contains("reports/payments", templates);
         Assert.Contains("reports/toeic-results", templates);
+        Assert.Contains("reports/questions", templates);
     }
 
     [Theory]

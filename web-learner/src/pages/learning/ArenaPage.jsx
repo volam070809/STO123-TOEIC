@@ -94,7 +94,7 @@ export function ArenaLobbyPage() {
       navigate(`/arena/matches/${match.id}`);
     } catch (e) { setError(e.message || "Không thể tạo trận. Vui lòng thử lại."); setBusy(""); }
   }
-  return <SiteLayout><div className="arena-page site-container">
+  return <SiteLayout examActive><div className="arena-page site-container">
     <header className="arena-hero"><div><span className="arena-eyebrow">TOEIC ARENA · 1 ĐỐI 1</span>
       <h1>Thử sức cùng người học khác</h1><p>Hai người cùng làm một bộ câu hỏi. Đáp án được khóa ngay khi chọn, sau đó cùng xem kết quả từng câu.</p></div>
       <span className="arena-hero-number" aria-hidden="true">1:1</span></header>
@@ -196,8 +196,8 @@ export function ArenaMatchPage() {
   const revealing = state?.status === "REVEAL" || state?.status === "COMPLETED";
   const inMatch = ["STARTING", "ACTIVE", "REVEAL"].includes(state?.status);
   const roomClosed = state?.status === "ABANDONED" && !state.startsAtUtc;
-  return <SiteLayout focused={inMatch}><div className="arena-page site-container">
-    <div className="arena-match-nav">{!inMatch ? <Link to="/arena">← Đấu trường</Link> :
+  return <SiteLayout focused={inMatch} examActive><div className="arena-page site-container">
+    <div className="arena-match-nav">{!inMatch ? <Link to="/arena">‹ Đấu trường</Link> :
       <strong>STO123 · TOEIC ARENA</strong>}
       {state?.status !== "COMPLETED" && <span>{connectionStatus === "connected" ? "● Đang đồng bộ" : "○ Đang kết nối lại"}</span>}
       {inMatch && <button className="arena-quiet" type="button" onClick={() => setConfirmSurrender(true)}>Đầu hàng</button>}</div>

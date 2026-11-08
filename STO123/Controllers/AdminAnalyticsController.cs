@@ -122,11 +122,13 @@ public sealed class AdminAnalyticsController(ToeicDbContext db, TimeProvider clo
             Open = g.Count(x => x.TrangThai == "DANG_MO"), Closed = g.Count(x => x.TrangThai == "DA_DONG") }).SingleOrDefaultAsync(ct);
         var courseStates = await db.KhoaHoc.AsNoTracking().GroupBy(_ => 1).Select(g => new {
             Open = g.Count(x => x.TrangThai == "DANG_MO"), Closed = g.Count(x => x.TrangThai == "DA_DONG") }).SingleOrDefaultAsync(ct);
-        var packages = await PackagePerformance(r, 100, ct);
-        var courses = await CoursePerformance(r, 100, ct);
         return Ok(new AdminOfferingsReportDto(r.Dto, packageStates?.Open ?? 0, packageStates?.Closed ?? 0,
-            courseStates?.Open ?? 0, courseStates?.Closed ?? 0, packages, courses));
+            courseStates?.Open ?? 0, courseStates?.Closed ?? 0, [], []));
     }
+
+    [HttpGet("reports/questions")]
+    public async Task<IActionResult> QuestionStatistics(CancellationToken ct) =>
+        Ok(await AdminQuestionStatisticsQueries.Load(db, ct));
 
     [HttpGet("reports/payments")]
     public async Task<IActionResult> Payments([FromQuery] AdminAnalyticsQuery request, CancellationToken ct)

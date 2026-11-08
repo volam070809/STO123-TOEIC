@@ -4,7 +4,9 @@ export function protectedReturnPath(value) {
   if (value === "/vocabulary") return value;
   const vocabularyTopic = /^\/vocabulary\?topic=([1-9]\d{0,9})$/.exec(value ?? "");
   if (vocabularyTopic && Number.isSafeInteger(Number(vocabularyTopic[1]))) return vocabularyTopic[0];
-  if (["/placement", "/mock-test", "/practice", "/practice/parts", "/practice/vocabulary"].includes(value)) return value;
+  if (["/placement", "/mock-test", "/practice", "/practice/parts", "/practice/vocabulary", "/smart-learning", "/arena"].includes(value)) return value;
+  const practicePart = /^\/practice\/parts\?part=([1-7])$/.exec(value ?? "");
+  if (practicePart) return practicePart[0];
   if (value === "/courses") return value;
   const coursesPayment = /^\/courses\?paymentId=([1-9]\d{0,9})$/.exec(value ?? "");
   if (coursesPayment && Number.isSafeInteger(Number(coursesPayment[1]))) return coursesPayment[0];

@@ -100,3 +100,14 @@
 @media (prefers-reduced-motion: reduce) {
   .home-page .access-card { transition: none; }
 }
+.site-shell .home-page .home-learner-hero { grid-template-columns: minmax(0, 1.02fr) minmax(0, .98fr); align-items: stretch; gap: 0; min-height: 350px; padding: 0; }
+.site-shell .home-page .home-learner-hero .home-lesson-photo { height: 100%; border-radius: 0; }
+.site-shell .home-page .home-learner-hero .home-lesson-photo img { width: 100%; height: 100%; min-height: 350px; object-fit: cover; }
+.site-shell .home-page .home-learner-hero .home-hero-content { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: clamp(26px, 4vw, 58px); }
+@media (max-width: 850px) {
+  .site-shell .home-page .home-learner-hero { grid-template-columns: minmax(0, 1fr); }
+  .site-shell .home-page .home-learner-hero .home-lesson-photo img { min-height: 240px; max-height: 320px; }
+}
+@media (max-width: 600px) {
+  .site-shell .home-page .home-learner-hero .home-hero-content { padding: 28px 23px; }
+}

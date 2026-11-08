@@ -22,9 +22,8 @@ export default function MockHistoryDetailPage() {
     return () => { live = false; };
   }, [page, token, retry]);
   return <SiteLayout><div className="site-container exam-home">
-    <div className="page-heading"><span>Thi thử / Lịch sử</span><h1>Lịch sử thi thử</h1>
+    <div className="page-heading"><span><Link to="/mock-test">Thi thử</Link> / Lịch sử</span><h1>Lịch sử thi thử</h1>
       <p>Điểm và thống kê của các đề đã hoàn thành.</p></div>
-    <div className="exam-navigation"><Link className="outline-button" to="/mock-test">← Quay lại Thi thử</Link></div>
     {error && <div className="exam-error" role="alert"><p>{error}</p><button type="button" className="outline-button" onClick={() => { setError(""); setPage(1); setResponse(null); setRetry(value => value + 1); }}>Thử lại</button></div>}
     {!response && !error && <p role="status">Đang tải lịch sử…</p>}
     {response?.items.length === 0 && <div className="mock-history-empty"><h2>Chưa có kết quả thi thử</h2><p>Hoàn thành một đề thi để xem kết quả gần nhất tại đây.</p><Link className="primary-button" to="/mock-test">Chọn đề thi →</Link></div>}
