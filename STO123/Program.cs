@@ -206,6 +206,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.UseCors(frontendCorsPolicy);
 
@@ -215,5 +217,6 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<ArenaHub>("/hubs/arena");
+app.MapFallbackToFile("index.html");
 
 app.Run();
