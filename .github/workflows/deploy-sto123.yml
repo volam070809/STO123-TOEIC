@@ -1,0 +1,66 @@
+name: Deploy STO123 to Azure
+
+on:
+  push:
+    branches:
+      - feature/practice-by-part-v2
+    paths-ignore:
+      - .github/workflows/deploy-sto123.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sto123-demo-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify React hosting is enabled
+        run: |
+          grep -Fq 'app.UseDefaultFiles();' STO123/Program.cs
+          grep -Fq 'app.UseStaticFiles();' STO123/Program.cs
+          grep -Fq 'app.MapFallbackToFile("index.html");' STO123/Program.cs
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web-learner/package-lock.json
+
+      - name: Build React
+        working-directory: web-learner
+        run: |
+          npm ci
+          npm run build
+
+      - name: Publish ASP.NET Core
+        run: dotnet publish STO123/STO123.csproj -c Release -o publish
+
+      - name: Package application for Linux
+        run: |
+          mkdir -p publish/wwwroot
+          cp -a web-learner/dist/. publish/wwwroot/
+          rm -f publish/appsettings.Development.json
+          test -f publish/STO123.dll
+          test -f publish/wwwroot/index.html
+          (cd publish && zip -qr ../sto123-deploy.zip .)
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: sto123-demo
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: sto123-deploy.zip
