@@ -42,7 +42,10 @@ jobs:
 
       - name: Build React
         working-directory: web-learner
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
         run: |
+          test -n "$VITE_GOOGLE_CLIENT_ID" || { echo 'Missing VITE_GOOGLE_CLIENT_ID repository variable'; exit 1; }
           npm ci
           npm run build
 
