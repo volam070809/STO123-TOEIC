@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - feature/practice-by-part-v2
-    paths-ignore:
-      - .github/workflows/deploy-sto123.yml
   workflow_dispatch:
 
 permissions:
