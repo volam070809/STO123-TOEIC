@@ -120,7 +120,7 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
                 .Where(e => e.MaNguoiDung == LearnerId)
                 .Include(e => e.MaGoiHocNavigation).ThenInclude(p => p.MaKhoaHoc)
                 .Include(e => e.ChiTietDangKyKhoaHoc)
-                .Include(e => e.GiaoDichThanhToan).ToListAsync(ct);
+                .Include(e => e.GiaoDichThanhToan).AsSplitQuery().ToListAsync(ct);
             var enrollments = enrollmentRows.SelectMany(e =>
                 (e.MaGoiHoc.HasValue ? e.MaGoiHocNavigation.MaKhoaHoc.Select(c => c.MaKhoaHoc) :
                     e.ChiTietDangKyKhoaHoc.Select(c => c.MaKhoaHoc)).Select(courseId => new {
@@ -218,16 +218,21 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
             .SelectMany(l => l.BuocLoTrinh.Where(s => !s.IsArchived)).Where(s => s.MaBaiTap != null).ToList();
         var stepIds = exerciseSteps.Select(s => s.MaBuoc).ToArray();
         var exerciseIds = exerciseSteps.Select(s => s.MaBaiTap!.Value).Distinct().ToArray();
-        var enrollmentIds = await db.DangKyGoiHoc.AsNoTracking().Where(e => e.MaNguoiDung == LearnerId)
-            .Select(e => e.MaDangKy).ToArrayAsync(ct);
+        var enrollmentIds = db.DangKyGoiHoc.AsNoTracking().Where(e => e.MaNguoiDung == LearnerId)
+            .Select(e => e.MaDangKy);
         var attempts = stepIds.Length == 0 ? new List<LuotBaiTapKhoaHoc>() : await db.LuotBaiTapKhoaHoc.AsNoTracking()
-            .Where(a => enrollmentIds.Contains(a.MaDangKy) && stepIds.Contains(a.MaBuoc)).ToListAsync(ct);
+            .Where(a => enrollmentIds.Contains(a.MaDangKy) && stepIds.Contains(a.MaBuoc))
+            .Select(a => new LuotBaiTapKhoaHoc { MaLuot = a.MaLuot, MaBuoc = a.MaBuoc,
+                MaPhienBan = a.MaPhienBan, TrangThai = a.TrangThai }).ToListAsync(ct);
         var attemptIds = attempts.Select(a => a.MaLuot).ToArray();
         var checkedRows = attemptIds.Length == 0 ? new List<LanKiemTraBaiTapKhoaHoc>() : await db.LanKiemTraBaiTapKhoaHoc.AsNoTracking()
-            .Where(c => attemptIds.Contains(c.MaLuot)).ToListAsync(ct);
+            .Where(c => attemptIds.Contains(c.MaLuot))
+            .Select(c => new LanKiemTraBaiTapKhoaHoc { MaLuot = c.MaLuot, MaCauHoi = c.MaCauHoi })
+            .ToListAsync(ct);
         var versions = exerciseIds.Length == 0 ? new List<PhienBanBaiTapKhoaHoc>() : await db.PhienBanBaiTapKhoaHoc.AsNoTracking()
             .Where(v => exerciseIds.Contains(v.MaBaiTap) && v.TrangThai == "XUAT_BAN")
-            .ToListAsync(ct);
+            .Select(v => new PhienBanBaiTapKhoaHoc { MaBaiTap = v.MaBaiTap,
+                MaPhienBan = v.MaPhienBan, SoPhienBan = v.SoPhienBan }).ToListAsync(ct);
         var versionIds = versions.Select(v => v.MaPhienBan).Concat(attempts.Select(a => a.MaPhienBan)).Distinct().ToArray();
         var questionCounts = versionIds.Length == 0 ? new Dictionary<int, int>() : await db.CauHoiBaiTapKhoaHoc.AsNoTracking()
             .Where(q => versionIds.Contains(q.MaPhienBan)).GroupBy(q => q.MaPhienBan)
@@ -278,7 +283,7 @@ public sealed class PlacementController(ToeicDbContext db, ExamAttemptService at
                     progressStatus = Status(b),
                     type = b.MaBaiGiang != null ? "LECTURE" : b.MaChuDe != null ? "VOCABULARY" : b.MaBaiTap != null ? "EXERCISE" : "EXAM",
                     locked = b.MaDeThi != null || b.MaBaiTap != null &&
-                        !db.PhienBanBaiTapKhoaHoc.Any(v => v.MaBaiTap == b.MaBaiTap && v.TrangThai == "XUAT_BAN")
+                        !versions.Any(v => v.MaBaiTap == b.MaBaiTap)
                 }).ToList()
             }).ToList()
         }).ToList();

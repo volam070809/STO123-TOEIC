@@ -22,7 +22,7 @@ public sealed class ExamSnapshotCleanupWorker(IServiceScopeFactory scopes, BlobS
             try { await ReconcileAsync(stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception e) { logger.LogError(e, "Exam snapshot cleanup deferred"); }
-            try { await Task.Delay(TimeSpan.FromHours(1), stoppingToken); }
+            try { await Task.Delay(TimeSpan.FromHours(2), stoppingToken); }
             catch (OperationCanceledException) { break; }
         }
     }

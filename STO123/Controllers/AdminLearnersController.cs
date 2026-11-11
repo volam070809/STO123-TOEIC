@@ -166,20 +166,22 @@ public sealed class AdminLearnersController(ToeicDbContext db, AvatarStorage? av
 
         var progress = await db.TienDoBuocLoTrinh.AsNoTracking()
             .Where(step => step.MaDangKyNavigation.MaNguoiDung == learnerId)
-            .Select(step => new { step.TrangThai, step.TyLeHoanThanh, step.CapNhatLuc })
-            .ToListAsync(ct);
-        var percentages = progress.Where(step => step.TyLeHoanThanh.HasValue)
-            .Select(step => (double)step.TyLeHoanThanh!.Value).ToList();
-        var lastProgressAt = progress.Count == 0 ? (DateTime?)null : progress.Max(step => step.CapNhatLuc);
+            .GroupBy(_ => 1).Select(group => new {
+                Total = group.Count(),
+                Completed = group.Count(step => step.TrangThai == "HOAN_THANH" || step.TyLeHoanThanh == 100),
+                Average = group.Average(step => (double?)step.TyLeHoanThanh),
+                LastProgressAt = group.Max(step => (DateTime?)step.CapNhatLuc)
+            }).SingleOrDefaultAsync(ct);
+        var lastProgressAt = progress?.LastProgressAt;
         var lastLearningAt = attemptSummary?.LastLearningAt;
         if (lastProgressAt.HasValue && (!lastLearningAt.HasValue || lastProgressAt > lastLearningAt))
             lastLearningAt = lastProgressAt;
         var learning = new AdminLearnerLearningSummaryDto(
             attemptSummary?.Total ?? 0,
             attemptSummary?.Completed ?? 0,
-            progress.Count,
-            progress.Count(step => step.TrangThai == "HOAN_THANH" || step.TyLeHoanThanh == 100),
-            percentages.Count == 0 ? null : Math.Round(percentages.Average(), 1),
+            progress?.Total ?? 0,
+            progress?.Completed ?? 0,
+            progress?.Average is { } average ? Math.Round(average, 1) : null,
             lastLearningAt,
             attempts);
 

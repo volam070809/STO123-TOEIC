@@ -51,7 +51,7 @@ public sealed class AdminCurriculumIntegrationTests
             CREATE TABLE GoiHocKhoaHoc (MaGoiHoc INTEGER NOT NULL, MaKhoaHoc INTEGER NOT NULL,
                 PRIMARY KEY(MaGoiHoc,MaKhoaHoc));
             CREATE TABLE TienDoBuocLoTrinh (MaBuoc INTEGER NOT NULL, MaNguoiDung INTEGER NOT NULL,
-                MaDangKy INTEGER NOT NULL DEFAULT 20);
+                MaDangKy INTEGER NOT NULL DEFAULT 20, TrangThai TEXT NOT NULL DEFAULT 'CHUA_LAM');
             CREATE TABLE BaiTapKhoaHoc (MaBaiTap INTEGER PRIMARY KEY AUTOINCREMENT, TieuDe TEXT NOT NULL);
             CREATE TABLE PhienBanBaiTapKhoaHoc (MaPhienBan INTEGER PRIMARY KEY AUTOINCREMENT,
                 MaBaiTap INTEGER NOT NULL, SoPhienBan INTEGER NOT NULL, TrangThai TEXT NOT NULL,
@@ -103,6 +103,16 @@ public sealed class AdminCurriculumIntegrationTests
         Assert.Equal(1, await db.BuocLoTrinh.CountAsync());
 
         var stepId = await db.BuocLoTrinh.Select(x => x.MaBuoc).SingleAsync();
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO TienDoBuocLoTrinh (MaNguoiDung,MaBuoc,TrangThai) VALUES ({99},{stepId},{"HOAN_THANH"})");
+        var summary = Assert.IsType<OkObjectResult>(await api.ProgressSummary(1, default));
+        using (var summaryJson = JsonDocument.Parse(JsonSerializer.Serialize(summary.Value)))
+        {
+            Assert.Equal(1, summaryJson.RootElement.GetProperty("enrolled").GetInt32());
+            Assert.Equal(1, summaryJson.RootElement.GetProperty("learnersStarted").GetInt32());
+            Assert.Equal(1, summaryJson.RootElement.GetProperty("completedActivityRecords").GetInt32());
+            Assert.Equal(1, summaryJson.RootElement.GetProperty("activeActivities").GetInt32());
+        }
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM TienDoBuocLoTrinh WHERE MaBuoc = {stepId}");
         var previewResult = Assert.IsType<OkObjectResult>(await api.PreviewStep(1, stepId, default));
         Assert.Contains("Nội dung học thật", JsonSerializer.Serialize(previewResult.Value, jsonOptions));
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {

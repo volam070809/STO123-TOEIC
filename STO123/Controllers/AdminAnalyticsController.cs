@@ -19,7 +19,6 @@ public sealed class AdminAnalyticsController(ToeicDbContext db, TimeProvider clo
         var rangeResult = Range(request, 366);
         if (rangeResult.Error is not null) return rangeResult.Error;
         var range = rangeResult.Value!;
-        var newLearners = await LearnersIn(range).CountAsync(ct);
         var enrollments = await EnrollmentsIn(range).CountAsync(ct);
         var paymentDaily = await AdminAnalyticsQueries.DashboardPayments(db, range.From, range.ToExclusive)
             .ToListAsync(ct);
@@ -40,7 +39,7 @@ public sealed class AdminAnalyticsController(ToeicDbContext db, TimeProvider clo
                 x.MaCongThanhToanNavigation.MaCong, x.NgayTao)).ToListAsync(ct);
         var performance = await PackagePerformance(range, 3, ct);
         performance.AddRange(await CoursePerformance(range, 3, ct));
-        return Ok(new AdminDashboardDto(range.Dto, newLearners, enrollments, paymentDaily.Sum(x => x.Revenue),
+        return Ok(new AdminDashboardDto(range.Dto, learnerTrend.Sum(x => x.Count), enrollments, paymentDaily.Sum(x => x.Revenue),
             paymentDaily.Sum(x => x.Pending), paymentDaily.Sum(x => x.Failed), await Fill(learnerTrend, range),
             await Fill(revenueTrend, range), recentEnrollments, recentPayments, performance));
     }
@@ -87,7 +86,6 @@ public sealed class AdminAnalyticsController(ToeicDbContext db, TimeProvider clo
     public async Task<IActionResult> Learners([FromQuery] AdminAnalyticsQuery request, CancellationToken ct)
     {
         var rr = Range(request, 366, true); if (rr.Error is not null) return rr.Error; var r = rr.Value!;
-        var total = await db.NguoiDung.AsNoTracking().CountAsync(x => x.VaiTro == "HOC_VIEN", ct);
         var status = await db.NguoiDung.AsNoTracking().Where(x => x.VaiTro == "HOC_VIEN").GroupBy(x => x.TrangThai)
             .Select(g => new AdminBreakdownDto(g.Key, g.Count())).ToListAsync(ct);
         var attempts = AttemptsIn(r); var attemptStats = await attempts.GroupBy(_ => 1).Select(g => new {
@@ -95,7 +93,7 @@ public sealed class AdminAnalyticsController(ToeicDbContext db, TimeProvider clo
         }).SingleOrDefaultAsync(ct);
         var learnerTrend = await LearnersIn(r).GroupBy(x => x.NgayTao.Date).Select(g => new AdminTrendPointDto(g.Key, g.Count())).ToListAsync(ct);
         var activityTrend = await attempts.GroupBy(x => x.NgayLamBai.Date).Select(g => new AdminTrendPointDto(g.Key, g.Count())).ToListAsync(ct);
-        return Ok(new AdminLearnersReportDto(r.Dto, total, await LearnersIn(r).CountAsync(ct),
+        return Ok(new AdminLearnersReportDto(r.Dto, status.Sum(x => x.Count), learnerTrend.Sum(x => x.Count),
             attemptStats?.Learners ?? 0, attemptStats?.Total ?? 0, attemptStats?.Completed ?? 0,
             status, await Fill(learnerTrend, r), await Fill(activityTrend, r)));
     }

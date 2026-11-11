@@ -150,10 +150,18 @@ export function ArenaMatchPage() {
       .catch(e => { if (active) setError(e.message || "Không thể tải trận đấu."); });
     hub.start().then(() => { if (active) { setConnectionStatus("connected"); hub.invoke("Sync", id).then(acceptState).catch(() => {}); } })
       .catch(() => { if (active) setConnectionStatus("offline"); });
-    const poll = setInterval(() => { if (active) refresh().catch(() => {}); }, 5000);
     const timer = setInterval(() => setClock(Date.now()), 500);
-    return () => { active = false; clearInterval(poll); clearInterval(timer); connection.current = null; hub.stop().catch(() => {}); };
+    return () => { active = false; clearInterval(timer); connection.current = null; hub.stop().catch(() => {}); };
   }, [id, token, refresh, acceptState]);
+
+  useEffect(() => {
+    if (state?.status === "COMPLETED" || state?.status === "SURRENDERED" ||
+        state?.status === "ABANDONED") return;
+    const poll = setInterval(() => {
+      if (!document.hidden) refresh().catch(() => {});
+    }, connectionStatus === "connected" ? 60_000 : 5000);
+    return () => clearInterval(poll);
+  }, [connectionStatus, state?.status, refresh]);
 
   async function act(label, invoke, fallback) {
     if (busy) return;

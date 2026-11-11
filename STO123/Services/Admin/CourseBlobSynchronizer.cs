@@ -230,7 +230,21 @@ public sealed class CourseBlobSynchronizer(ToeicDbContext db, LectureResourceSto
     }
 }
 
+public sealed class CourseBlobRecoverySignal
+{
+    private readonly SemaphoreSlim signal = new(0, 1);
+
+    public void Wake()
+    {
+        try { signal.Release(); }
+        catch (SemaphoreFullException) { }
+    }
+
+    public Task<bool> WaitAsync(TimeSpan timeout, CancellationToken ct) => signal.WaitAsync(timeout, ct);
+}
+
 public sealed class CourseBlobSyncFilter(CourseBlobSynchronizer sync, ToeicDbContext db,
+    CourseBlobRecoverySignal recoverySignal,
     ILogger<CourseBlobSyncFilter> logger) : IAsyncActionFilter, IOrderedFilter
 {
     public int Order => -1000;
@@ -274,6 +288,7 @@ public sealed class CourseBlobSyncFilter(CourseBlobSynchronizer sync, ToeicDbCon
         }
         catch (Exception e)
         {
+            recoverySignal.Wake();
             logger.LogError(e, "Course Blob synchronization pending for {Courses}", courseIds);
             executed.Result = new ObjectResult(new { code = "COURSE_BLOB_SYNC_PENDING",
                 message = "Nội dung SQL đã lưu; tệp đang được đồng bộ. Vui lòng tải lại trước khi thao tác tiếp." })
@@ -282,29 +297,42 @@ public sealed class CourseBlobSyncFilter(CourseBlobSynchronizer sync, ToeicDbCon
     }
 }
 
-public sealed class CourseBlobSyncRecovery(IServiceScopeFactory scopes, ILogger<CourseBlobSyncRecovery> logger)
+public sealed class CourseBlobSyncRecovery(IServiceScopeFactory scopes,
+    CourseBlobRecoverySignal signal, ILogger<CourseBlobSyncRecovery> logger)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            var delay = TimeSpan.FromMinutes(2);
             try
             {
                 using var scope = scopes.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ToeicDbContext>();
                 var sync = scope.ServiceProvider.GetRequiredService<CourseBlobSynchronizer>();
                 var courses = await db.Database.SqlQuery<int>($"""
-                    SELECT MaKhoaHoc AS Value FROM dbo.CourseBlobSyncJournal
+                    SELECT TOP (100) MaKhoaHoc AS Value FROM dbo.CourseBlobSyncJournal
                     WHERE MaTaiNguyen=0 AND (SoThaoTacDangChay=0 OR LeaseUntilUtc<SYSUTCDATETIME())
                     """).ToListAsync(stoppingToken);
+                if (courses.Count == 0)
+                {
+                    var nextLease = await db.Database.SqlQuery<DateTime>($"""
+                        SELECT TOP (1) LeaseUntilUtc AS Value FROM dbo.CourseBlobSyncJournal
+                        WHERE MaTaiNguyen=0 AND SoThaoTacDangChay>0 AND LeaseUntilUtc IS NOT NULL
+                        ORDER BY LeaseUntilUtc
+                        """).Select(value => (DateTime?)value).FirstOrDefaultAsync(stoppingToken);
+                    delay = nextLease is null ? TimeSpan.FromHours(2) :
+                        nextLease.Value - DateTime.UtcNow;
+                    if (delay < TimeSpan.FromSeconds(1)) delay = TimeSpan.FromSeconds(1);
+                }
                 foreach (var courseId in courses)
                     try { await sync.SyncCourse(courseId, stoppingToken); }
                     catch (Exception e) { logger.LogWarning(e, "Course resource recovery pending for {CourseId}", courseId); }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception e) { logger.LogError(e, "Course resource recovery failed"); }
-            try { await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken); }
+            try { await signal.WaitAsync(delay, stoppingToken); }
             catch (OperationCanceledException) { break; }
         }
     }

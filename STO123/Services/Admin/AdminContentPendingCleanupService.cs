@@ -14,15 +14,19 @@ public sealed class AdminContentPendingCleanupService(IServiceScopeFactory scope
         if (!configuration.GetValue<bool>("AdminContent:EnableIdempotency")) return;
         while (!stoppingToken.IsCancellationRequested)
         {
-            try { await Reconcile(stoppingToken); }
+            var delay = TimeSpan.FromMinutes(10);
+            try
+            {
+                if (!await Reconcile(stoppingToken)) delay = TimeSpan.FromHours(2);
+            }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception e) { logger.LogError(e, "Admin Content reservation reconciliation failed"); }
-            try { await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken); }
+            try { await Task.Delay(delay, stoppingToken); }
             catch (OperationCanceledException) { break; }
         }
     }
 
-    private async Task Reconcile(CancellationToken ct)
+    private async Task<bool> Reconcile(CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ToeicDbContext>();
@@ -70,5 +74,6 @@ public sealed class AdminContentPendingCleanupService(IServiceScopeFactory scope
                 WHERE MaYeuCau = @p0 AND TrangThai = 'PENDING' AND LeaseToken = @p1
                 """, [row.Id, lease], ct);
         }
+        return pending.Count > 0;
     }
 }

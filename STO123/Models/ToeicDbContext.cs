@@ -353,6 +353,9 @@ public partial class ToeicDbContext : DbContext
         {
             entity.HasKey(e => e.MaGiaoDich).HasName("PK__GiaoDich__0A2A24EB2E6E77FC");
 
+            entity.HasIndex(e => new { e.TrangThai, e.NgayTao }, "IX_GiaoDichThanhToan_TrangThaiNgayTao")
+                .IncludeProperties(e => e.MaDangKy);
+
             entity.HasIndex(e => new { e.MaCongThanhToan, e.MaGiaoDichCongThanhToan }, "UX_GiaoDichThanhToan_MaCong")
                 .IsUnique()
                 .HasFilter("([MaGiaoDichCongThanhToan] IS NOT NULL)");

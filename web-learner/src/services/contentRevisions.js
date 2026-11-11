@@ -26,16 +26,31 @@ export function checkContentRevisions({ fresh = false } = {}) {
 
 export function ContentRevisionWatcher() {
   useEffect(() => {
-    const check = options => { if (!document.hidden) checkContentRevisions(options).catch(() => {}); };
+    let lastActivity = Date.now();
+    const check = options => {
+      if (!document.hidden && Date.now() - lastActivity < 15 * 60_000)
+        checkContentRevisions(options).catch(() => {});
+    };
     check({ fresh: true });
     const timer = window.setInterval(() => check(), 25_000);
+    const activity = () => {
+      const wasIdle = Date.now() - lastActivity >= 15 * 60_000;
+      lastActivity = Date.now();
+      if (wasIdle) check({ fresh: true });
+    };
     const focus = () => {
       if (document.hidden) return;
+      lastActivity = Date.now();
       check({ fresh: true });
     };
+    window.addEventListener("pointerdown", activity);
+    window.addEventListener("keydown", activity);
+    window.addEventListener("scroll", activity, { passive: true });
     window.addEventListener("focus", focus);
     document.addEventListener("visibilitychange", focus);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", focus);
+      window.removeEventListener("pointerdown", activity); window.removeEventListener("keydown", activity);
+      window.removeEventListener("scroll", activity);
       document.removeEventListener("visibilitychange", focus); };
   }, []);
   return null;

@@ -23,7 +23,8 @@ public sealed record CourseQuoteItem(int CourseId, string Name, decimal Price);
 public sealed record CourseQuote(IReadOnlyList<CourseQuoteItem> Courses, decimal Total, int ValidDays);
 public sealed record CourseQuoteOutcome(PaymentCreationError Error, CourseQuote? Quote = null);
 
-public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway gateway, TimeProvider clock)
+public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway gateway, TimeProvider clock,
+    PaymentExpirySignal? expirySignal = null)
 {
     public const int CourseValidDays = 30;
 
@@ -52,20 +53,18 @@ public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway ga
             return new(PaymentCreationError.InvalidSelection);
         var requested = courseIds.ToArray();
         var courses = await db.KhoaHoc.AsNoTracking().Where(c => requested.Contains(c.MaKhoaHoc))
-            .Select(c => new CourseQuoteItem(c.MaKhoaHoc, c.TenKhoaHoc,
-                c.GiaBanLe ?? 0m)).ToListAsync(ct);
+            .Select(c => new { c.MaKhoaHoc, c.TenKhoaHoc, Price = c.GiaBanLe ?? 0m,
+                c.TrangThai }).ToListAsync(ct);
         if (courses.Count != requested.Length || courses.Any(c => c.Price <= 0 ||
-            c.Price > 9_999_999_999m ||
+            c.Price > 9_999_999_999m || c.TrangThai != "DANG_MO" ||
             c.Price != decimal.Truncate(c.Price))) return new(PaymentCreationError.PackageUnavailable);
-        var availableCount = await db.KhoaHoc.AsNoTracking().CountAsync(c =>
-            requested.Contains(c.MaKhoaHoc) && c.TrangThai == "DANG_MO", ct);
-        if (availableCount != requested.Length) return new(PaymentCreationError.PackageUnavailable);
         var localNow = clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime;
         if (await CourseEntitlement.ActiveCourseIds(db, learnerId, localNow)
             .AnyAsync(id => requested.Contains(id), ct)) return new(PaymentCreationError.AlreadyActive);
         if (await CourseEntitlement.PendingCourseIds(db, learnerId, localNow)
             .AnyAsync(id => requested.Contains(id), ct)) return new(PaymentCreationError.AlreadyPending);
-        var ordered = courses.OrderBy(c => c.CourseId).ToArray();
+        var ordered = courses.OrderBy(c => c.MaKhoaHoc)
+            .Select(c => new CourseQuoteItem(c.MaKhoaHoc, c.TenKhoaHoc, c.Price)).ToArray();
         var total = ordered.Sum(c => c.Price);
         if (total > 9_999_999_999m) return new(PaymentCreationError.PackageUnavailable);
         return new(PaymentCreationError.None, new CourseQuote(ordered, total, CourseValidDays));
@@ -115,6 +114,7 @@ public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway ga
         db.GiaoDichThanhToan.Add(payment);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        expirySignal?.Wake();
         return new(PaymentCreationError.None, new(payment.MaGiaoDich, checkoutUrl));
     }
 
@@ -207,6 +207,7 @@ public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway ga
         db.GiaoDichThanhToan.Add(payment);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        expirySignal?.Wake();
         return new(PaymentCreationError.None, new(payment.MaGiaoDich, checkoutUrl));
     }
 }

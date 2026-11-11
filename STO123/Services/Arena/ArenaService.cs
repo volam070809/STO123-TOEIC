@@ -17,7 +17,7 @@ public sealed record ArenaSubmission(int QuestionIndex, int PlayerId, string? Ch
 
 public sealed class ArenaService(ToeicDbContext db, PracticePartService practice,
     SmartLearningService smartLearning, IHubContext<ArenaHub> hub, ArenaPresence presence,
-    ILogger<ArenaService> logger)
+    ArenaTickSignal tickSignal, ILogger<ArenaService> logger)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> MatchLocks = new();
@@ -94,6 +94,7 @@ public sealed class ArenaService(ToeicDbContext db, PracticePartService practice
             RoomCode = code, CreatedUtc = DateTime.UtcNow, Status = "WAITING" };
         db.ArenaMatch.Add(row);
         await db.SaveChangesAsync(ct);
+        tickSignal.Wake();
         return await StateForAsync(row, learnerId, ct);
     }
 
@@ -301,6 +302,18 @@ public sealed class ArenaService(ToeicDbContext db, PracticePartService practice
         }
     }
 
+    public Task<DateTime?> NextDeadlineUtcAsync(CancellationToken ct) =>
+        db.ArenaMatch.AsNoTracking()
+            .Where(x => x.Status == "WAITING" || x.Status == "READY" ||
+                x.Status == "STARTING" && x.StartedUtc != null ||
+                x.Status == "ACTIVE" && x.DeadlineUtc != null ||
+                x.Status == "REVEAL" && x.RevealUntilUtc != null)
+            .Select(x => x.Status == "WAITING" || x.Status == "READY"
+                ? (DateTime?)x.CreatedUtc.AddMinutes(30)
+                : x.Status == "STARTING" ? x.StartedUtc
+                : x.Status == "ACTIVE" ? x.DeadlineUtc : x.RevealUntilUtc)
+            .MinAsync(ct);
+
     private async Task<T> WithMatchAsync<T>(Guid id, int learnerId,
         Func<ArenaMatch, Task<T>> action, CancellationToken ct, bool allowJoin = false, bool system = false)
     {
@@ -320,15 +333,17 @@ public sealed class ArenaService(ToeicDbContext db, PracticePartService practice
 
     private async Task NotifyAsync(ArenaMatch row, CancellationToken ct)
     {
+        tickSignal.Wake();
         // SQL is already committed. A transient transport failure must not turn a saved answer
         // into an apparent failure; clients also synchronize from SQL after reconnect/polling.
         try
         {
+            var names = await LoadNamesAsync(row, CancellationToken.None);
             await hub.Clients.User(row.OwnerId.ToString()).SendAsync("ArenaState",
-                await StateForAsync(row, row.OwnerId, CancellationToken.None), CancellationToken.None);
+                await StateForAsync(row, row.OwnerId, CancellationToken.None, names), CancellationToken.None);
             if (row.OpponentId is { } opponent)
                 await hub.Clients.User(opponent.ToString()).SendAsync("ArenaState",
-                    await StateForAsync(row, opponent, CancellationToken.None), CancellationToken.None);
+                    await StateForAsync(row, opponent, CancellationToken.None, names), CancellationToken.None);
         }
         catch (Exception error) { logger.LogWarning(error, "Arena match {MatchId} notification will be recovered by sync", row.Id); }
     }
@@ -348,7 +363,26 @@ public sealed class ArenaService(ToeicDbContext db, PracticePartService practice
         { throw new ArenaProblem("MATCH_BUSY", "Ghép trận đang bận. Vui lòng thử lại.", 409); }
     }
 
-    private async Task<object> StateForAsync(ArenaMatch row, int learnerId, CancellationToken ct)
+    private async Task<Dictionary<int, (string Name, string? Avatar)>> LoadNamesAsync(
+        ArenaMatch row, CancellationToken ct)
+    {
+        try
+        {
+            return await db.NguoiDung.AsNoTracking().Where(x => x.MaNguoiDung == row.OwnerId ||
+                x.MaNguoiDung == row.OpponentId)
+                .Select(x => new { x.MaNguoiDung, x.HoTen, x.AnhDaiDien })
+                .ToDictionaryAsync(x => x.MaNguoiDung,
+                    x => (x.HoTen, (string?)x.AnhDaiDien), ct);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            logger.LogWarning(error, "Arena participant names unavailable for match {MatchId}", row.Id);
+            return new Dictionary<int, (string Name, string? Avatar)>();
+        }
+    }
+
+    private async Task<object> StateForAsync(ArenaMatch row, int learnerId, CancellationToken ct,
+        Dictionary<int, (string Name, string? Avatar)>? participantNames = null)
     {
         RequireParticipant(row, learnerId);
         var questions = Questions(row);
@@ -358,20 +392,7 @@ public sealed class ArenaService(ToeicDbContext db, PracticePartService practice
         var myAnswer = answers.FirstOrDefault(x => x.QuestionIndex == index && x.PlayerId == learnerId);
         var otherId = row.OwnerId == learnerId ? row.OpponentId : row.OwnerId;
         var otherAnswer = answers.FirstOrDefault(x => x.QuestionIndex == index && x.PlayerId == otherId);
-        Dictionary<int, (string Name, string? Avatar)> names;
-        try
-        {
-            names = await db.NguoiDung.AsNoTracking().Where(x => x.MaNguoiDung == row.OwnerId ||
-                x.MaNguoiDung == row.OpponentId)
-                .Select(x => new { x.MaNguoiDung, x.HoTen, x.AnhDaiDien })
-                .ToDictionaryAsync(x => x.MaNguoiDung,
-                    x => (x.HoTen, (string?)x.AnhDaiDien), ct);
-        }
-        catch (Exception error) when (error is not OperationCanceledException)
-        {
-            logger.LogWarning(error, "Arena participant names unavailable for match {MatchId}", row.Id);
-            names = new Dictionary<int, (string Name, string? Avatar)>();
-        }
+        var names = participantNames ?? await LoadNamesAsync(row, ct);
         (string? Url, string? Endpoint) Avatar(int id)
         {
             var avatar = names.GetValueOrDefault(id).Avatar;

@@ -26,6 +26,37 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
         var query = db.CauHoi.AsNoTracking().AsQueryable();
         if (part.HasValue) query = query.Where(q => q.MaPartNavigation.SoPart == part);
         if (bank is not null) query = query.Where(q => q.LoaiCauHoi == bank);
+        int? totalUnits = null;
+        int[]? pageQuestionIds = null;
+        int[]? pageGroupIds = null;
+        if (string.IsNullOrWhiteSpace(search) && completeness == "all")
+        {
+            // List navigation needs group keys first; large text, answer and document columns
+            // are only read for groups visible on this page.
+            var keys = await query.Select(q => new {
+                id = q.MaCauHoi, part = q.MaPartNavigation.SoPart,
+                groupId = q.NhomCauHoi == null ? (int?)null : q.NhomCauHoi.MaNguLieu,
+                order = q.NhomCauHoi == null ? 0 : q.NhomCauHoi.ThuTu
+            }).ToListAsync(ct);
+            var groups = keys.GroupBy(q => q.groupId is null ? $"q{q.id}" : $"g{q.groupId}")
+                .Select(g => {
+                    var members = g.OrderBy(q => q.order).ThenBy(q => q.id).ToArray();
+                    var first = members[0];
+                    return new { firstId = first.id, first.groupId,
+                        isGroup = first.groupId != null && first.part is 3 or 4 or 6 or 7,
+                        ids = members.Select(q => q.id).ToArray() };
+                }).Where(g => scope == "all" || scope == "groups" && g.isGroup ||
+                    scope == "single" && !g.isGroup)
+                .OrderBy(g => g.firstId).ToArray();
+            totalUnits = groups.Length;
+            var selected = groups.Skip((page - 1) * pageSize).Take(pageSize).ToArray();
+            pageQuestionIds = selected.SelectMany(g => g.ids).ToArray();
+            pageGroupIds = selected.Where(g => g.groupId.HasValue)
+                .Select(g => g.groupId!.Value).ToArray();
+            if (pageQuestionIds.Length == 0)
+                return Ok(new { items = Array.Empty<object>(), total = totalUnits.Value, page, pageSize });
+            query = query.Where(q => pageQuestionIds.Contains(q.MaCauHoi));
+        }
         var rows = await query.Select(q => new {
             id = q.MaCauHoi, part = q.MaPartNavigation.SoPart, bank = q.LoaiCauHoi,
             text = q.NoiDung, groupId = q.NhomCauHoi == null ? (int?)null : q.NhomCauHoi.MaNguLieu,
@@ -41,6 +72,8 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
         var documentsQuery = db.NguLieuTaiLieu.AsNoTracking()
             .Where(d => d.MaNguLieuNavigation.NhomCauHoi.Any(m =>
                 bank == null || m.MaCauHoiNavigation.LoaiCauHoi == bank));
+        if (pageGroupIds is not null)
+            documentsQuery = documentsQuery.Where(d => pageGroupIds.Contains(d.MaNguLieu));
         if (part.HasValue)
         {
             var selectedPart = part.Value;
@@ -52,6 +85,8 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
             .ToDictionary(g => g.Key, g => g.ToArray());
         var usageQuery = db.CauHoiDeThi.AsNoTracking()
             .Where(link => bank == null || link.MaCauHoiNavigation.LoaiCauHoi == bank);
+        if (pageQuestionIds is not null)
+            usageQuery = usageQuery.Where(link => pageQuestionIds.Contains(link.MaCauHoi));
         if (part.HasValue)
         {
             var selectedPart = part.Value;
@@ -61,6 +96,8 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
             .Select(link => new { link.MaCauHoi, link.MaDeThi,
                 name = link.MaDeThiNavigation.TenDe, status = link.MaDeThiNavigation.TrangThai,
                 current = link.MaDeThiNavigation.MaPhienBanHienHanh != null }).ToListAsync(ct);
+        var usageByQuestion = usage.GroupBy(link => link.MaCauHoi)
+            .ToDictionary(group => group.Key, group => group.ToArray());
         var keyword = search?.Trim();
         var groupSearch = keyword?.StartsWith("nhóm ", StringComparison.OrdinalIgnoreCase) == true ?
             keyword[5..].Trim() : keyword;
@@ -73,7 +110,7 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
                 var matching = string.IsNullOrWhiteSpace(keyword) ? [] : members.Where(q =>
                     numericSearch ? q.id == number : q.id.ToString().Contains(keyword) ||
                     (q.text?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)).Select(q => q.id).ToArray();
-                var memberIds = members.Select(q => q.id).ToHashSet();
+                var memberUsage = members.SelectMany(q => usageByQuestion.GetValueOrDefault(q.id) ?? []).ToArray();
                 var missing = new List<string>();
                 foreach (var q in members)
                 {
@@ -118,9 +155,9 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
                 return new { first.groupId, first.part, first.bank,
                     isGroup = first.groupId != null && first.part is 3 or 4 or 6 or 7,
                     questionIds = members.Select(q => q.id).ToArray(),
-                    questionCount = members.Length, examCount = usage.Where(link => memberIds.Contains(link.MaCauHoi))
+                    questionCount = members.Length, examCount = memberUsage
                         .Select(link => link.MaDeThi).Distinct().Count(),
-                    exams = usage.Where(link => memberIds.Contains(link.MaCauHoi))
+                    exams = memberUsage
                         .GroupBy(link => link.MaDeThi).Select(g => new { examId = g.Key,
                             name = g.First().name, status = g.First().status,
                             current = g.First().current }).ToArray(),
@@ -129,7 +166,7 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
                     matches = string.IsNullOrWhiteSpace(keyword) || matching.Length > 0 ||
                         (!exactQuestionExists && first.groupId?.ToString().Contains(groupSearch!) == true) ||
                         (!numericSearch && first.groupText?.Contains(keyword, StringComparison.OrdinalIgnoreCase) == true) ||
-                        (!numericSearch && usage.Any(link => memberIds.Contains(link.MaCauHoi) &&
+                        (!numericSearch && memberUsage.Any(link =>
                             link.name.Contains(keyword, StringComparison.OrdinalIgnoreCase))) };
             }).Where(u => u.matches &&
                 (completeness == "all" || completeness == "incomplete" && u.missingFields.Length > 0 ||
@@ -137,7 +174,8 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
                 (scope == "all" || scope == "groups" && u.isGroup ||
                 scope == "single" && !u.isGroup))
             .OrderBy(u => u.questionIds[0]).ToArray();
-        return Ok(new { items = units.Skip((page - 1) * pageSize).Take(pageSize), total = units.Length, page, pageSize });
+        return Ok(new { items = (totalUnits.HasValue ? units : units.Skip((page - 1) * pageSize).Take(pageSize)).ToArray(),
+            total = totalUnits ?? units.Length, page, pageSize });
     }
 
     [HttpGet("units/{questionId:int}")]

@@ -9,6 +9,8 @@ using Microsoft.EntityFrameworkCore;
 namespace STO123.Models;
 
 [Index("MaHocVien", "TrangThai", "NgayLamBai", Name = "IX_KetQuaLamBai_HocVienTrangThai", IsDescending = new[] { false, false, true })]
+[Index("MaHocVien", "LoaiBaiLam", "NgayLamBai", "MaKetQua",
+    Name = "IX_KetQuaLamBai_HocVienLoaiNgay", IsDescending = new[] { false, false, true, true })]
 [Index("MaLuotLam", Name = "UQ__KetQuaLa__C8728A37FBEBE052", IsUnique = true)]
 public partial class KetQuaLamBai
 {

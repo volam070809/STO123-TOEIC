@@ -801,6 +801,14 @@ CREATE INDEX IX_KetQuaLamBai_HocVienTrangThai
 ON dbo.KetQuaLamBai(MaHocVien, TrangThai, NgayLamBai DESC);
 GO
 
+CREATE INDEX IX_KetQuaLamBai_HocVienLoaiNgay
+ON dbo.KetQuaLamBai(MaHocVien, LoaiBaiLam, NgayLamBai DESC, MaKetQua DESC);
+GO
+
+CREATE INDEX IX_GiaoDichThanhToan_TrangThaiNgayTao
+ON dbo.GiaoDichThanhToan(TrangThai, NgayTao) INCLUDE (MaDangKy);
+GO
+
 CREATE INDEX IX_CauHoi_PartTrangThai
 ON dbo.CauHoi(MaPart, TrangThai);
 GO

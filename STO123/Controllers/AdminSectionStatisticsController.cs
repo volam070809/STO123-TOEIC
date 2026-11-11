@@ -242,16 +242,19 @@ public sealed class AdminSectionStatisticsController(ToeicDbContext db, TimeProv
     public async Task<IActionResult> VocabularyTopic(int topicId, CancellationToken ct)
     {
         if (!await db.ChuDe.AsNoTracking().AnyAsync(x => x.MaChuDe == topicId, ct)) return NotFound();
-        var links = await db.TuVungChuDe.AsNoTracking().Where(x => x.MaChuDe == topicId)
-            .Select(x => x.MaTuVung).ToArrayAsync(ct);
+        var links = db.TuVungChuDe.AsNoTracking().Where(x => x.MaChuDe == topicId)
+            .Select(x => x.MaTuVung);
         var progress = await db.TienDoTuVung.AsNoTracking().Where(x => links.Contains(x.MaTuVung))
-            .Select(x => new { x.MaNguoiDung, x.TrangThai }).ToListAsync(ct);
+            .GroupBy(_ => 1).Select(g => new {
+                learners = g.Select(x => x.MaNguoiDung).Distinct().Count(),
+                remembered = g.Count(x => x.TrangThai == "DA_NHO")
+            }).SingleOrDefaultAsync(ct);
         var practice = await db.LanLuyenTuVung.AsNoTracking().Where(x => x.MaChuDe == topicId)
             .GroupBy(_ => 1).Select(g => new { attempts = g.Count(),
                 learners = g.Select(x => x.MaNguoiDung).Distinct().Count() }).SingleOrDefaultAsync(ct);
-        return Ok(new { metrics = new[] { Metric("Từ trong chủ đề", links.Length),
-            Metric("Học viên có tiến độ", progress.Select(x => x.MaNguoiDung).Distinct().Count()),
-            Metric("Từ đã nhớ", progress.Count(x => x.TrangThai == "DA_NHO"), "Tổng bản ghi tiến độ"),
+        return Ok(new { metrics = new[] { Metric("Từ trong chủ đề", await links.CountAsync(ct)),
+            Metric("Học viên có tiến độ", progress?.learners ?? 0),
+            Metric("Từ đã nhớ", progress?.remembered ?? 0, "Tổng bản ghi tiến độ"),
             Metric("Lượt luyện chủ đề", practice?.attempts ?? 0),
             Metric("Học viên đã luyện", practice?.learners ?? 0) } });
     }
@@ -260,12 +263,18 @@ public sealed class AdminSectionStatisticsController(ToeicDbContext db, TimeProv
     public async Task<IActionResult> Lectures([FromQuery] int? courseId, CancellationToken ct)
     {
         if (courseId is <= 0) return BadRequest(new { message = "Mã khóa học không hợp lệ." });
-        var lectureIds = courseId is null ? null : await db.BuocLoTrinh.AsNoTracking()
+        var lectureIds = db.BuocLoTrinh.AsNoTracking()
             .Where(s => s.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc == courseId && s.MaBaiGiang != null)
-            .Select(s => s.MaBaiGiang!.Value).Distinct().ToArrayAsync(ct);
-        var lectures = await db.BaiGiang.AsNoTracking().CountAsync(x => lectureIds == null || lectureIds.Contains(x.MaBaiGiang), ct);
-        var resources = await db.TaiNguyenBaiGiang.AsNoTracking()
-            .Where(x => !x.IsArchived && (lectureIds == null || lectureIds.Contains(x.MaBaiGiang)))
+            .Select(s => s.MaBaiGiang!.Value).Distinct();
+        var lectureQuery = db.BaiGiang.AsNoTracking().AsQueryable();
+        var resourceQuery = db.TaiNguyenBaiGiang.AsNoTracking().Where(x => !x.IsArchived);
+        if (courseId.HasValue)
+        {
+            lectureQuery = lectureQuery.Where(x => lectureIds.Contains(x.MaBaiGiang));
+            resourceQuery = resourceQuery.Where(x => lectureIds.Contains(x.MaBaiGiang));
+        }
+        var lectures = await lectureQuery.CountAsync(ct);
+        var resources = await resourceQuery
             .GroupBy(x => x.LoaiTaiNguyen).Select(g => new { kind = g.Key, count = g.Count() }).ToListAsync(ct);
         var completed = await db.TienDoBuocLoTrinh.AsNoTracking().CountAsync(p =>
             p.TrangThai == "HOAN_THANH" && p.MaBuocNavigation.MaBaiGiang != null &&

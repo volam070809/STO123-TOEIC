@@ -51,22 +51,25 @@ public sealed class AdminCurriculumController(ToeicDbContext db) : ControllerBas
     public async Task<IActionResult> ProgressSummary(int courseId, CancellationToken ct)
     {
         if (!await db.KhoaHoc.AnyAsync(x => x.MaKhoaHoc == courseId, ct)) return NotFound();
-        var enrollmentIds = await db.DangKyGoiHoc.AsNoTracking().Where(e =>
+        var enrollments = db.DangKyGoiHoc.AsNoTracking().Where(e =>
             e.TrangThai == "DANG_SU_DUNG" && e.GiaoDichThanhToan.Any(p => p.TrangThai == "THANH_CONG") &&
             (e.MaGoiHoc != null && e.MaGoiHocNavigation.MaKhoaHoc.Any(c => c.MaKhoaHoc == courseId) ||
              e.MaGoiHoc == null && e.ChiTietDangKyKhoaHoc.Any(c => c.MaKhoaHoc == courseId)))
-            .Select(e => e.MaDangKy).ToArrayAsync(ct);
-        var activeStepIds = await db.BuocLoTrinh.AsNoTracking().Where(s =>
+            .Select(e => e.MaDangKy);
+        var activeSteps = db.BuocLoTrinh.AsNoTracking().Where(s =>
             s.MaLessonNavigation.MaUnitNavigation.MaKhoaHoc == courseId && !s.IsArchived &&
             !s.MaLessonNavigation.IsArchived && !s.MaLessonNavigation.MaUnitNavigation.IsArchived)
-            .Select(s => s.MaBuoc).ToArrayAsync(ct);
+            .Select(s => s.MaBuoc);
         var progress = await db.TienDoBuocLoTrinh.AsNoTracking().Where(p =>
-            enrollmentIds.Contains(p.MaDangKy) && activeStepIds.Contains(p.MaBuoc))
-            .Select(p => new { p.MaDangKy, p.TrangThai }).ToListAsync(ct);
-        return Ok(new { enrolled = enrollmentIds.Length,
-            learnersStarted = progress.Select(p => p.MaDangKy).Distinct().Count(),
-            completedActivityRecords = progress.Count(p => p.TrangThai == "HOAN_THANH"),
-            activeActivities = activeStepIds.Length });
+                enrollments.Contains(p.MaDangKy) && activeSteps.Contains(p.MaBuoc))
+            .GroupBy(_ => 1).Select(group => new {
+                learnersStarted = group.Select(p => p.MaDangKy).Distinct().Count(),
+                completedActivityRecords = group.Count(p => p.TrangThai == "HOAN_THANH")
+            }).FirstOrDefaultAsync(ct);
+        return Ok(new { enrolled = await enrollments.CountAsync(ct),
+            learnersStarted = progress?.learnersStarted ?? 0,
+            completedActivityRecords = progress?.completedActivityRecords ?? 0,
+            activeActivities = await activeSteps.CountAsync(ct) });
     }
 
     [HttpGet("courses/{courseId:int}/outline")]
