@@ -42,12 +42,14 @@ export default function QuestionContentPreview({ unit, token, onEditQuestion }) 
       <Media path={unit.resource.audio} bank={unit.bank || "DE_THI"} token={token} audio />
       <Media path={unit.resource.image} bank={unit.bank || "DE_THI"} token={token} />
     </section>}
-    {unit.documents?.map((doc, index) => <div className="exam-document-pair" key={index}><DocumentPreview doc={doc} index={index} title={`Tài liệu ${index + 1} · Bản gốc`} />
+    {unit.documents?.map((doc, index) => <div className="exam-document-pair" key={index}><div className="exam-document-original">
+      <DocumentPreview doc={doc} index={index} title={`Tài liệu ${index + 1} · Bản gốc`} />
+      {doc.image && <Media path={doc.image} bank={unit.bank || "DE_THI"} token={token} />}</div>
       {hasTranslatedContent(part7Translation?.documents[index], fromDocument(doc)) && <DocumentPreview index={index}
         doc={{ type: doc.type, content: typeof part7Translation.documents[index].content === "string" ?
           part7Translation.documents[index].content : JSON.stringify(part7Translation.documents[index].content) }}
         title={`Tài liệu ${index + 1} · Bản dịch tiếng Việt`} translation />}
-      {doc.image && <Media path={doc.image} bank={unit.bank || "DE_THI"} token={token} />}</div>)}
+    </div>)}
     {questions.map((question, index) => <section className="exam-author-question" key={question.id}>
       <h3>Câu {index + 1} · #{question.id}</h3>
       {question.text && <p style={{ whiteSpace: "pre-wrap" }}>{question.text}</p>}

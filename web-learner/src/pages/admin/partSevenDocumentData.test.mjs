@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { documentPayload, fromDocument } from "./partSevenDocumentData.js";
+import { documentIssues, documentPayload, documentTypes, fromDocument, moveItem,
+  newDocument, partSevenIssues } from "./partSevenDocumentData.js";
 
 test("Part 7 structured legacy documents round trip without changing untouched fields", () => {
   const cases = [
@@ -35,4 +36,27 @@ test("Part 7 TEXT and IMAGE retain their native values", () => {
 
 test("Unparseable legacy document is marked for blocking instead of converting", () => {
   assert.equal(fromDocument({ type: "TABLE", content: "legacy-table" })._parseError, true);
+});
+
+test("all Part 7 templates keep structure and attached image through create and edit", () => {
+  assert.equal(Object.keys(documentTypes).length, 15);
+  for (const type of ["LETTER", "ARTICLE", "NOTICE", "POLICY", "INVOICE", "WEB", "AD", "SCHEDULE", "SURVEY"]) {
+    const item = { ...newDocument(type), title: "Source", imagePath: "part7/photo.png" };
+    const payload = documentPayload(item);
+    const loaded = fromDocument({ type, content: payload.content, image: payload.imagePath });
+    assert.equal(loaded.title, "Source");
+    assert.equal(loaded.imagePath, "part7/photo.png");
+    assert.deepEqual(JSON.parse(documentPayload(loaded).content), JSON.parse(payload.content));
+  }
+  assert.equal(documentPayload({ ...newDocument("TEXT"), content: "Text", imagePath: "part7/photo.png" }).imagePath,
+    "part7/photo.png");
+});
+
+test("Part 7 editors detect incomplete documents and question explanations", () => {
+  const question = { text: "Question?", a: "A", b: "B", c: "C", d: "D", explanation: "Why" };
+  const issues = partSevenIssues([newDocument("IMAGE")], [question, { ...question, explanation: "" }]);
+  assert.match(issues.join(" "), /cần tải hình ảnh/);
+  assert.match(issues.join(" "), /cần nhập giải thích/);
+  assert.deepEqual(documentIssues({ ...newDocument("INVOICE"), title: "Invoice", rows: [["Tea", "1", "$2"]] }, 0), []);
+  assert.deepEqual(moveItem(["one", "two", "three"], 0, 1), ["two", "one", "three"]);
 });

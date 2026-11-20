@@ -6,6 +6,7 @@ import PlacementIcon from "./PlacementIcon";
 
 function materialLayout(group, imageSize) {
   if (!group) return "";
+  if (group.part === 7) return "";
   const documents = group.documents || [];
   const tables = documents.filter(document => document.type === "TABLE");
   const textLength = (group.context?.length || 0) + documents.reduce((length, document) => {
@@ -66,12 +67,14 @@ function Question({ question, review, onAnswer, onFlag, onRetry, saveState, subm
 
 export default function ExamContent({ group, independentQuestion, attemptId, token, review = false,
   mode = "MOCK", onAnswer, onFlag, onRetry, saveStates = {}, submissionPending = false }) {
-  const [sourceOpen, setSourceOpen] = useState(() => Boolean(group?.hasImage && [3, 4].includes(group.part)));
+  const [sourceOpen, setSourceOpen] = useState(() => Boolean(group?.part === 7 ||
+    group?.hasImage && [3, 4].includes(group.part)));
   const [imageSize, setImageSize] = useState(null);
   const questions = group?.questions ?? [independentQuestion];
   const partOne = group?.part === 1;
   const base = `/api/attempts/${attemptId}/groups/${group?.groupId}`;
-  return <div className={`exam-content${group ? " exam-content-grouped" + (partOne ? " is-part-one" : materialLayout(group, imageSize)) : ""}`}>
+  return <div className={`exam-content${group ? " exam-content-grouped" +
+    (partOne ? " is-part-one" : group.part === 7 ? " exam-part7-content" : materialLayout(group, imageSize)) : ""}`}>
     {group && <div className="exam-source">
       {!partOne && <button className="outline-button exam-source-toggle" type="button" aria-expanded={sourceOpen}
         onClick={() => setSourceOpen(value => !value)}>{sourceOpen ? "Thu gọn đề" : "Xem đề"}</button>}

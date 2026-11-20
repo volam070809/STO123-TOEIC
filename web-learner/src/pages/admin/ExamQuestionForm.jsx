@@ -2,31 +2,43 @@ import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../../services/api";
 import PartSevenDocumentForm from "./PartSevenDocumentForm";
 import PartSevenTranslationForm from "./PartSevenTranslationForm";
-import { documentPayload, newDocument } from "./partSevenDocumentData";
-import { serializePart7Translation } from "./partSevenTranslationData";
+import PartSevenLivePreview from "./PartSevenLivePreview";
+import { documentPayload, moveItem, newDocument, partSevenIssues } from "./partSevenDocumentData";
+import { serializePart7Translation, updateTranslationStructure } from "./partSevenTranslationData";
+import { clearPartSevenDraft, loadPartSevenDraft, savePartSevenDraft } from "./partSevenDraft";
 
 const emptyQuestion = () => ({ text: "", translation: "", a: "", b: "", c: "", d: "", correct: "A", difficulty: 2, explanation: "" });
 const questionCount = part => ({ 1: 1, 2: 1, 3: 3, 4: 3, 5: 1, 6: 4, 7: 2 })[Number(part)] || 1;
 
 export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, initialPart = 1, initialCount = null, examId = null, inline = false, fixedPart = false }) {
+  const [draft] = useState(() => Number(initialPart) === 7 ?
+    loadPartSevenDraft(token, fixedBank || "DE_THI", examId) : null);
   const [part, setPart] = useState(Number(initialPart));
   const [bank, setBank] = useState(fixedBank || "DE_THI");
-  const [text, setText] = useState("");
+  const [text, setText] = useState(draft?.text || "");
   const [translation, setTranslation] = useState("");
   const [audioPath, setAudioPath] = useState("");
   const [imagePath, setImagePath] = useState("");
-  const [documents, setDocuments] = useState(() => Number(initialPart) === 7 ? [newDocument()] : []);
-  const [part7Translation, setPart7Translation] = useState({ legacyText: "", documents: [] });
+  const [documents, setDocuments] = useState(() => draft?.documents || (Number(initialPart) === 7 ? [newDocument()] : []));
+  const [part7Translation, setPart7Translation] = useState(draft?.part7Translation || { legacyText: "", documents: [] });
   const [questions, setQuestions] = useState(() =>
-    Array.from({ length: initialCount || questionCount(initialPart) }, emptyQuestion));
+    draft?.questions || Array.from({ length: initialCount || questionCount(initialPart) }, emptyQuestion));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [draftNotice, setDraftNotice] = useState(draft ? "Đã mở lại bản nháp Part 7 trên trình duyệt này." : "");
   const [fieldErrors, setFieldErrors] = useState({});
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirty] = useState(Boolean(draft));
   const [previews, setPreviews] = useState({});
   const previewUrls = useRef([]);
 
   useEffect(() => () => previewUrls.current.forEach(URL.revokeObjectURL), []);
+
+  useEffect(() => {
+    if (part !== 7 || !dirty) return;
+    const timer = window.setTimeout(() => savePartSevenDraft(token, bank, examId,
+      { text, documents, part7Translation, questions }), 500);
+    return () => window.clearTimeout(timer);
+  }, [part, dirty, token, bank, examId, text, documents, part7Translation, questions]);
 
   useEffect(() => {
     if (!dirty) return undefined;
@@ -45,6 +57,8 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
 
   function close() {
     if (busy) return;
+    if (part === 7 && dirty && savePartSevenDraft(token, bank, examId,
+      { text, documents, part7Translation, questions })) { onClose(); return; }
     if (dirty && !window.confirm("Bạn có thay đổi chưa lưu. Đóng và bỏ nội dung đã nhập?")) return;
     onClose();
   }
@@ -53,12 +67,13 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
     const next = Number(value);
     if (next === part) return;
     if (dirty && !window.confirm("Đổi Part sẽ đặt lại ngữ liệu và số câu theo cấu trúc mới. Tiếp tục?")) return;
+    const saved = next === 7 ? loadPartSevenDraft(token, bank, examId) : null;
     setPart(next); setDirty(true); setError("");
     setFieldErrors({});
-    setQuestions(Array.from({ length: questionCount(next) }, emptyQuestion));
-    setDocuments(next === 7 ? [newDocument()] : []);
-    setPart7Translation({ legacyText: "", documents: [] });
-    setText(""); setTranslation(""); setAudioPath(""); setImagePath("");
+    setQuestions(saved?.questions || Array.from({ length: questionCount(next) }, emptyQuestion));
+    setDocuments(saved?.documents || (next === 7 ? [newDocument()] : []));
+    setPart7Translation(saved?.part7Translation || { legacyText: "", documents: [] });
+    setText(saved?.text || ""); setTranslation(""); setAudioPath(""); setImagePath("");
     setPreviews({});
   }
 
@@ -66,6 +81,23 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
     setQuestions(old => old.map((item, at) => at === index ? { ...item, [key]: value } : item));
     setFieldErrors(old => ({ ...old, [`${index}-${key}`]: "" }));
     setDirty(true);
+  }
+
+  function changeBank(next) {
+    if (next === bank) return;
+    if (part === 7) {
+      if (dirty && !savePartSevenDraft(token, bank, examId, { text, documents, part7Translation, questions }) &&
+        !window.confirm("Không lưu được bản nháp. Đổi ngân hàng và bỏ nội dung Part 7 đang nhập?")) return;
+      const saved = loadPartSevenDraft(token, next, examId);
+      setDocuments(saved?.documents || [newDocument()]);
+      setQuestions(saved?.questions || Array.from({ length: 2 }, emptyQuestion));
+      setPart7Translation(saved?.part7Translation || { legacyText: "", documents: [] });
+      setText(saved?.text || "");
+      setDraftNotice(saved ? "Đã mở lại bản nháp Part 7 của ngân hàng này." : "");
+      setPreviews({});
+      setDirty(Boolean(saved));
+    } else setDirty(true);
+    setBank(next);
   }
 
   async function upload(file, setter, key) {
@@ -119,6 +151,10 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
     if (part === 7 && (documents.length < 1 || documents.length > 3)) {
       setError("Part 7 cần từ 1 đến 3 tài liệu."); return;
     }
+    if (part === 7) {
+      const issues = partSevenIssues(documents, questions);
+      if (issues.length) { setError(issues.join(" ")); return; }
+    }
     let structuredTranslation = null;
     if (part === 7) {
       try { structuredTranslation = serializePart7Translation(part7Translation, documents); }
@@ -142,6 +178,7 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
       const result = await apiRequest(examId ? `/api/admin/content/question-authoring/exam/${examId}` : "/api/admin/content/question-authoring", {
         token, method: "POST", body: payload, timeoutMs: 90_000
       });
+      if (part === 7) clearPartSevenDraft(token, bank, examId);
       setDirty(false);
       onSaved(result);
     } catch (e) { setError(e.message); }
@@ -149,13 +186,14 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
   }
 
   return <div className={inline ? "admin-panel exam-inline-author" : "exam-drawer-backdrop"} onMouseDown={event => { if (!inline && event.target === event.currentTarget) close(); }}>
-    <div className={inline ? "exam-author-inline" : "exam-drawer exam-author-drawer"} role={inline ? undefined : "dialog"} aria-modal={inline ? undefined : "true"} aria-label="Thêm câu hỏi">
+    <div className={inline ? "exam-author-inline" : `exam-drawer exam-author-drawer${part === 7 ? " is-part-seven" : ""}`} role={inline ? undefined : "dialog"} aria-modal={inline ? undefined : "true"} aria-label="Thêm câu hỏi">
       <div className="exam-drawer-head"><div><h2>{[1, 2, 5].includes(Number(part)) ? "Thêm câu hỏi" : "Thêm nhóm câu hỏi"} · Part {part}</h2><p>Nhập nội dung theo cấu trúc Part; lưu một lần khi hoàn tất.</p></div><button type="button" onClick={close} disabled={busy}>Đóng</button></div>
       {error && <p role="alert" className="exam-alert exam-alert-error">{error}</p>}
+      {part === 7 && draftNotice && <p role="status" className="exam-alert">{draftNotice}</p>}
       <form onSubmit={save} onInvalidCapture={event => { const section = event.target.closest("details"); if (section) section.open = true; }} className="exam-author-form">
         <div className="exam-author-two"><label>Part<select value={part} onChange={event => changePart(event.target.value)} disabled={busy || fixedPart}>{Array.from({ length: 7 }, (_, index) => <option key={index + 1} value={index + 1}>Part {index + 1}</option>)}</select></label>
           {fixedBank ? <p className="exam-form-bank">Ngân hàng: <strong>{fixedBank === "DE_THI" ? "Câu hỏi đề thi" : "Câu hỏi luyện tập"}</strong></p> :
-            <label>Ngân hàng<select value={bank} onChange={event => { setBank(event.target.value); setDirty(true); }} disabled={busy}><option value="DE_THI">Đề thi</option><option value="LUYEN_TAP">Luyện tập</option></select></label>}</div>
+            <label>Ngân hàng<select value={bank} onChange={event => changeBank(event.target.value)} disabled={busy}><option value="DE_THI">Đề thi</option><option value="LUYEN_TAP">Luyện tập</option></select></label>}</div>
         {part !== 5 && <section><h3>{Number(part) === 7 ? "Tài liệu đọc" : Number(part) === 6 ? "Đoạn văn chung" : Number(part) <= 2 ? "Âm thanh và hình ảnh" : "Ngữ liệu nghe chung"}</h3>
           {[3, 4, 6].includes(Number(part)) && <label>{Number(part) === 3 ? "Hội thoại chung" : Number(part) === 4 ? "Bài nói chung" : "Đoạn văn có chỗ trống [1]–[4]"}
             <textarea value={text} onChange={event => { setText(event.target.value); setDirty(true); }} rows={Number(part) === 6 ? 7 : 4}/></label>}
@@ -163,9 +201,15 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
             {[1, 3, 4].includes(Number(part)) && fileField("Hình ảnh", imagePath, setImagePath, ".jpg,.jpeg,.png,.webp,image/*")}</div>}
           {part === 7 && <div className="exam-author-docs"><div className="exam-drawer-head"><h3>Tài liệu đọc</h3><button type="button" disabled={documents.length >= 3} onClick={() => { setDocuments(old => [...old, newDocument()]); setDirty(true); }}>Thêm tài liệu</button></div>
             {documents.map((doc, index) => <PartSevenDocumentForm key={index} index={index} value={doc} fileField={fileField}
-              canRemove={documents.length > 1} onRemove={() => { setDocuments(old => old.filter((_, at) => at !== index));
+              canRemove={documents.length > 1} count={documents.length}
+              onMove={direction => { setDocuments(old => moveItem(old, index, direction));
+                setPart7Translation(old => ({ ...old, documents: moveItem(old.documents, index, direction) }));
+                setPreviews({}); setDirty(true); }}
+              onRemove={() => { setDocuments(old => old.filter((_, at) => at !== index)); setPreviews({});
                 setPart7Translation(old => ({ ...old, documents: old.documents.filter((_, at) => at !== index) })); setDirty(true); }}
-              onChange={next => { setDocuments(old => old.map((item, at) => at === index ? next : item)); setDirty(true); }}/>)}</div>}
+              onChange={(next, mutation) => { setDocuments(old => old.map((item, at) => at === index ? next : item));
+                if (mutation) setPart7Translation(old => updateTranslationStructure(old, index, mutation));
+                setDirty(true); }}/>)}</div>}
           {part === 7 && <section className="exam-author-docs"><h3>Bản dịch tiếng Việt theo từng tài liệu</h3>
             {documents.map((doc, index) => <PartSevenTranslationForm key={index} original={doc} token={token} bank={bank}
               value={part7Translation.documents[index]} index={index} onChange={next => {
@@ -190,6 +234,13 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
           {part === 7 && <button type="button" disabled={questions.length >= 5} onClick={() => { setQuestions(old => [...old, emptyQuestion()]); setDirty(true); }}>Thêm câu Part 7</button>}
           {part === 7 && questions.length > 2 && <button type="button" onClick={() => { setQuestions(old => old.slice(0, -1)); setDirty(true); }}>Bớt một câu</button>}
         </section>
+        {part === 7 && <PartSevenLivePreview documents={documents} questions={questions} text={text}
+          token={token} bank={bank} issues={partSevenIssues(documents, questions)} />}
+        {part === 7 && <div className="exam-editor-actions"><button type="button" disabled={busy}
+          onClick={() => setDraftNotice(savePartSevenDraft(token, bank, examId,
+            { text, documents, part7Translation, questions }) ?
+            "Đã lưu bản nháp trên trình duyệt này. Có thể đóng và mở lại form." :
+            "Không lưu được bản nháp trên trình duyệt này.")}>Lưu nháp</button></div>}
         <div className="exam-editor-actions"><button className="admin-button admin-button-secondary" type="button" onClick={close} disabled={busy}>Hủy</button><button className="admin-button" type="submit" disabled={busy}>{busy ? "Đang xử lý…" : [1, 2, 5].includes(Number(part)) ? "Lưu câu hỏi" : "Lưu nhóm câu"}</button></div>
       </form>
     </div>

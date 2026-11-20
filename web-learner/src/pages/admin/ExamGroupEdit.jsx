@@ -2,13 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { apiRequest, API_BASE_URL } from "../../services/api";
 import PartSevenDocumentForm from "./PartSevenDocumentForm";
 import PartSevenTranslationForm from "./PartSevenTranslationForm";
-import { documentPayload, fromDocument, newDocument } from "./partSevenDocumentData";
-import { parsePart7Translation, serializePart7Translation } from "./partSevenTranslationData";
+import PartSevenLivePreview from "./PartSevenLivePreview";
+import { documentIssues, documentPayload, fromDocument, moveItem, newDocument } from "./partSevenDocumentData";
+import { parsePart7Translation, serializePart7Translation, updateTranslationStructure } from "./partSevenTranslationData";
+import { clearPartSevenGroupDraft, loadPartSevenGroupDraft, savePartSevenGroupDraft } from "./partSevenDraft";
 
 const part6Translation = (value, order) => value?.replace(/\r/g, "").split("\n")
   .find(line => line.trim().startsWith(`[${order}]`))?.trim().slice(3).trim() || "";
 const withPart6Translation = (value, order, translation) =>
   Array.from({ length: 4 }, (_, index) => `[${index + 1}] ${index + 1 === order ? translation : part6Translation(value, index + 1)}`).join("\n");
+
+const sourceValue = unit => ({ text: unit.resource?.text || "", translation: unit.resource?.translation || "",
+  audioPath: unit.resource?.audio || "", imagePath: unit.resource?.image || "",
+  documents: (unit.documents || []).map(fromDocument) });
+const sourceTranslation = unit => parsePart7Translation(unit.resource?.translation,
+  (unit.documents || []).map(fromDocument));
 
 function SavedImagePreview({ path, bank, token, localUrl }) {
   const [preview, setPreview] = useState({ path: "", url: "", error: false });
@@ -37,24 +45,27 @@ function SavedImagePreview({ path, bank, token, localUrl }) {
 }
 
 export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
-  const [value, setValue] = useState(() => ({
-    text: unit.resource?.text || "", translation: unit.resource?.translation || "",
-    audioPath: unit.resource?.audio || "", imagePath: unit.resource?.image || "",
-    documents: (unit.documents || []).map(fromDocument)
-  }));
+  const [source] = useState(() => JSON.stringify({ resource: unit.resource, documents: unit.documents }));
+  const [draft] = useState(() => unit.part === 7 ?
+    loadPartSevenGroupDraft(token, unit.bank || "DE_THI", unit.groupId, source) : null);
+  const [value, setValue] = useState(() => draft?.value || sourceValue(unit));
   const [part7Translation, setPart7Translation] = useState(() =>
-    parsePart7Translation(unit.resource?.translation, (unit.documents || []).map(fromDocument)));
+    draft?.part7Translation || sourceTranslation(unit));
   const [previews, setPreviews] = useState({});
   const objectUrls = useRef([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [initial, setInitial] = useState(() => JSON.stringify({ value: {
-    text: unit.resource?.text || "", translation: unit.resource?.translation || "",
-    audioPath: unit.resource?.audio || "", imagePath: unit.resource?.image || "",
-    documents: (unit.documents || []).map(fromDocument)
-  }, part7Translation: parsePart7Translation(unit.resource?.translation, (unit.documents || []).map(fromDocument)) }));
+  const [draftNotice, setDraftNotice] = useState(draft ? "Đã mở lại bản nháp chỉnh sửa nhóm trên trình duyệt này." : "");
+  const [initial, setInitial] = useState(() => JSON.stringify({ value: sourceValue(unit),
+    part7Translation: sourceTranslation(unit) }));
   const dirty = JSON.stringify({ value, part7Translation }) !== initial;
   useEffect(() => () => objectUrls.current.forEach(URL.revokeObjectURL), []);
+  useEffect(() => {
+    if (unit.part !== 7 || !dirty) return;
+    const timer = window.setTimeout(() => savePartSevenGroupDraft(token, unit.bank || "DE_THI",
+      unit.groupId, source, value, part7Translation), 500);
+    return () => window.clearTimeout(timer);
+  }, [unit.part, unit.bank, unit.groupId, token, source, value, part7Translation, dirty]);
   useEffect(() => {
     if (!dirty) return undefined;
     const warn = event => { event.preventDefault(); event.returnValue = ""; };
@@ -70,6 +81,8 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
       document.removeEventListener("click", guardLink, true); };
   }, [dirty]);
   function cancel() {
+    if (unit.part === 7 && dirty && savePartSevenGroupDraft(token, unit.bank || "DE_THI",
+      unit.groupId, source, value, part7Translation)) { onCancel(); return; }
     if (dirty && !window.confirm("Ngữ liệu có thay đổi chưa lưu. Bỏ thay đổi và quay lại?")) return;
     onCancel();
   }
@@ -94,11 +107,11 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
     return <div className="exam-author-file"><strong>{label}</strong><small>{path || "Chưa chọn tệp"}</small>
       <label className="exam-file-button">Tải tệp<input type="file" accept={accept} disabled={busy}
         onChange={event => { upload(event.target.files?.[0], setter, key); event.target.value = ""; }} /></label>
-      {key === "image" && [3, 4].includes(unit.part) && path && <button className="exam-file-button" type="button" disabled={busy}
+      {accept.includes("image") && path && <button className="exam-file-button" type="button" disabled={busy}
         onClick={() => { setter(""); setPreviews(old => ({ ...old, [key]: null })); }}>Gỡ ảnh</button>}
       {previews[key] && (accept.includes("audio") ? <audio controls src={previews[key]} /> :
         <img className="exam-media-preview" src={previews[key]} alt={label} />)}
-      {key === "image" && <SavedImagePreview path={path} bank={unit.bank || "DE_THI"}
+      {accept.includes("image") && <SavedImagePreview path={path} bank={unit.bank || "DE_THI"}
         token={token} localUrl={previews[key]} />}
     </div>;
   }
@@ -117,6 +130,10 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
     if (value.documents.some(doc => doc._parseError)) {
       setError("Có tài liệu cũ không đọc được. Chưa lưu để tránh mất dữ liệu."); return;
     }
+    if (unit.part === 7) {
+      const issues = value.documents.flatMap(documentIssues);
+      if (issues.length) { setError(issues.join(" ")); return; }
+    }
     let translated = value.translation || null;
     if (unit.part === 7) {
       try { translated = serializePart7Translation(part7Translation, value.documents); }
@@ -132,6 +149,7 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
       });
       setValue(old => ({ ...old, translation: translated || "" }));
       setInitial(JSON.stringify({ value: { ...value, translation: translated || "" }, part7Translation }));
+      if (unit.part === 7) clearPartSevenGroupDraft(token, unit.bank || "DE_THI", unit.groupId);
       onSaved(result);
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
@@ -145,6 +163,7 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
         `${exam.name} (#${exam.examId}, ${exam.status})`).join("; ")}.</>}
       {" "}Khi lưu, đề hiện hành liên quan sẽ được cập nhật. Bài thi đã bắt đầu vẫn dùng nội dung lúc bắt đầu.</p>
     {error && <p role="alert" className="exam-alert exam-alert-error">{error}</p>}
+    {unit.part === 7 && draftNotice && <p role="status" className="exam-alert">{draftNotice}</p>}
     <form className="exam-author-form" onSubmit={save} onInvalidCapture={event => { const section = event.target.closest("details"); if (section) section.open = true; }}>
       {unit.part >= 3 && unit.part <= 6 && <label>{label}<textarea rows={unit.part === 6 ? 7 : 4}
         value={value.text} onChange={event => change("text", event.target.value)} /></label>}
@@ -157,11 +176,19 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
           change("documents", [...value.documents, newDocument()])}>Thêm tài liệu</button></div>
         {value.documents.map((doc, index) => <PartSevenDocumentForm key={index} value={doc} index={index}
           fileField={(label, path, setter, accept) => fileField(label, path, setter, accept, `doc-${index}`)}
-          canRemove={value.documents.length > 1}
+          canRemove={value.documents.length > 1} count={value.documents.length}
+          onMove={direction => { change("documents", moveItem(value.documents, index, direction));
+            setPart7Translation(old => ({ ...old, documents: moveItem(old.documents, index, direction) }));
+            setPreviews({}); }}
           onRemove={() => { change("documents", value.documents.filter((_, at) => at !== index));
-            setPart7Translation(old => ({ ...old, documents: old.documents.filter((_, at) => at !== index) })); }}
-          onChange={next => change("documents", value.documents.map((item, at) => at === index ? next : item))} />)}
+            setPart7Translation(old => ({ ...old, documents: old.documents.filter((_, at) => at !== index) }));
+            setPreviews({}); }}
+          onChange={(next, mutation) => { change("documents", value.documents.map((item, at) => at === index ? next : item));
+            if (mutation) setPart7Translation(old => updateTranslationStructure(old, index, mutation)); }} />)}
       </div>}
+      {unit.part === 7 && <PartSevenLivePreview documents={value.documents} questions={unit.questions || []}
+        text={value.text} token={token} bank={unit.bank || "DE_THI"}
+        issues={value.documents.flatMap(documentIssues)} />}
       {unit.part === 7 && <div className="exam-author-docs"><h3>Bản dịch tiếng Việt theo từng tài liệu</h3>
         {value.documents.map((doc, index) => <PartSevenTranslationForm key={index} original={doc} token={token} bank={unit.bank}
           value={part7Translation.documents[index]} index={index} onChange={next =>
@@ -184,6 +211,10 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
           value={value.translation} onChange={event => change("translation", event.target.value)} /></label>}
       </details>}
       <div className="exam-editor-actions"><button type="button" onClick={cancel} disabled={busy}>Hủy sửa</button>
+        {unit.part === 7 && <button type="button" disabled={busy} onClick={() =>
+          setDraftNotice(savePartSevenGroupDraft(token, unit.bank || "DE_THI", unit.groupId,
+            source, value, part7Translation) ? "Đã lưu bản nháp chỉnh sửa trên trình duyệt này." :
+            "Không lưu được bản nháp trên trình duyệt này.")}>Lưu nháp</button>}
         <button className="admin-button" type="submit" disabled={busy || !dirty}>{busy ? "Đang lưu…" : "Lưu ngữ liệu"}</button></div>
     </form>
   </section>;

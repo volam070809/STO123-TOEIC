@@ -47,7 +47,11 @@ public sealed record ExamDocuments(int Version, List<ExamDocumentSnapshot> Docum
 public static class ExamDocumentCodec
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
-    private static readonly HashSet<string> Types = ["TEXT", "EMAIL", "TABLE", "CHAT", "FORM", "IMAGE"];
+    private static readonly HashSet<string> LayoutTypes =
+        ["LETTER", "ARTICLE", "NOTICE", "POLICY", "INVOICE", "WEB", "AD", "SCHEDULE", "SURVEY"];
+    private static readonly HashSet<string> Types = ["TEXT", "EMAIL", "TABLE", "CHAT", "FORM", "IMAGE", .. LayoutTypes];
+
+    public static bool IsLayoutType(string type) => LayoutTypes.Contains(type);
 
     public static bool IsValidSource(NguLieuTaiLieu document) =>
         IsValid(document.LoaiTaiLieu, document.NoiDung, document.DuongDanAnh);
@@ -65,6 +69,7 @@ public static class ExamDocumentCodec
             if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("version", out var version) ||
                 version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var number) || number != 1)
                 return false;
+            if (LayoutTypes.Contains(type)) return ValidLayout(root, type);
             return type switch
             {
                 "EMAIL" => HasText(root, "body") &&
@@ -94,6 +99,28 @@ public static class ExamDocumentCodec
     private static bool OptionalStrings(JsonElement value, params string[] names) =>
         names.All(name => !value.TryGetProperty(name, out var property) ||
             property.ValueKind == JsonValueKind.String);
+
+    private static bool ValidLayout(JsonElement root, string type)
+    {
+        if (!HasString(root, "title") || !HasString(root, "subtitle") || !HasString(root, "footer") ||
+            !root.TryGetProperty("metadata", out var metadata) || metadata.ValueKind != JsonValueKind.Array ||
+            metadata.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.Object ||
+                !HasString(item, "label") || !HasString(item, "value")) ||
+            !root.TryGetProperty("paragraphs", out var paragraphs) || paragraphs.ValueKind != JsonValueKind.Array ||
+            paragraphs.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.String) ||
+            !root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array ||
+            items.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.String)) return false;
+        var hasTable = type is "INVOICE" or "SCHEDULE";
+        if (hasTable && (!ValidTable(root) ||
+            root.GetProperty("headers").EnumerateArray().Any(header => string.IsNullOrWhiteSpace(header.GetString())) ||
+            !root.GetProperty("rows").EnumerateArray().Any(row => row.EnumerateArray().Any(cell =>
+                !string.IsNullOrWhiteSpace(cell.GetString()))))) return false;
+        return HasText(root, "title") || paragraphs.EnumerateArray().Any(item =>
+            !string.IsNullOrWhiteSpace(item.GetString())) || items.EnumerateArray().Any(item =>
+            !string.IsNullOrWhiteSpace(item.GetString())) || hasTable && root.GetProperty("rows")
+            .EnumerateArray().Any(row => row.EnumerateArray().Any(cell =>
+                !string.IsNullOrWhiteSpace(cell.GetString())));
+    }
 
     private static bool ValidTable(JsonElement root)
     {

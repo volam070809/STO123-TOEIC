@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { alignTranslation, parsePart7Translation, serializePart7Translation,
+import { alignTranslation, parsePart7Translation, serializePart7Translation, updateTranslationStructure,
   translationPrefix } from "./partSevenTranslationData.js";
+import { newDocument } from "./partSevenDocumentData.js";
 
 const originals = [
   { type: "TABLE", title: "Prices", headers: ["Item", "Price"], rows: [["Tea", "$2"], ["Cake", "$4"]] },
@@ -58,4 +59,22 @@ test("metadata-only email and chat edits survive while untouched defaults remain
   assert.equal(documents[1].content.from, "Phòng kinh doanh");
   assert.equal(documents[2].content.messages[0].sender, "Nhân viên");
   assert.equal(documents[0], null);
+});
+
+test("new layouts keep translated paragraphs, table rows and columns aligned after edits", () => {
+  const source = { ...newDocument("INVOICE"), title: "Invoice", paragraphs: ["First", "Second"],
+    rows: [["Tea", "1", "$2"], ["Cake", "2", "$4"]] };
+  let state = parsePart7Translation(null, [source]);
+  state.documents[0].content.paragraphs = ["Đầu", "Sau"];
+  state.documents[0].content.rows = [["Trà", "1", "2 đô"], ["Bánh", "2", "4 đô"]];
+  state = updateTranslationStructure(state, 0, { key: "paragraphs", type: "move", index: 0, direction: 1 });
+  assert.deepEqual(state.documents[0].content.paragraphs, ["Sau", "Đầu"]);
+  state = updateTranslationStructure(state, 0, { key: "headers", type: "move", index: 0, direction: 1 });
+  assert.deepEqual(state.documents[0].content.rows[0], ["1", "Trà", "2 đô"]);
+  state = updateTranslationStructure(state, 0, { key: "rows", type: "delete", index: 0 });
+  assert.deepEqual(state.documents[0].content.rows, [["2", "Bánh", "4 đô"]]);
+  const aligned = alignTranslation({ ...source, paragraphs: ["Second", "First"],
+    headers: ["Quantity", "Item", "Amount"], rows: [["2", "Cake", "$4"]] }, state.documents[0]);
+  assert.equal(aligned.content.paragraphs[0], "Sau");
+  assert.equal(aligned.content.rows[0][1], "Bánh");
 });

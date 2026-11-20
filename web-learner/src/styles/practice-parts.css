@@ -213,7 +213,8 @@
 .practice-session-layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; align-items: start; gap: 1.5rem; margin-top: 1.25rem; }
 .practice-session-content, .practice-session-material { min-width: 0; }
 .practice-session-material { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-.practice-session[data-part="3"] .practice-session-material, .practice-session[data-part="4"] .practice-session-material { grid-template-columns: minmax(0, 44%) minmax(0, 1fr); align-items: start; }
+.practice-session[data-part="3"] .practice-session-material, .practice-session[data-part="4"] .practice-session-material,
+.practice-session[data-part="7"] .practice-session-material { grid-template-columns: minmax(0, 50%) minmax(0, 1fr); align-items: start; }
 .practice-session .practice-part-source, .practice-session .practice-part-question { min-width: 0; margin: 0; padding: 1.25rem; border: 1px solid #dbe3e8; border-radius: 10px; background: #fff; overflow-wrap: anywhere; }
 .practice-session .practice-part-source { display: grid; gap: 1rem; }
 .practice-session .practice-part-source > :is(p, audio) { margin: 0; }
@@ -286,7 +287,8 @@
 @media (max-width: 800px) {
   .practice-parts:has(> .practice-session) > .page-heading { grid-template-columns: minmax(0, 1fr); }
   .practice-parts:has(> .practice-session) > .page-heading .outline-button { grid-column: 1; grid-row: auto; margin-top: .4rem; }
-  .practice-session[data-part="3"] .practice-session-material, .practice-session[data-part="4"] .practice-session-material { grid-template-columns: minmax(0, 1fr); }
+  .practice-session[data-part="3"] .practice-session-material, .practice-session[data-part="4"] .practice-session-material,
+  .practice-session[data-part="7"] .practice-session-material { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 560px) {
   .practice-session-top { align-items: flex-start; flex-direction: column; gap: .5rem; padding: .85rem 1rem; }

@@ -50,7 +50,8 @@ public static class Part7TranslationCodec
                     type == "FORM" && (!OptionalString(content, "title") ||
                         !SameArrayLength(originalBody, content, "fields") ||
                         !content.GetProperty("fields").EnumerateArray().All(field =>
-                            field.ValueKind == JsonValueKind.Object && AllStrings(field, "label", "value")))) return false;
+                            field.ValueKind == JsonValueKind.Object && AllStrings(field, "label", "value"))) ||
+                    ExamDocumentCodec.IsLayoutType(type) && !SameLayoutShape(originalBody, content, type)) return false;
             }
             return true;
         }
@@ -74,6 +75,21 @@ public static class Part7TranslationCodec
 
     private static bool SameArrayLength(JsonElement original, JsonElement translated, string key) =>
         original.GetProperty(key).GetArrayLength() == translated.GetProperty(key).GetArrayLength();
+
+    private static bool SameLayoutShape(JsonElement original, JsonElement translated, string type) =>
+        AllStrings(translated, "title", "subtitle", "footer") &&
+        SameArrayLength(original, translated, "metadata") &&
+        translated.GetProperty("metadata").EnumerateArray().All(item =>
+            item.ValueKind == JsonValueKind.Object && AllStrings(item, "label", "value")) &&
+        SameArrayLength(original, translated, "paragraphs") &&
+        translated.GetProperty("paragraphs").EnumerateArray().All(item => item.ValueKind == JsonValueKind.String) &&
+        SameArrayLength(original, translated, "items") &&
+        translated.GetProperty("items").EnumerateArray().All(item => item.ValueKind == JsonValueKind.String) &&
+        (type is not ("INVOICE" or "SCHEDULE") ||
+            SameTableShape(original, translated) &&
+            translated.GetProperty("headers").EnumerateArray().All(item => item.ValueKind == JsonValueKind.String) &&
+            translated.GetProperty("rows").EnumerateArray().All(row => row.EnumerateArray().All(
+                item => item.ValueKind == JsonValueKind.String)));
 
     private static bool AllStrings(JsonElement value, params string[] keys) =>
         keys.All(key => value.TryGetProperty(key, out var field) && field.ValueKind == JsonValueKind.String);

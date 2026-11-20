@@ -88,6 +88,22 @@ test("Part 7 preserves structured EMAIL, TABLE, CHAT, FORM and IMAGE rendering",
   assert.equal((html.match(/class="exam-document"/g) || []).length, 5);
 });
 
+test("Part 7 practice keeps a mixed article, invoice and image in source order", () => {
+  const layout = (title, headers, rows) => ({ version: 1, title, subtitle: "", footer: "",
+    metadata: [], paragraphs: ["Opening paragraph"], items: ["First item"], headers, rows });
+  const documents = [
+    { order: 1, type: "ARTICLE", content: layout("News article", ["A"], [["B"]]) },
+    { order: 2, type: "INVOICE", content: layout("Invoice 42", ["Item", "Price"], [["Tea", "$2"]]),
+      imageUrl: "/api/attempts/1/groups/1/documents/2/image" },
+    { order: 3, type: "IMAGE", imageUrl: "/api/attempts/1/groups/1/documents/3/image" }
+  ];
+  const html = render(PracticeGroup, { group: { groupId: 1, documents }, part: 7 });
+  assert.ok(html.indexOf("News article") < html.indexOf("Invoice 42"));
+  assert.ok(html.indexOf("Invoice 42") < html.indexOf("Tài liệu 3"));
+  assert.equal((html.match(/Phóng to hình tài liệu/g) || []).length, 2);
+  assert.match(html, /Tea/);
+});
+
 test("Next is disabled until Check or See Answer", () => {
   assert.match(render(QuestionNavigation, { current: 0, total: 2, canPrevious: false, canNext: false }),
     /disabled=""[^>]*>Câu tiếp/);

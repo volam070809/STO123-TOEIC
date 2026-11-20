@@ -6,6 +6,40 @@ namespace STO123.Tests;
 
 public sealed class Part7TranslationCodecTests
 {
+    [Theory]
+    [InlineData("LETTER")]
+    [InlineData("ARTICLE")]
+    [InlineData("NOTICE")]
+    [InlineData("POLICY")]
+    [InlineData("INVOICE")]
+    [InlineData("WEB")]
+    [InlineData("AD")]
+    [InlineData("SCHEDULE")]
+    [InlineData("SURVEY")]
+    public void NewPartSevenLayoutsValidateAndSurviveSnapshotRoundTrip(string type)
+    {
+        const string source = """{"version":1,"title":"Notice","subtitle":"Office","footer":"Signed","metadata":[{"label":"Date","value":"Monday"}],"paragraphs":["First paragraph"],"items":["Item one"],"headers":["Time","Activity"],"rows":[["09:00","Meeting"]]}""";
+        var original = new NguLieuTaiLieu { LoaiTaiLieu = type, NoiDung = source,
+            DuongDanAnh = "part7/chart.png", ThuTu = 1 };
+        Assert.True(ExamDocumentCodec.IsValidSource(original));
+        var encoded = ExamDocumentCodec.Encode([new ExamDocumentSnapshot(1, type, source, original.DuongDanAnh)]);
+        var restored = Assert.Single(ExamDocumentCodec.Decode(encoded));
+        Assert.Equal(type, restored.Type);
+        Assert.Equal(original.DuongDanAnh, restored.ImagePath);
+        Assert.Equal("Notice", ((JsonElement)ExamDocumentCodec.ToContent(restored)!).GetProperty("title").GetString());
+
+        var translation = Part7TranslationCodec.Prefix + JsonSerializer.Serialize(new {
+            version = 1, kind = "PART7_TRANSLATIONS", documents = new[] { new { type, content = new {
+                version = 1, title = "Thông báo", subtitle = "Văn phòng", footer = "Ký tên",
+                metadata = new[] { new { label = "Ngày", value = "Thứ hai" } },
+                paragraphs = new[] { "Đoạn đầu" }, items = new[] { "Mục một" },
+                headers = new[] { "Giờ", "Hoạt động" }, rows = new[] { new[] { "09:00", "Họp" } }
+            } } }
+        });
+        Assert.True(Part7TranslationCodec.IsValid(translation, [original]));
+        Assert.False(Part7TranslationCodec.IsValid(translation.Replace("\"paragraphs\":[", "\"paragraphs\":[\"Extra\","), [original]));
+    }
+
     [Fact]
     public void StructuredTranslationsRequireOriginalDocumentShapes()
     {

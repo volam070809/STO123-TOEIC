@@ -84,6 +84,28 @@ public class ExamSourceValidatorTests
     }
 
     [Fact]
+    public void Part7_three_documents_require_every_attached_image_blob()
+    {
+        var fixture = CompleteExam();
+        var groupId = fixture.Members.First(m => fixture.Questions[m.MaCauHoi].MaPart == 7).MaNguLieu;
+        var first = fixture.Documents.Single(d => d.MaNguLieu == groupId);
+        first.DuongDanAnh = "part7/article.png";
+        fixture.Documents.Add(new NguLieuTaiLieu { MaNguLieu = groupId, ThuTu = 2,
+            LoaiTaiLieu = "IMAGE", DuongDanAnh = "part7/chart.png" });
+        fixture.Documents.Add(new NguLieuTaiLieu { MaNguLieu = groupId, ThuTu = 3,
+            LoaiTaiLieu = "TEXT", NoiDung = "Third passage" });
+
+        Assert.Contains(fixture.Validate().Issues, issue => issue.Code == "BLOB_MISSING");
+        fixture.Blobs.Add(first.DuongDanAnh);
+        fixture.Blobs.Add("part7/chart.png");
+        Assert.True(fixture.Validate().Valid);
+
+        fixture.Documents.Add(new NguLieuTaiLieu { MaNguLieu = groupId, ThuTu = 4,
+            LoaiTaiLieu = "TEXT", NoiDung = "Too many" });
+        Assert.Contains(fixture.Validate().Issues, issue => issue.Code == "DOCUMENT_INVALID");
+    }
+
+    [Fact]
     public void Practice_question_cannot_enter_fixed_exam()
     {
         var fixture = CompleteExam();

@@ -159,6 +159,9 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
             !ExamSourceValidator.ValidQuestion(q, input.Part)))
             return BadRequest(new { code = "INVALID_QUESTION",
                 message = "Nội dung, độ khó hoặc đáp án của câu hỏi không hợp lệ." });
+        if (input.Part == 7 && questions.Any(q => string.IsNullOrWhiteSpace(q.GiaiThich)))
+            return BadRequest(new { code = "PART7_EXPLANATION_REQUIRED",
+                message = "Mỗi câu Part 7 cần có giải thích." });
         var resource = input.Part == 5 ? null : new NguLieu {
             NoiDungNguLieu = input.Text?.Trim(),
             NoiDungDich = input.Part == 6 ? QuestionContentRules.FormatPart6(

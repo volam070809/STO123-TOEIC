@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../../services/api";
 import { alignTranslation } from "./partSevenTranslationData";
 import DocumentPreview from "./ExamDocumentPreview";
-import { documentPayload } from "./partSevenDocumentData";
+import { documentPayload, isLayoutType, layoutTemplates } from "./partSevenDocumentData";
 
 function SourceImage({ path, token, bank }) {
   const [url, setUrl] = useState("");
@@ -32,7 +32,7 @@ export default function PartSevenTranslationForm({ original, value, index, onCha
     <summary>Bản dịch tài liệu {index + 1} · {original.type}</summary>
     <div className="exam-author-doc-body">
       <div className="exam-translation-preview"><DocumentPreview doc={{ ...originalDoc, image: originalDoc.imagePath }} index={index} title="Bản gốc" /></div>
-      {original.type === "IMAGE" && <SourceImage key={original.imagePath} path={original.imagePath} token={token} bank={bank} />}
+      {original.imagePath && <SourceImage key={original.imagePath} path={original.imagePath} token={token} bank={bank} />}
       {original.type === "TEXT" && <label>Bản dịch văn bản<textarea rows={5} value={content}
         onChange={event => change(event.target.value)} /></label>}
       {original.type === "IMAGE" && <label>Chú thích tiếng Việt cho hình ảnh<textarea rows={2} value={content}
@@ -68,6 +68,37 @@ export default function PartSevenTranslationForm({ original, value, index, onCha
               <input value={content.fields[at][key]} onChange={event => change({ ...content,
                 fields: content.fields.map((item, i) => i === at ? { ...item, [key]: event.target.value } : item) })} />
             </label>)}</div></div>)}</>}
+      {isLayoutType(original.type) && <>
+        <label>Tiêu đề tiếng Việt<input value={content.title}
+          onChange={event => change({ ...content, title: event.target.value })} /></label>
+        {layoutTemplates[original.type].subtitle && <label>Tiêu đề phụ tiếng Việt<input value={content.subtitle}
+          onChange={event => change({ ...content, subtitle: event.target.value })} /></label>}
+        {original.metadata.map((item, at) => <div className="exam-author-two" key={at}>
+          <label>Nhãn · {item.label}<input value={content.metadata[at].label}
+            onChange={event => change({ ...content, metadata: content.metadata.map((entry, i) =>
+              i === at ? { ...entry, label: event.target.value } : entry) })} /></label>
+          <label>Giá trị · {item.value}<input value={content.metadata[at].value}
+            onChange={event => change({ ...content, metadata: content.metadata.map((entry, i) =>
+              i === at ? { ...entry, value: event.target.value } : entry) })} /></label>
+        </div>)}
+        {original.paragraphs.map((paragraph, at) => <label key={`p-${at}`}>Đoạn {at + 1} · {paragraph.slice(0, 60)}
+          <textarea rows={3} value={content.paragraphs[at]} onChange={event => change({ ...content,
+            paragraphs: content.paragraphs.map((entry, i) => i === at ? event.target.value : entry) })} /></label>)}
+        {original.items.map((item, at) => <label key={`i-${at}`}>Mục {at + 1} · {item.slice(0, 60)}
+          <input value={content.items[at]} onChange={event => change({ ...content,
+            items: content.items.map((entry, i) => i === at ? event.target.value : entry) })} /></label>)}
+        {layoutTemplates[original.type].table && <div className="exam-table-scroll"><table className="exam-translation-table">
+          <thead><tr>{original.headers.map((header, at) => <th key={at}><label>{header}<input
+            value={content.headers[at]} onChange={event => change({ ...content,
+              headers: content.headers.map((entry, i) => i === at ? event.target.value : entry) })} /></label></th>)}</tr></thead>
+          <tbody>{original.rows.map((row, at) => <tr key={at}>{row.map((cell, col) => <td key={col}>
+            <label>{cell}<input value={content.rows[at][col]} onChange={event => change({ ...content,
+              rows: content.rows.map((cells, i) => i === at ? cells.map((entry, j) =>
+                j === col ? event.target.value : entry) : cells) })} /></label>
+          </td>)}</tr>)}</tbody></table></div>}
+        <label>Ghi chú hoặc chữ ký tiếng Việt<textarea rows={2} value={content.footer}
+          onChange={event => change({ ...content, footer: event.target.value })} /></label>
+      </>}
       <DocumentPreview doc={{ type: original.type, content: original.type === "TEXT" || original.type === "IMAGE" ? content : JSON.stringify(content) }}
         index={index} title="Xem trước bản dịch" translation />
     </div>
