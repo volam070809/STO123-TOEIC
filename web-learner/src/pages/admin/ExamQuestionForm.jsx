@@ -86,7 +86,7 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
 
   function fileField(label, value, setter, accept, key = label) {
     return <div className="exam-author-file"><span>{label}</span><small>{value || "Chưa chọn tệp"}</small><div className="exam-unit-actions"><label>Tải tệp<input type="file" accept={accept} disabled={busy}
-      onChange={event => { upload(event.target.files?.[0], setter, key); event.target.value = ""; }}/></label>{value && <button type="button" onClick={() => { setter(""); setDirty(true); setPreviews(old => ({ ...old, [key]: null })); }}>Gỡ</button>}</div>
+      onChange={event => { upload(event.target.files?.[0], setter, key); event.target.value = ""; }}/></label>{value && <button type="button" disabled={busy} onClick={() => { setter(""); setDirty(true); setPreviews(old => ({ ...old, [key]: null })); }}>Gỡ</button>}</div>
       {previews[key] && (accept.includes("audio") ? <audio controls src={previews[key]} /> : <img className="exam-media-preview" src={previews[key]} alt="Ảnh mới" />)}</div>;
   }
 
@@ -160,7 +160,7 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
           {[3, 4, 6].includes(Number(part)) && <label>{Number(part) === 3 ? "Hội thoại chung" : Number(part) === 4 ? "Bài nói chung" : "Đoạn văn có chỗ trống [1]–[4]"}
             <textarea value={text} onChange={event => { setText(event.target.value); setDirty(true); }} rows={Number(part) === 6 ? 7 : 4}/></label>}
           {[1, 2, 3, 4].includes(Number(part)) && <div className="exam-author-two">{fileField("Audio MP3", audioPath, setAudioPath, ".mp3,audio/mpeg")}
-            {Number(part) === 1 && fileField("Hình ảnh", imagePath, setImagePath, ".jpg,.jpeg,.png,.webp,image/*")}</div>}
+            {[1, 3].includes(Number(part)) && fileField("Hình ảnh", imagePath, setImagePath, ".jpg,.jpeg,.png,.webp,image/*")}</div>}
           {part === 7 && <div className="exam-author-docs"><div className="exam-drawer-head"><h3>Tài liệu đọc</h3><button type="button" disabled={documents.length >= 3} onClick={() => { setDocuments(old => [...old, newDocument()]); setDirty(true); }}>Thêm tài liệu</button></div>
             {documents.map((doc, index) => <PartSevenDocumentForm key={index} index={index} value={doc} fileField={fileField}
               canRemove={documents.length > 1} onRemove={() => { setDocuments(old => old.filter((_, at) => at !== index));

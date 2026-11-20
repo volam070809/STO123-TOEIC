@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { apiRequest } from "../../services/api";
+import { apiRequest, API_BASE_URL } from "../../services/api";
 import PartSevenDocumentForm from "./PartSevenDocumentForm";
 import PartSevenTranslationForm from "./PartSevenTranslationForm";
 import { documentPayload, fromDocument, newDocument } from "./partSevenDocumentData";
@@ -9,6 +9,32 @@ const part6Translation = (value, order) => value?.replace(/\r/g, "").split("\n")
   .find(line => line.trim().startsWith(`[${order}]`))?.trim().slice(3).trim() || "";
 const withPart6Translation = (value, order, translation) =>
   Array.from({ length: 4 }, (_, index) => `[${index + 1}] ${index + 1 === order ? translation : part6Translation(value, index + 1)}`).join("\n");
+
+function SavedImagePreview({ path, bank, token, localUrl }) {
+  const [preview, setPreview] = useState({ path: "", url: "", error: false });
+  useEffect(() => {
+    if (!path || localUrl) return undefined;
+    const controller = new AbortController();
+    let objectUrl = "";
+    fetch(`${API_BASE_URL}/api/admin/content/media/file?${new URLSearchParams({ bank, path })}`, {
+      headers: { Authorization: `Bearer ${token}` }, signal: controller.signal
+    }).then(response => {
+      if (!response.ok) throw new Error("Không tải được ảnh từ Blob.");
+      return response.blob();
+    }).then(blob => {
+      if (!controller.signal.aborted) {
+        objectUrl = URL.createObjectURL(blob);
+        setPreview({ path, url: objectUrl, error: false });
+      }
+    }).catch(() => {
+      if (!controller.signal.aborted) setPreview({ path, url: "", error: true });
+    });
+    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [path, bank, token, localUrl]);
+  if (!path || localUrl || preview.path !== path) return null;
+  if (preview.error) return <p role="alert">Không tải được ảnh từ Blob.</p>;
+  return preview.url && <img className="exam-media-preview" src={preview.url} alt="Ảnh hiện tại" />;
+}
 
 export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
   const [value, setValue] = useState(() => ({
@@ -68,8 +94,12 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
     return <div className="exam-author-file"><strong>{label}</strong><small>{path || "Chưa chọn tệp"}</small>
       <label className="exam-file-button">Tải tệp<input type="file" accept={accept} disabled={busy}
         onChange={event => { upload(event.target.files?.[0], setter, key); event.target.value = ""; }} /></label>
+      {key === "image" && unit.part === 3 && path && <button className="exam-file-button" type="button" disabled={busy}
+        onClick={() => { setter(""); setPreviews(old => ({ ...old, [key]: null })); }}>Gỡ ảnh</button>}
       {previews[key] && (accept.includes("audio") ? <audio controls src={previews[key]} /> :
         <img className="exam-media-preview" src={previews[key]} alt={label} />)}
+      {key === "image" && <SavedImagePreview path={path} bank={unit.bank || "DE_THI"}
+        token={token} localUrl={previews[key]} />}
     </div>;
   }
 
@@ -120,7 +150,7 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
         value={value.text} onChange={event => change("text", event.target.value)} /></label>}
       {[1, 2, 3, 4].includes(unit.part) && fileField("Audio MP3", value.audioPath,
         path => change("audioPath", path), ".mp3,audio/mpeg", "audio")}
-      {unit.part === 1 && fileField("Hình ảnh", value.imagePath,
+      {[1, 3].includes(unit.part) && fileField("Hình ảnh", value.imagePath,
         path => change("imagePath", path), ".jpg,.jpeg,.png,.webp,image/*", "image")}
       {unit.part === 7 && <div className="exam-author-docs"><div className="exam-editor-header"><h3>Tài liệu Part 7</h3>
         <button type="button" disabled={value.documents.length >= 3} onClick={() =>

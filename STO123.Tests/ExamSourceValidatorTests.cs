@@ -66,6 +66,22 @@ public class ExamSourceValidatorTests
     }
 
     [Fact]
+    public void Part3_group_image_is_optional_but_a_referenced_blob_must_exist()
+    {
+        var fixture = CompleteExam();
+        var part3Group = fixture.Members.First(m => fixture.Questions[m.MaCauHoi].MaPart == 3).MaNguLieu;
+        var resource = fixture.Resources[part3Group];
+        Assert.True(fixture.Validate().Valid);
+
+        resource.DuongDanAnh = "image/part3.png";
+        Assert.Contains(fixture.Validate().Issues, issue => issue.Code == "BLOB_MISSING");
+
+        fixture.Blobs.Add(resource.DuongDanAnh);
+        Assert.True(fixture.Validate().Valid);
+        Assert.Equal($"audio/{part3Group}.mp3", resource.DuongDanAudio);
+    }
+
+    [Fact]
     public void Practice_question_cannot_enter_fixed_exam()
     {
         var fixture = CompleteExam();
