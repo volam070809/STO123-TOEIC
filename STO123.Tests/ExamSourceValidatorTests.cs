@@ -65,20 +65,22 @@ public class ExamSourceValidatorTests
         Assert.True(fixture.Validate().Valid);
     }
 
-    [Fact]
-    public void Part3_group_image_is_optional_but_a_referenced_blob_must_exist()
+    [Theory]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void Listening_group_image_is_optional_but_a_referenced_blob_must_exist(int part)
     {
         var fixture = CompleteExam();
-        var part3Group = fixture.Members.First(m => fixture.Questions[m.MaCauHoi].MaPart == 3).MaNguLieu;
-        var resource = fixture.Resources[part3Group];
+        var groupId = fixture.Members.First(m => fixture.Questions[m.MaCauHoi].MaPart == part).MaNguLieu;
+        var resource = fixture.Resources[groupId];
         Assert.True(fixture.Validate().Valid);
 
-        resource.DuongDanAnh = "image/part3.png";
+        resource.DuongDanAnh = $"image/part{part}.png";
         Assert.Contains(fixture.Validate().Issues, issue => issue.Code == "BLOB_MISSING");
 
         fixture.Blobs.Add(resource.DuongDanAnh);
         Assert.True(fixture.Validate().Valid);
-        Assert.Equal($"audio/{part3Group}.mp3", resource.DuongDanAudio);
+        Assert.Equal($"audio/{groupId}.mp3", resource.DuongDanAudio);
     }
 
     [Fact]

@@ -66,7 +66,7 @@ function Question({ question, review, onAnswer, onFlag, onRetry, saveState, subm
 
 export default function ExamContent({ group, independentQuestion, attemptId, token, review = false,
   mode = "MOCK", onAnswer, onFlag, onRetry, saveStates = {}, submissionPending = false }) {
-  const [sourceOpen, setSourceOpen] = useState(false);
+  const [sourceOpen, setSourceOpen] = useState(() => Boolean(group?.hasImage && [3, 4].includes(group.part)));
   const [imageSize, setImageSize] = useState(null);
   const questions = group?.questions ?? [independentQuestion];
   const partOne = group?.part === 1;

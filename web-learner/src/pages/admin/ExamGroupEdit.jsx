@@ -94,7 +94,7 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
     return <div className="exam-author-file"><strong>{label}</strong><small>{path || "Chưa chọn tệp"}</small>
       <label className="exam-file-button">Tải tệp<input type="file" accept={accept} disabled={busy}
         onChange={event => { upload(event.target.files?.[0], setter, key); event.target.value = ""; }} /></label>
-      {key === "image" && unit.part === 3 && path && <button className="exam-file-button" type="button" disabled={busy}
+      {key === "image" && [3, 4].includes(unit.part) && path && <button className="exam-file-button" type="button" disabled={busy}
         onClick={() => { setter(""); setPreviews(old => ({ ...old, [key]: null })); }}>Gỡ ảnh</button>}
       {previews[key] && (accept.includes("audio") ? <audio controls src={previews[key]} /> :
         <img className="exam-media-preview" src={previews[key]} alt={label} />)}
@@ -150,7 +150,7 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
         value={value.text} onChange={event => change("text", event.target.value)} /></label>}
       {[1, 2, 3, 4].includes(unit.part) && fileField("Audio MP3", value.audioPath,
         path => change("audioPath", path), ".mp3,audio/mpeg", "audio")}
-      {[1, 3].includes(unit.part) && fileField("Hình ảnh", value.imagePath,
+      {[1, 3, 4].includes(unit.part) && fileField("Hình ảnh", value.imagePath,
         path => change("imagePath", path), ".jpg,.jpeg,.png,.webp,image/*", "image")}
       {unit.part === 7 && <div className="exam-author-docs"><div className="exam-editor-header"><h3>Tài liệu Part 7</h3>
         <button type="button" disabled={value.documents.length >= 3} onClick={() =>

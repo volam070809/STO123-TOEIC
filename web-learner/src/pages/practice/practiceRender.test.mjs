@@ -43,12 +43,14 @@ test("Parts 1 and 2 show one transcript after reveal and in Review", () => {
   }
 });
 
-test("Parts 3 and 4 render one shared audio source for multiple questions", () => {
+test("Parts 3 and 4 render one shared audio and image source for multiple questions", () => {
   for (const part of [3, 4]) {
-    const group = render(PracticeGroup, { group: { groupId: 9, audioUrl: "/audio", documents: [] }, part });
+    const group = render(PracticeGroup, { group: { groupId: 9, audioUrl: "/audio",
+      imageUrl: "/image", documents: [] }, part });
     const html = group + render(PracticeQuestion, { question: question(part, 1) }) +
       render(PracticeQuestion, { question: question(part, 2) });
     assert.equal((html.match(/Đang tải âm thanh/g) || []).length, 1);
+    assert.equal((html.match(/Đang tải hình ảnh/g) || []).length, 1);
     assert.equal((html.match(/practice-part-question/g) || []).length, 2);
   }
 });
