@@ -90,19 +90,19 @@ public sealed class PaymentCreationTests
     }
 
     [Fact]
-    public async Task CustomCoursesQuoteAndCheckoutStoreExactPriceSnapshots()
+    public async Task SingleCourseQuoteAndCheckoutStoreExactPriceSnapshot()
     {
         await using var fixture = await PaymentDb.CreateAsync();
         var controller = fixture.Controller(1);
-        var quoteResult = await controller.Quote(new CoursePurchaseRequest([2, 1], 0),
+        var quoteResult = await controller.Quote(new CoursePurchaseRequest([2], 0),
             CancellationToken.None);
         var quote = Assert.IsType<CourseQuote>(Assert.IsType<OkObjectResult>(quoteResult).Value);
-        Assert.Equal([1, 2], quote.Courses.Select(c => c.CourseId));
-        Assert.Equal([99_000m, 199_000m], quote.Courses.Select(c => c.Price));
-        Assert.Equal(298_000m, quote.Total);
+        Assert.Equal([2], quote.Courses.Select(c => c.CourseId));
+        Assert.Equal([199_000m], quote.Courses.Select(c => c.Price));
+        Assert.Equal(199_000m, quote.Total);
         Assert.Equal(30, quote.ValidDays);
 
-        var created = await controller.CreateCourses(new CoursePurchaseRequest([2, 1], quote.Total),
+        var created = await controller.CreateCourses(new CoursePurchaseRequest([2], quote.Total),
             CancellationToken.None);
         var response = Assert.IsType<CreatePaymentResponse>(Assert.IsType<OkObjectResult>(created).Value);
         var enrollment = await fixture.Db.DangKyGoiHoc.SingleAsync();
@@ -110,22 +110,26 @@ public sealed class PaymentCreationTests
         var payment = await fixture.Db.GiaoDichThanhToan.SingleAsync();
         Assert.Null(enrollment.MaGoiHoc);
         Assert.Equal(30, enrollment.SoNgaySuDung);
-        Assert.Equal(298_000m, enrollment.GiaDangKy);
-        Assert.Equal([1, 2], details.Select(d => d.MaKhoaHoc));
-        Assert.Equal([99_000m, 199_000m], details.Select(d => d.DonGia));
-        Assert.Equal(298_000m, payment.SoTien);
+        Assert.Equal(199_000m, enrollment.GiaDangKy);
+        Assert.Equal([2], details.Select(d => d.MaKhoaHoc));
+        Assert.Equal([199_000m], details.Select(d => d.DonGia));
+        Assert.Equal(199_000m, payment.SoTien);
         Assert.Equal(payment.MaGiaoDich, response.MaGiaoDich);
-        Assert.Equal("29800000", Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(
+        Assert.Equal("19900000", Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(
             new Uri(response.CheckoutUrl).Query)["vnp_Amount"].ToString());
     }
 
     [Fact]
-    public async Task CustomCheckoutRejectsDuplicateCoursesAndChangedQuoteWithoutWrites()
+    public async Task CheckoutRejectsMultipleCoursesAndChangedQuoteWithoutWrites()
     {
         await using var fixture = await PaymentDb.CreateAsync();
         var controller = fixture.Controller(1);
         Assert.IsType<BadRequestObjectResult>(await controller.Quote(
             new CoursePurchaseRequest([1, 1], 0), CancellationToken.None));
+        Assert.IsType<BadRequestObjectResult>(await controller.Quote(
+            new CoursePurchaseRequest([1, 2], 0), CancellationToken.None));
+        Assert.IsType<BadRequestObjectResult>(await controller.CreateCourses(
+            new CoursePurchaseRequest([1, 2], 298_000m), CancellationToken.None));
         Assert.IsType<ConflictObjectResult>(await controller.CreateCourses(
             new CoursePurchaseRequest([1], 1m), CancellationToken.None));
         Assert.Empty(await fixture.Db.DangKyGoiHoc.ToListAsync());
@@ -134,18 +138,39 @@ public sealed class PaymentCreationTests
     }
 
     [Fact]
-    public async Task EveryNonEmptyCourseSelectionHasAdditivePrice()
+    public async Task SingleCourseCheckoutBlocksDuplicatesAndAllowsRetryAfterFailure()
+    {
+        await using var fixture = await PaymentDb.CreateAsync();
+        var request = new CoursePurchaseRequest([2], 199_000m);
+        Assert.IsType<OkObjectResult>(await fixture.Controller(1).CreateCourses(request, CancellationToken.None));
+        Assert.IsType<ConflictObjectResult>(await fixture.Controller(1).CreateCourses(request, CancellationToken.None));
+        Assert.Single(await fixture.Db.GiaoDichThanhToan.ToListAsync());
+
+        var failedPayment = await fixture.Db.GiaoDichThanhToan.Include(p => p.MaDangKyNavigation).SingleAsync();
+        failedPayment.TrangThai = "THAT_BAI";
+        failedPayment.MaDangKyNavigation.TrangThai = "THAT_BAI";
+        await fixture.Db.SaveChangesAsync();
+        fixture.Db.ChangeTracker.Clear();
+
+        Assert.IsType<OkObjectResult>(await fixture.Controller(1).CreateCourses(request, CancellationToken.None));
+        Assert.Equal(2, await fixture.Db.GiaoDichThanhToan.CountAsync());
+        var details = await fixture.Db.ChiTietDangKyKhoaHoc.AsNoTracking().ToListAsync();
+        Assert.Equal(2, details.Count);
+        Assert.All(details, detail => Assert.Equal(2, detail.MaKhoaHoc));
+    }
+
+    [Fact]
+    public async Task EverySingleCourseQuoteMatchesItsDatabasePrice()
     {
         await using var fixture = await PaymentDb.CreateAsync();
         var controller = fixture.Controller(1);
         var prices = new[] { 99_000m, 199_000m, 299_000m };
-        for (var mask = 1; mask < 8; mask++)
+        for (var courseId = 1; courseId <= prices.Length; courseId++)
         {
-            var ids = Enumerable.Range(1, 3).Where(id => (mask & (1 << (id - 1))) != 0).ToArray();
-            var result = await controller.Quote(new CoursePurchaseRequest(ids, 0), CancellationToken.None);
+            var result = await controller.Quote(new CoursePurchaseRequest([courseId], 0), CancellationToken.None);
             var quote = Assert.IsType<CourseQuote>(Assert.IsType<OkObjectResult>(result).Value);
-            Assert.Equal(ids, quote.Courses.Select(c => c.CourseId));
-            Assert.Equal(ids.Sum(id => prices[id - 1]), quote.Total);
+            Assert.Equal([courseId], quote.Courses.Select(c => c.CourseId));
+            Assert.Equal(prices[courseId - 1], quote.Total);
             Assert.Equal(30, quote.ValidDays);
         }
     }
@@ -160,7 +185,7 @@ public sealed class PaymentCreationTests
         Assert.IsType<ConflictObjectResult>(await controller.Quote(
             new CoursePurchaseRequest([1], 0), CancellationToken.None));
         Assert.IsType<OkObjectResult>(await controller.Quote(
-            new CoursePurchaseRequest([2, 3], 0), CancellationToken.None));
+            new CoursePurchaseRequest([2], 0), CancellationToken.None));
     }
 
     [Fact]
@@ -172,7 +197,7 @@ public sealed class PaymentCreationTests
             BEGIN SELECT RAISE(ABORT, 'payment insert rejected'); END;
             """);
         await Assert.ThrowsAsync<DbUpdateException>(() => fixture.Controller(1).CreateCourses(
-            new CoursePurchaseRequest([1, 2], 298_000m), CancellationToken.None));
+            new CoursePurchaseRequest([1], 99_000m), CancellationToken.None));
         fixture.Db.ChangeTracker.Clear();
         Assert.Empty(await fixture.Db.DangKyGoiHoc.ToListAsync());
         Assert.Empty(await fixture.Db.ChiTietDangKyKhoaHoc.ToListAsync());

@@ -31,9 +31,13 @@ public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway ga
     public async Task<CourseQuoteOutcome> QuoteCoursesAsync(int learnerId, IReadOnlyList<int>? courseIds,
         CancellationToken ct)
     {
+        if (!SingleCourseSelection(courseIds)) return new(PaymentCreationError.InvalidSelection);
         await ExpirePendingAsync(learnerId, ct);
         return await ValidateCoursesAsync(learnerId, courseIds, ct);
     }
+
+    private static bool SingleCourseSelection(IReadOnlyList<int>? courseIds) =>
+        courseIds is { Count: 1 } && courseIds[0] > 0;
 
     public async Task ExpirePendingAsync(int learnerId, CancellationToken ct)
     {
@@ -48,10 +52,9 @@ public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway ga
     private async Task<CourseQuoteOutcome> ValidateCoursesAsync(int learnerId, IReadOnlyList<int>? courseIds,
         CancellationToken ct)
     {
-        if (courseIds is null || courseIds.Count is < 1 or > 100 ||
-            courseIds.Any(id => id <= 0) || courseIds.Distinct().Count() != courseIds.Count)
+        if (!SingleCourseSelection(courseIds))
             return new(PaymentCreationError.InvalidSelection);
-        var requested = courseIds.ToArray();
+        var requested = courseIds!.ToArray();
         var courses = await db.KhoaHoc.AsNoTracking().Where(c => requested.Contains(c.MaKhoaHoc))
             .Select(c => new { c.MaKhoaHoc, c.TenKhoaHoc, Price = c.GiaBanLe ?? 0m,
                 c.TrangThai }).ToListAsync(ct);
@@ -73,6 +76,7 @@ public sealed class PaymentCreationService(ToeicDbContext db, IPaymentGateway ga
     public async Task<PaymentCreationOutcome> CreateCoursesAsync(int learnerId,
         IReadOnlyList<int>? courseIds, decimal expectedTotal, string clientIp, CancellationToken ct)
     {
+        if (!SingleCourseSelection(courseIds)) return new(PaymentCreationError.InvalidSelection);
         var now = clock.GetUtcNow();
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         if (db.Database.IsSqlServer())

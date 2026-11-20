@@ -42,10 +42,10 @@ export function checkoutErrorMessage(error) {
     CHECKOUT_DISABLED: "Thanh toán VNPay chưa được mở. Bạn chưa bị ghi nhận giao dịch mới.",
     PACKAGE_UNAVAILABLE: "Gói học không còn khả dụng.",
     PACKAGE_ALREADY_ACTIVE: "Bạn đang sử dụng gói học này.",
-    PAYMENT_ALREADY_PENDING: "Một khóa học đã chọn có giao dịch đang chờ xác minh.",
-    INVALID_COURSE_SELECTION: "Danh sách khóa học không hợp lệ. Vui lòng chọn lại.",
-    COURSE_UNAVAILABLE: "Một khóa học không còn mở bán hoặc chưa có giá. Vui lòng chọn lại.",
-    COURSE_ALREADY_ACTIVE: "Bạn đã có quyền học đối với một khóa đã chọn. Vui lòng chọn lại.",
+    PAYMENT_ALREADY_PENDING: "Khóa học này có giao dịch đang chờ xác minh.",
+    INVALID_COURSE_SELECTION: "Mỗi giao dịch chỉ được chọn một khóa học hợp lệ.",
+    COURSE_UNAVAILABLE: "Khóa học không còn mở bán hoặc chưa có giá. Vui lòng chọn lại.",
+    COURSE_ALREADY_ACTIVE: "Bạn đã có quyền học đối với khóa học này.",
     QUOTE_CHANGED: "Giá khóa học đã thay đổi. Vui lòng kiểm tra báo giá mới.",
   };
   return messages[error?.data?.code] || (error?.message === "INVALID_CHECKOUT_URL" ?

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthState";
 import SiteLayout from "../../layouts/SiteLayout";
@@ -12,6 +12,7 @@ import { publicCourseApi } from "../../services/publicCourseApi";
 import { useContentRevision } from "../../services/contentRevisions";
 import { useGuestAuthPrompt } from "../../contexts/GuestAuthPromptState";
 import { loadCourseCatalog, requestGuestCoursePurchase } from "./coursePublicAccess";
+import CoursePurchaseDialog from "./CoursePurchaseDialog";
 import "../../styles/course.css";
 
 const money = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" });
@@ -25,6 +26,34 @@ const accessLabels = {
   ACTIVE: "Đang có quyền học", EXPIRED: "Đã hết hạn", PAYMENT_FAILED: "Thanh toán thất bại",
 };
 const paymentLabels = { CHO_XU_LY: "Đang chờ xác nhận", THANH_CONG: "Thành công", THAT_BAI: "Thất bại", QUA_HAN: "Quá hạn" };
+
+export function CourseCard({ course, isGuest, user, busy, onPurchase, requireAuthentication }) {
+  const purchasable = !["ACTIVE", "PAYMENT_PENDING"].includes(course.accessStatus) &&
+    Number.isInteger(course.retailPrice) && course.retailPrice > 0;
+  const purchaseLabel = course.accessStatus === "EXPIRED" ? "Gia hạn khóa học" : "Mua khóa học";
+  return <article className={`course-card ${course.recommended ? "is-recommended" : ""}`}>
+    <CourseCover course={course} /><div className="course-card-body">
+      <div className="course-badges"><span className="course-stage-badge">{courseAudienceLabel(course.stage)}</span>
+        {course.recommended && <span className="course-recommend-badge">Đề xuất {course.recommendationOrder}</span>}</div>
+      <h3>{course.name}</h3><div className="course-score-summary">
+        <p>{courseEntryReference(course.stage)}</p><strong>{courseTargetLabel(course.maxTargetScore)}</strong></div>
+      <p className="course-description">{course.description || "Thông tin khóa học đang được cập nhật."}</p>
+      <div className="course-card-bottom"><p className="course-access" data-status={course.accessStatus}>
+        {accessLabels[course.accessStatus] || "Chưa xác định"}
+        {course.accessStatus === "ACTIVE" && course.accessExpiresAt ? ` · Đến ${date(course.accessExpiresAt)}` : ""}</p>
+        <div className="course-offer"><div className="course-price"><strong>{course.retailPrice > 0 ? money.format(course.retailPrice) :
+          "Chưa có giá bán"}</strong><span>{course.accessDays} ngày truy cập</span></div></div>
+        <div className="course-card-actions"><Link className="outline-button course-cta course-info-cta"
+          to={`/courses/${course.courseId}`}>Xem chi tiết</Link>
+          {isGuest && user ? <button type="button" className="primary-button course-cta" disabled>Chỉ dành cho học viên</button> :
+            course.accessStatus === "ACTIVE" ? <Link className="primary-button course-cta" to={`/courses/${course.courseId}`}>Vào học</Link> :
+            course.accessStatus === "PAYMENT_PENDING" ? <button type="button" className="primary-button course-cta" disabled>Đang chờ thanh toán</button> :
+            <button type="button" className="primary-button course-cta" disabled={!purchasable || busy}
+              onClick={() => isGuest ? requestGuestCoursePurchase(requireAuthentication) : onPurchase(course)}>
+              {purchasable ? purchaseLabel : "Chưa mở bán"}</button>}</div>
+      </div></div>
+  </article>;
+}
 
 export default function CourseListPage() {
   const { token, user } = useAuth();
@@ -46,8 +75,8 @@ export default function CourseListPage() {
   const [revision, setRevision] = useState(0);
   const contentRevision = useContentRevision("COURSES", "ACCESS", "EXAMS");
   const [view, setView] = useState({ token: null, courses: null, placement: null, history: null, error: "" });
-  const [selected, setSelected] = useState([]);
-  const [quotation, setQuotation] = useState({ key: "", data: null, error: "" });
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [quotation, setQuotation] = useState({ courseId: null, data: null, error: "" });
   const [quoteRevision, setQuoteRevision] = useState(0);
   const [checkout, setCheckout] = useState({ busy: false, message: "" });
   const busyRef = useRef(false);
@@ -72,37 +101,49 @@ export default function CourseListPage() {
   const current = view.token === token ? view : { courses: null, placement: null, history: null, error: "" };
   const { courses, placement, history, error } = current;
   const retryCourses = history?.find(item => item.maGiaoDich === paymentId)?.courseIds || [];
+  const retryOptions = retryCourses.map(id => courses?.find(course => course.courseId === id))
+    .filter(course => course && !["ACTIVE", "PAYMENT_PENDING"].includes(course.accessStatus) && course.retailPrice > 0);
   const recommended = courses?.filter(item => item.recommended) ?? [];
   const owned = courses?.filter(item => ["ACTIVE", "EXPIRED"].includes(item.accessStatus)) ?? [];
-  const selectionKey = selected.join(",");
-  const quoted = quotation.key === selectionKey ? quotation : { data: null, error: "" };
+  const selectedCourseId = selectedCourse?.courseId ?? null;
+  const quoted = quotation.courseId === selectedCourseId ? quotation : { data: null, error: "" };
   useEffect(() => {
-    if (!learnerToken || !selectionKey) return;
+    if (!learnerToken || !selectedCourseId) return undefined;
     let live = true;
-    paymentApi.quote(selectionKey.split(",").map(Number), token).then(data => {
-      if (live) setQuotation({ key: selectionKey, data, error: "" });
+    paymentApi.quoteCourse(selectedCourseId, token).then(data => {
+      if (live) setQuotation({ courseId: selectedCourseId, data, error: "" });
     }).catch(failure => {
-      if (live) setQuotation({ key: selectionKey, data: null, error: checkoutErrorMessage(failure) });
+      if (live) setQuotation({ courseId: selectedCourseId, data: null, error: checkoutErrorMessage(failure) });
     });
     return () => { live = false; };
-  }, [token, learnerToken, selectionKey, quoteRevision, contentRevision]);
-  function toggle(id) {
-    setSelected(current => current.includes(id) ? current.filter(value => value !== id) :
-      [...current, id].sort((a, b) => a - b));
+  }, [token, learnerToken, selectedCourseId, quoteRevision, contentRevision]);
+  function openPurchase(course) {
+    if (!learnerToken || busyRef.current || !course || ["ACTIVE", "PAYMENT_PENDING"].includes(course.accessStatus) ||
+        !Number.isInteger(course.retailPrice) || course.retailPrice <= 0) return;
+    setSelectedCourse(course);
+    setQuotation({ courseId: null, data: null, error: "" });
     setCheckout({ busy: false, message: "" });
-  }
-  function prepareRetry(ids) {
-    if (!ids?.length) return;
-    setSelected([...ids].sort((a, b) => a - b));
     setQuoteRevision(value => value + 1);
-    document.getElementById("course-quotation")?.scrollIntoView({ behavior: "smooth" });
+  }
+  const closePurchase = useCallback(() => {
+    if (busyRef.current) return;
+    setSelectedCourse(null);
+    setQuotation({ courseId: null, data: null, error: "" });
+    setCheckout({ busy: false, message: "" });
+  }, []);
+  function retryQuote() {
+    if (busyRef.current) return;
+    setQuotation({ courseId: null, data: null, error: "" });
+    setQuoteRevision(value => value + 1);
   }
   async function purchase() {
-    if (!quoted.data || !token || busyRef.current) return;
+    if (!selectedCourseId || !token || busyRef.current || quoted.data?.courses?.length !== 1 ||
+        quoted.data.courses[0].courseId !== selectedCourseId ||
+        quoted.data.total !== quoted.data.courses[0].price || quoted.data.validDays !== 30) return;
     busyRef.current = true;
     setCheckout({ busy: true, message: "" });
     try {
-      const result = await paymentApi.createCourses(selected, quoted.data.total, token);
+      const result = await paymentApi.createCourse(selectedCourseId, quoted.data.total, token);
       const url = validatedCheckoutUrl(result?.checkoutUrl);
       if (!Number.isSafeInteger(result?.maGiaoDich) || result.maGiaoDich <= 0 || !url)
         throw new Error("INVALID_CHECKOUT_URL");
@@ -110,6 +151,7 @@ export default function CourseListPage() {
     } catch (failure) {
       setCheckout({ busy: false, message: checkoutErrorMessage(failure) });
       busyRef.current = false;
+      setQuotation({ courseId: null, data: null, error: "" });
       setRevision(value => value + 1);
       setQuoteRevision(value => value + 1);
     }
@@ -127,12 +169,13 @@ export default function CourseListPage() {
   return <SiteLayout><main className="site-container course-page">
     <header className="course-page-heading"><div><h1>Khóa học TOEIC</h1>
       <p>{isGuest ? "Khám phá chương trình, giai đoạn và mức giá của các khóa học đang mở." :
-        "Chọn một hoặc nhiều khóa học, xem giá chính xác và theo dõi quyền học tại đây."}</p></div></header>
+        "Khám phá lộ trình phù hợp và thanh toán riêng từng khóa học qua VNPay."}</p></div></header>
     {learnerToken && paymentId && <div className="course-notice" role="status"><strong>Thanh toán #{paymentId}</strong>
       <span>{paymentMessage}{paymentView.kind === "pending" && retrySeconds != null &&
         ` Tự kiểm tra lại; có thể thanh toán lại sau ${Math.floor(retrySeconds / 60)}:${String(retrySeconds % 60).padStart(2, "0")}.`}</span>
-      {["expired", "failed"].includes(paymentView.kind) && retryCourses.length > 0 &&
-        <button type="button" onClick={() => prepareRetry(retryCourses)}>Thanh toán lại</button>}
+      {["expired", "failed"].includes(paymentView.kind) && retryOptions.map(course =>
+        <button type="button" key={course.courseId} onClick={() => openPurchase(course)}>
+          {retryOptions.length === 1 ? "Thanh toán lại" : `Thanh toán lại ${course.name}`}</button>)}
       <button type="button" onClick={() => { refreshPayment(); setRevision(v => v + 1); }}>Cập nhật</button></div>}
     {search && !paymentId && <p className="exam-error" role="alert">Mã giao dịch trên liên kết không hợp lệ.</p>}
     {error && <p className="exam-error" role="alert">{error} <button type="button" onClick={() => setRevision(v => v + 1)}>Thử lại</button></p>}
@@ -157,49 +200,13 @@ export default function CourseListPage() {
         <p>Thứ tự dựa trên giai đoạn KNN và điểm mục tiêu. Bạn vẫn có thể chọn bất kỳ khóa học đang mở.</p>
         <div className="course-recommend-list">{recommended.map(course => <span key={course.courseId}>
           {course.recommendationOrder}. {course.name}</span>)}</div></section>}
-      <section className="course-section"><h2>{isGuest ? "Danh sách khóa học" : "Chọn khóa học"}</h2>
+      <section className="course-section" id="course-catalog"><h2>Danh sách khóa học</h2>
         <p>{isGuest ? "Xem thông tin tổng quan; đăng nhập khi bạn muốn mua hoặc truy cập nội dung học." :
-          "Mỗi khóa có thời hạn truy cập sau khi thanh toán được xác nhận. Tổng tiền bằng giá của các khóa đã chọn."}</p>
+          "Mỗi khóa học được thanh toán riêng. Quyền học bắt đầu sau khi VNPay xác nhận giao dịch."}</p>
         {courses.length === 0 && <p>Chưa có khóa học đang mở.</p>}
-        <div className="course-grid">{courses.map(course => {
-          const purchasable = !["ACTIVE", "PAYMENT_PENDING"].includes(course.accessStatus) &&
-            Number.isInteger(course.retailPrice) && course.retailPrice > 0;
-          return <article className={`course-card ${course.recommended ? "is-recommended" : ""}`} key={course.courseId}>
-            <CourseCover course={course} /><div className="course-card-body">
-              <div className="course-badges"><span className="course-stage-badge">{courseAudienceLabel(course.stage)}</span>
-                {course.recommended && <span className="course-recommend-badge">Đề xuất {course.recommendationOrder}</span>}</div>
-              <h3>{course.name}</h3><div className="course-score-summary">
-                <p>{courseEntryReference(course.stage)}</p>
-                <strong>{courseTargetLabel(course.maxTargetScore)}</strong>
-              </div>
-              <p className="course-description">{course.description || "Thông tin khóa học đang được cập nhật."}</p>
-              <div className="course-card-bottom">{!isGuest && <p className="course-access">{accessLabels[course.accessStatus]}
-                {course.accessStatus === "ACTIVE" && course.accessExpiresAt ? ` · Đến ${date(course.accessExpiresAt)}` : ""}</p>}
-                <div className="course-offer"><div className="course-price"><strong>{course.retailPrice > 0 ? money.format(course.retailPrice) :
-                  "Chưa có giá bán"}</strong><span>{course.accessDays} ngày truy cập</span></div>
-                  {!isGuest && purchasable && <label className="course-select"><input type="checkbox"
-                    checked={selected.includes(course.courseId)} disabled={checkout.busy}
-                    onChange={() => toggle(course.courseId)} /> Chọn khóa học</label>}</div>
-                {isGuest ? <div className="course-card-actions">
-                  <Link className="outline-button course-cta course-info-cta" to={`/courses/${course.courseId}`}>Xem thông tin</Link>
-                  {!user && purchasable && <button type="button" className="primary-button course-cta"
-                    onClick={() => requestGuestCoursePurchase(requireAuthentication)}>Mua khóa học</button>}
-                </div> : course.accessStatus === "ACTIVE" && <Link className="primary-button course-cta" to={`/courses/${course.courseId}`}>Vào học</Link>}
-              </div></div></article>;
-        })}</div></section>
-      {!isGuest && <section id="course-quotation" className="course-section course-quotation" aria-live="polite"><h2>Báo giá khóa học</h2>
-        {!selected.length && <p>Chọn ít nhất một khóa học để xem báo giá từ hệ thống.</p>}
-        {selected.length > 0 && !quoted.data && !quoted.error && <p>Đang tính giá…</p>}
-        {quoted.error && <p className="exam-error" role="alert">{quoted.error}</p>}
-        {quoted.data && <><ul>{quoted.data.courses.map(item => <li key={item.courseId}>
-          <span>{item.name}</span><strong>{money.format(item.price)}</strong></li>)}</ul>
-          <p>Thời hạn mỗi khóa: <strong>{quoted.data.validDays} ngày</strong></p>
-          <p className="course-quote-total">Tổng thanh toán: <strong>{money.format(quoted.data.total)}</strong></p>
-          <p>Quyền học chỉ được kích hoạt sau khi VNPay xác nhận thanh toán.</p>
-          {checkout.message && <p className="exam-error" role="alert">{checkout.message}</p>}
-          <button type="button" className="primary-button course-cta" disabled={checkout.busy} onClick={purchase}>
-            {checkout.busy ? "Đang xử lý…" : "Xác nhận và tiếp tục đến VNPay"}</button></>}
-      </section>}
+        <div className="course-grid">{courses.map(course => <CourseCard key={course.courseId} course={course}
+          isGuest={isGuest} user={user} busy={checkout.busy} onPurchase={openPurchase}
+          requireAuthentication={requireAuthentication} />)}</div></section>
       {!isGuest && <section className="course-section"><h2>Khóa học đã mua</h2>
         {owned.length ? <div className="course-owned">{owned.map(course => <div key={course.courseId}>
           <strong>{course.name}</strong><span>{accessLabels[course.accessStatus]}
@@ -217,10 +224,17 @@ export default function CourseListPage() {
               <span className="course-payment-status" data-status={item.trangThai}>{paymentLabels[item.trangThai] || item.trangThai || "Chưa xác định"}</span></div>
             <dl className="course-history-facts"><div><dt>Số tiền</dt><dd>{item.soTien != null && Number.isFinite(Number(item.soTien)) ? money.format(item.soTien) : "Chưa có dữ liệu"}</dd></div>
               <div><dt>Ngày tạo</dt><dd>{date(item.ngayTao) || "Chưa có dữ liệu"}</dd></div></dl>
-            {["QUA_HAN", "THAT_BAI"].includes(item.trangThai) && item.courseIds?.length > 0 &&
-              <button type="button" className="outline-button course-history-retry" onClick={() => prepareRetry(item.courseIds)}>Chọn lại khóa để thanh toán</button>}
+            {["QUA_HAN", "THAT_BAI"].includes(item.trangThai) && item.courseIds?.map(id => {
+              const course = courses.find(candidate => candidate.courseId === id);
+              return course && !["ACTIVE", "PAYMENT_PENDING"].includes(course.accessStatus) && course.retailPrice > 0 ?
+                <button type="button" key={id} className="outline-button course-history-retry"
+                  onClick={() => openPurchase(course)}>Thanh toán lại {course.name}</button> : null;
+            })}
           </article>)}</div> : <p className="course-history-empty">Bạn chưa có giao dịch thanh toán nào.</p>}
         </details></section>}
     </>}
+    {selectedCourse && learnerToken && <CoursePurchaseDialog course={selectedCourse} quote={quoted.data}
+      quoteError={quoted.error} error={checkout.message} busy={checkout.busy}
+      onClose={closePurchase} onConfirm={purchase} onRetry={retryQuote} />}
   </main></SiteLayout>;
 }

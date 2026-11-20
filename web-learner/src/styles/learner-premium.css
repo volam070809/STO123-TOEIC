@@ -195,7 +195,6 @@
 .site-shell .course-grid .course-price span { color: #6b7891; font-size: 12px; font-weight: 600; }
 .site-shell .course-grid .course-card-actions { gap: 10px; margin-top: 16px; }
 .site-shell .course-grid .course-cta { min-height: 45px; border-radius: 11px; font-size: 13px; }
-.site-shell .course-grid .course-select { min-height: 37px; color: #285aab; font-size: 13px; }
 .site-shell .course-page .course-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .site-shell .course-page .course-grid .course-card { border: 1px solid #e0e8f0; border-radius: 18px; box-shadow: 0 9px 26px rgb(20 50 84 / 6%); }
 .site-shell .course-page .course-grid .course-cover { height: 165px; background: #edf3f8; }
