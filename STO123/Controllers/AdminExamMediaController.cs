@@ -102,6 +102,10 @@ public sealed class AdminExamMediaController(ToeicDbContext db, BlobServiceClien
         if (path.StartsWith("exam-snapshots/", StringComparison.Ordinal))
             return Conflict(new { code = "IMMUTABLE_MEDIA",
                 message = "Media lịch sử của phiên bản đề không thể xóa từ thư viện nguồn." });
+        if (await db.NguLieuTaiLieu.AsNoTracking().AnyAsync(x =>
+            x.NoiDung != null && x.NoiDung.Contains(path), ct))
+            return Conflict(new { code = "DOCUMENT_BLOCK_IN_USE",
+                message = "Hình còn nằm trong khối tài liệu Part 7. Hãy gỡ hình trong trình soạn và lưu trước khi xóa tệp." });
         await using var mediaLease = await ExamMediaPathLease.AcquireAsync(
             db.Database.GetConnectionString()!, Container.Name, path, ct);
         var blob = Container.GetBlobClient(path);
@@ -181,6 +185,10 @@ public sealed class AdminExamMediaController(ToeicDbContext db, BlobServiceClien
         }
         await using (var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct))
         {
+            if (await db.NguLieuTaiLieu.AsNoTracking().AnyAsync(x =>
+                x.NoiDung != null && x.NoiDung.Contains(path), ct))
+                return Conflict(new { code = "DOCUMENT_BLOCK_IN_USE",
+                    message = "Hình còn nằm trong khối tài liệu Part 7. Hãy gỡ hình và lưu trước khi xóa tệp." });
             var source = await db.NguLieu.Where(x => x.DuongDanAudio == path || x.DuongDanAnh == path)
                 .ToListAsync(ct);
             var documents = await db.NguLieuTaiLieu.Where(x => x.DuongDanAnh == path).ToListAsync(ct);

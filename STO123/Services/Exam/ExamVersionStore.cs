@@ -352,7 +352,7 @@ public sealed class ExamVersionStore(ToeicDbContext db, BlobServiceClient blobs,
     private async Task<VersionedExam> ArchiveMediaAsync(VersionedExam source, string prefix, CancellationToken ct)
     {
         var paths = source.Groups.SelectMany(g => new[] { g.Audio, g.Image }
-            .Concat(g.Documents.Select(d => d.ImagePath)))
+            .Concat(g.Documents.SelectMany(ExamDocumentCodec.ImagePaths)))
             .Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p!)
             .Distinct(StringComparer.Ordinal).ToArray();
         var mapped = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -386,7 +386,9 @@ public sealed class ExamVersionStore(ToeicDbContext db, BlobServiceClient blobs,
         string? Archive(string? path) => path is null ? null : mapped[path];
         return source with { Groups = source.Groups.Select(g => g with {
             Audio = Archive(g.Audio), Image = Archive(g.Image),
-            Documents = g.Documents.Select(d => d with { ImagePath = Archive(d.ImagePath) }).ToList()
+            Documents = g.Documents.Select(d => d with { ImagePath = Archive(d.ImagePath),
+                Content = PartSevenBlockCodec.IsV2(d.Content) ?
+                    PartSevenBlockCodec.ArchiveImages(d.Content!, mapped) : d.Content }).ToList()
         }).ToList() };
     }
 

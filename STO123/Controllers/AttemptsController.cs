@@ -94,7 +94,14 @@ public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbConte
     }
 
     [HttpGet("{id:int}/groups/{groupId:int}/documents/{order:int}/image")]
-    public async Task<IActionResult> DocumentImage(int id, int groupId, int order, CancellationToken ct)
+    public Task<IActionResult> DocumentImage(int id, int groupId, int order, CancellationToken ct) =>
+        DocumentImageCore(id, groupId, order, null, ct);
+
+    [HttpGet("{id:int}/groups/{groupId:int}/documents/{order:int}/images/{blockId}")]
+    public Task<IActionResult> DocumentBlockImage(int id, int groupId, int order, string blockId, CancellationToken ct) =>
+        DocumentImageCore(id, groupId, order, blockId, ct);
+
+    private async Task<IActionResult> DocumentImageCore(int id, int groupId, int order, string? blockId, CancellationToken ct)
     {
         try
         {
@@ -114,13 +121,15 @@ public sealed class AttemptsController(ExamAttemptService attempts, ToeicDbConte
             }
             var document = ExamDocumentCodec.Decode(group?.TaiLieuJson ?? compactGroup?.Documents)
                 .FirstOrDefault(d => d.Order == order);
-            if (string.IsNullOrWhiteSpace(document?.ImagePath))
+            var path = blockId is null ? document?.ImagePath :
+                PartSevenBlockCodec.ImagePath(document?.Content, blockId);
+            if (string.IsNullOrWhiteSpace(path))
                 throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Không tìm thấy hình ảnh.", 404);
             var containerName = MediaContainer(group?.LoaiBaiLam ?? compactGroup!.Type);
             if (string.IsNullOrWhiteSpace(containerName)) throw new ExamProblem("MEDIA_NOT_AVAILABLE", "Media chưa được cấu hình.", 503);
-            var blob = blobs.GetBlobContainerClient(containerName).GetBlobClient(document.ImagePath);
+            var blob = blobs.GetBlobContainerClient(containerName).GetBlobClient(path);
             var properties = await blob.GetPropertiesAsync(cancellationToken: ct);
-            return File(await blob.OpenReadAsync(cancellationToken: ct), MediaType(document.ImagePath, properties.Value.ContentType), enableRangeProcessing: true);
+            return File(await blob.OpenReadAsync(cancellationToken: ct), MediaType(path, properties.Value.ContentType), enableRangeProcessing: true);
         }
         catch (ExamProblem e) { return StatusCode(e.Status, new { code = e.Code, message = e.Message }); }
         catch (RequestFailedException e) when (e.Status == 404) { return NotFound(new { code = "MEDIA_NOT_AVAILABLE", message = "Không tìm thấy hình ảnh." }); }

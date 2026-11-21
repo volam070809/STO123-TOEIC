@@ -6,11 +6,12 @@ import PartSevenLivePreview from "./PartSevenLivePreview";
 import { documentPayload, moveItem, newDocument, partSevenIssues } from "./partSevenDocumentData";
 import { serializePart7Translation, updateTranslationStructure } from "./partSevenTranslationData";
 import { clearPartSevenDraft, loadPartSevenDraft, savePartSevenDraft } from "./partSevenDraft";
+import PartSevenStudio from "./PartSevenStudio";
 
 const emptyQuestion = () => ({ text: "", translation: "", a: "", b: "", c: "", d: "", correct: "A", difficulty: 2, explanation: "" });
 const questionCount = part => ({ 1: 1, 2: 1, 3: 3, 4: 3, 5: 1, 6: 4, 7: 2 })[Number(part)] || 1;
 
-export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, initialPart = 1, initialCount = null, examId = null, inline = false, fixedPart = false }) {
+export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, initialPart = 1, initialCount = null, examId = null, draftScope = null, inline = false, fixedPart = false }) {
   const [draft] = useState(() => Number(initialPart) === 7 ?
     loadPartSevenDraft(token, fixedBank || "DE_THI", examId) : null);
   const [part, setPart] = useState(Number(initialPart));
@@ -32,13 +33,6 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
   const previewUrls = useRef([]);
 
   useEffect(() => () => previewUrls.current.forEach(URL.revokeObjectURL), []);
-
-  useEffect(() => {
-    if (part !== 7 || !dirty) return;
-    const timer = window.setTimeout(() => savePartSevenDraft(token, bank, examId,
-      { text, documents, part7Translation, questions }), 500);
-    return () => window.clearTimeout(timer);
-  }, [part, dirty, token, bank, examId, text, documents, part7Translation, questions]);
 
   useEffect(() => {
     if (!dirty) return undefined;
@@ -185,6 +179,9 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
     finally { setBusy(false); }
   }
 
+  if (part === 7) return <PartSevenStudio token={token} bank={bank} examId={examId} inline={inline}
+    initialCount={initialCount} draftScope={draftScope}
+    onClose={onClose} onSaved={onSaved} onPartChange={fixedPart ? undefined : changePart} />;
   return <div className={inline ? "admin-panel exam-inline-author" : "exam-drawer-backdrop"} onMouseDown={event => { if (!inline && event.target === event.currentTarget) close(); }}>
     <div className={inline ? "exam-author-inline" : `exam-drawer exam-author-drawer${part === 7 ? " is-part-seven" : ""}`} role={inline ? undefined : "dialog"} aria-modal={inline ? undefined : "true"} aria-label="Thêm câu hỏi">
       <div className="exam-drawer-head"><div><h2>{[1, 2, 5].includes(Number(part)) ? "Thêm câu hỏi" : "Thêm nhóm câu hỏi"} · Part {part}</h2><p>Nhập nội dung theo cấu trúc Part; lưu một lần khi hoàn tất.</p></div><button type="button" onClick={close} disabled={busy}>Đóng</button></div>

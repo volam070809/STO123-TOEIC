@@ -63,6 +63,26 @@ function LayoutDocument({ type, content }) {
   </div>;
 }
 
+function BlockDocument({ type, content, token, ImageComponent }) {
+  return <div className={`exam-layout-document exam-layout-${type.toLowerCase()} exam-block-document`}>
+    {content.blocks.map((block, index) => <div className={`exam-block exam-block-${block.kind.toLowerCase()}`} key={block.id}>
+      {block.kind === "HEADING" && <h4 className="exam-preserve-lines">{block.text}</h4>}
+      {block.kind === "PARAGRAPH" && <p className="exam-preserve-lines">{block.text}</p>}
+      {block.kind === "BULLET" && <ul><li className="exam-preserve-lines">{block.text}</li></ul>}
+      {block.kind === "NUMBERED" && <ol start={content.blocks.slice(0, index).filter(item =>
+        item.kind === "NUMBERED").length + 1}><li className="exam-preserve-lines">{block.text}</li></ol>}
+      {block.kind === "META" && <dl className="exam-layout-meta"><div><dt>{block.label}</dt><dd className="exam-preserve-lines">{block.value}</dd></div></dl>}
+      {block.kind === "TABLE" && <TableDocument content={block} />}
+      {block.kind === "IMAGE" && <div className="exam-block-image" style={{ width: `${block.width || 100}%`,
+        marginLeft: block.align === "right" ? "auto" : block.align === "center" ? "auto" : 0,
+        marginRight: block.align === "left" ? "auto" : block.align === "center" ? "auto" : 0 }}>
+        <ImageDocument document={{ imageUrl: block.imageUrl }} token={token}
+          ImageComponent={ImageComponent} />{block.caption && <p className="exam-block-caption">{block.caption}</p>}</div>}
+      {block.kind === "SEPARATOR" && <hr />}
+    </div>)}
+  </div>;
+}
+
 function ImageDocument({ document, token, ImageComponent }) {
   const [zoomSrc, setZoomSrc] = useState("");
   useEffect(() => {
@@ -91,7 +111,8 @@ function ImageDocument({ document, token, ImageComponent }) {
 export default function DocumentRenderer({ document, token, ImageComponent = PrivateImage, heading }) {
   const { type, content } = document ?? {};
   const structured = content && typeof content === "object" && !Array.isArray(content);
-  const valid = type === "IMAGE" ? Boolean(document.imageUrl) :
+  const blocks = structured && content.version === 2 && Array.isArray(content.blocks);
+  const valid = blocks ? true : type === "IMAGE" ? Boolean(document.imageUrl) :
     type === "TEXT" ? typeof content === "string" :
     type === "EMAIL" ? structured && typeof content.body === "string" :
     type === "TABLE" ? structured && Array.isArray(content.headers) && Array.isArray(content.rows) :
@@ -102,14 +123,15 @@ export default function DocumentRenderer({ document, token, ImageComponent = Pri
   return <article className="exam-document">
     <h3>{heading || `Tài liệu ${document?.order}`}</h3>
     {!valid ? unavailable : <>
-      {type === "TEXT" && <TextDocument content={content} />}
-      {type === "EMAIL" && <EmailDocument content={content} />}
-      {type === "TABLE" && <TableDocument content={content} />}
-      {type === "CHAT" && <ChatDocument content={content} />}
-      {type === "FORM" && <FormDocument content={content} />}
-      {isLayoutType(type) && <LayoutDocument type={type} content={content} />}
-      {type === "IMAGE" && <ImageDocument document={document} token={token} ImageComponent={ImageComponent} />}
-      {type !== "IMAGE" && document.imageUrl &&
+      {blocks && <BlockDocument type={type} content={content} token={token} ImageComponent={ImageComponent} />}
+      {!blocks && type === "TEXT" && <TextDocument content={content} />}
+      {!blocks && type === "EMAIL" && <EmailDocument content={content} />}
+      {!blocks && type === "TABLE" && <TableDocument content={content} />}
+      {!blocks && type === "CHAT" && <ChatDocument content={content} />}
+      {!blocks && type === "FORM" && <FormDocument content={content} />}
+      {!blocks && isLayoutType(type) && <LayoutDocument type={type} content={content} />}
+      {!blocks && type === "IMAGE" && <ImageDocument document={document} token={token} ImageComponent={ImageComponent} />}
+      {!blocks && type !== "IMAGE" && document.imageUrl &&
         <ImageDocument document={document} token={token} ImageComponent={ImageComponent} />}
     </>}
   </article>;

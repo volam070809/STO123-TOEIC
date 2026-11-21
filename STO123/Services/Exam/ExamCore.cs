@@ -56,8 +56,18 @@ public static class ExamDocumentCodec
     public static bool IsValidSource(NguLieuTaiLieu document) =>
         IsValid(document.LoaiTaiLieu, document.NoiDung, document.DuongDanAnh);
 
+    public static IEnumerable<string> ImagePaths(NguLieuTaiLieu document) =>
+        new[] { document.DuongDanAnh }.Where(path => !string.IsNullOrWhiteSpace(path))!
+            .Select(path => path!).Concat(PartSevenBlockCodec.ImagePaths(document.NoiDung));
+
+    public static IEnumerable<string> ImagePaths(ExamDocumentSnapshot document) =>
+        new[] { document.ImagePath }.Where(path => !string.IsNullOrWhiteSpace(path))!
+            .Select(path => path!).Concat(PartSevenBlockCodec.ImagePaths(document.Content));
+
     private static bool IsValid(string? type, string? content, string? imagePath)
     {
+        if (PartSevenBlockCodec.IsV2(content))
+            return PartSevenBlockCodec.IsValid(type, content) && string.IsNullOrWhiteSpace(imagePath);
         if (type is null || !Types.Contains(type)) return false;
         if (type == "IMAGE") return !string.IsNullOrWhiteSpace(imagePath);
         if (type == "TEXT") return !string.IsNullOrWhiteSpace(content);
@@ -155,9 +165,17 @@ public static class ExamDocumentCodec
     public static object? ToContent(ExamDocumentSnapshot document)
     {
         if (document.Type == "UNAVAILABLE") return null;
-        if (document.Type is "TEXT" or "IMAGE") return document.Content;
+        if (!PartSevenBlockCodec.IsV2(document.Content) && document.Type is ("TEXT" or "IMAGE"))
+            return document.Content;
         try { return JsonDocument.Parse(document.Content!).RootElement.Clone(); }
         catch (JsonException) { return null; }
+    }
+
+    public static object? ToClientContent(ExamDocumentSnapshot document, int attemptId, int groupId)
+    {
+        if (PartSevenBlockCodec.IsV2(document.Content))
+            return PartSevenBlockCodec.ToClientContent(document.Content!, attemptId, groupId, document.Order);
+        return ToContent(document);
     }
 }
 

@@ -66,8 +66,10 @@ export default function AdminQuestionBankPage({ bank }) {
     const editor = location.state?.openEditor;
     if (!detail || !editor || !questionId) return;
     if (editor === "group" && detail.groupId) setGroupEditing(true);
-    else if (detail.questions.some(question => question.id === Number(editor)))
-      setEditingQuestion(Number(editor));
+    else if (detail.questions.some(question => question.id === Number(editor))) {
+      if (detail.part === 7) setGroupEditing(true);
+      else setEditingQuestion(Number(editor));
+    }
     navigate(location.pathname, { replace: true, state: null });
   }, [detail, questionId, location.pathname, location.state, navigate]);
 
@@ -118,10 +120,14 @@ export default function AdminQuestionBankPage({ bank }) {
           onClose={nextId => setEditingQuestion(nextId || null)}
           onSaved={() => { setEditingQuestion(null); setNotice("Đã lưu câu nguồn và cập nhật đề hiện hành liên quan. Lượt thi đã bắt đầu giữ nguyên nội dung cũ."); reload(); }} /> :
           groupEditing ? <ExamGroupEdit unit={detail} token={token} onCancel={() => setGroupEditing(false)}
-            onSaved={() => { setGroupEditing(false); setNotice("Đã lưu ngữ liệu nguồn và cập nhật đề hiện hành liên quan. Lượt thi đã bắt đầu giữ nguyên nội dung cũ."); reload(); }} /> : <>
+            onSaved={result => { setGroupEditing(false); setNotice("Đã lưu ngữ liệu nguồn và cập nhật đề hiện hành liên quan. Lượt thi đã bắt đầu giữ nguyên nội dung cũ.");
+              if (result.questionIds?.length && !result.questionIds.includes(Number(questionId)))
+                navigate(`${base}/detail/${result.questionIds[0]}`);
+              else reload(); }} /> : <>
             <div className="exam-editor-header"><div><h2>Nội dung {detail.groupId ? "nhóm câu" : "câu hỏi"}</h2><p>Đáp án đúng và giải thích được hiển thị bên dưới.</p></div>
-              {detail.groupId && <button type="button" className="admin-button admin-button-secondary" onClick={() => setGroupEditing(true)}>Sửa ngữ liệu chung</button>}</div>
-            <QuestionContentPreview unit={detail} token={token} onEditQuestion={setEditingQuestion} />
+              {detail.groupId && <button type="button" className="admin-button admin-button-secondary" onClick={() => setGroupEditing(true)}>{detail.part === 7 ? "Mở Visual Document Studio" : "Sửa ngữ liệu chung"}</button>}</div>
+            <QuestionContentPreview unit={detail} token={token} onEditQuestion={id =>
+              detail.part === 7 ? setGroupEditing(true) : setEditingQuestion(id)} />
           </>}
       </main><aside className="admin-panel question-bank-usage"><h2>Đang thuộc đề thi</h2>
         {detail.exams?.length ? detail.exams.map(exam => <p key={exam.examId}><strong>{exam.name}</strong><br />#{exam.examId} · {exam.current ? "Đang sử dụng" : "Chưa xuất bản"}</p>) :

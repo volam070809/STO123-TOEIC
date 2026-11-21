@@ -6,6 +6,7 @@ import PartSevenLivePreview from "./PartSevenLivePreview";
 import { documentIssues, documentPayload, fromDocument, moveItem, newDocument } from "./partSevenDocumentData";
 import { parsePart7Translation, serializePart7Translation, updateTranslationStructure } from "./partSevenTranslationData";
 import { clearPartSevenGroupDraft, loadPartSevenGroupDraft, savePartSevenGroupDraft } from "./partSevenDraft";
+import PartSevenStudio from "./PartSevenStudio";
 
 const part6Translation = (value, order) => value?.replace(/\r/g, "").split("\n")
   .find(line => line.trim().startsWith(`[${order}]`))?.trim().slice(3).trim() || "";
@@ -44,7 +45,7 @@ function SavedImagePreview({ path, bank, token, localUrl }) {
   return preview.url && <img className="exam-media-preview" src={preview.url} alt="Ảnh hiện tại" />;
 }
 
-export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
+function LegacyExamGroupEdit({ unit, token, onCancel, onSaved }) {
   const [source] = useState(() => JSON.stringify({ resource: unit.resource, documents: unit.documents }));
   const [draft] = useState(() => unit.part === 7 ?
     loadPartSevenGroupDraft(token, unit.bank || "DE_THI", unit.groupId, source) : null);
@@ -218,4 +219,10 @@ export default function ExamGroupEdit({ unit, token, onCancel, onSaved }) {
         <button className="admin-button" type="submit" disabled={busy || !dirty}>{busy ? "Đang lưu…" : "Lưu ngữ liệu"}</button></div>
     </form>
   </section>;
+}
+
+export default function ExamGroupEdit(props) {
+  if (props.unit.part === 7) return <PartSevenStudio unit={props.unit} token={props.token}
+    bank={props.unit.bank || "DE_THI"} inline onClose={props.onCancel} onSaved={props.onSaved} />;
+  return <LegacyExamGroupEdit {...props} />;
 }

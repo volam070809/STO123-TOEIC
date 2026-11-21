@@ -105,15 +105,16 @@ export default function AdminManualExamPage() {
     {error && <p role="alert" className="exam-alert exam-alert-error">{error}</p>}
     {notice && <p role="status" className="exam-alert exam-alert-success">{notice}</p>}
     <section className="admin-panel question-detail">
-      {editingId ? <ExamQuestionEdit inline id={editingId} token={token} onClose={nextId => setEditingId(nextId || null)}
+      {editingId && part !== 7 ? <ExamQuestionEdit inline id={editingId} token={token} onClose={nextId => setEditingId(nextId || null)}
         onSaved={() => { setEditingId(null); setDetail(null); setRevision(value => value + 1);
           setNotice("Đã lưu câu nguồn và cập nhật đề đang soạn."); }} /> :
       groupEditing ? <ExamGroupEdit unit={detail} token={token} onCancel={() => setGroupEditing(false)}
         onSaved={() => { setGroupEditing(false); setDetail(null); setRevision(value => value + 1);
           setNotice("Đã lưu ngữ liệu chung."); }} /> : <>
         <div className="exam-editor-header"><h2>Nội dung câu hỏi</h2>
-          {draft?.status === "CHUA_XUAT_BAN" && detail.groupId && <button type="button" onClick={() => setGroupEditing(true)}>Sửa ngữ liệu chung</button>}</div>
-        <QuestionContentPreview unit={detail} token={token} onEditQuestion={draft?.status === "CHUA_XUAT_BAN" ? setEditingId : undefined} />
+          {draft?.status === "CHUA_XUAT_BAN" && detail.groupId && <button type="button" onClick={() => setGroupEditing(true)}>{part === 7 ? "Mở Visual Document Studio" : "Sửa ngữ liệu chung"}</button>}</div>
+        <QuestionContentPreview unit={detail} token={token} onEditQuestion={draft?.status === "CHUA_XUAT_BAN" ?
+          id => part === 7 ? setGroupEditing(true) : setEditingId(id) : undefined} />
       </>}
     </section>
   </div>;

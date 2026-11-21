@@ -91,7 +91,8 @@ public static class ExamSourceValidator
                 continue;
             }
             var paths = new[] { resource.DuongDanAudio, resource.DuongDanAnh }
-                .Concat(documents.Where(d => d.MaNguLieu == member.MaNguLieu).Select(d => d.DuongDanAnh))
+                .Concat(documents.Where(d => d.MaNguLieu == member.MaNguLieu)
+                    .SelectMany(ExamDocumentCodec.ImagePaths))
                 .Where(p => !string.IsNullOrWhiteSpace(p));
             foreach (var path in paths.Where(p => !existingBlobPaths.Contains(p)))
                 Add("BLOB_MISSING", $"Không tìm thấy Blob cho nhóm {member.MaNguLieu}: {path}");

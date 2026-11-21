@@ -36,3 +36,22 @@ test("Part 7 edit draft is ignored after the saved group changes", () => {
     assert.equal(loadPartSevenGroupDraft(token, "DE_THI", 9, "source-v1"), null);
   } finally { globalThis.localStorage = original; }
 });
+
+test("version 2 studio blocks and translated captions reopen only for their author", () => {
+  const storage = new Map();
+  const original = globalThis.localStorage;
+  globalThis.localStorage = { getItem: key => storage.get(key) || null,
+    setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) };
+  try {
+    const token = subject => `x.${Buffer.from(JSON.stringify({ sub: subject })).toString("base64url")}.x`;
+    const document = { id: "doc", type: "IMAGE", blocks: [{ id: "image", kind: "IMAGE",
+      path: "part7/photo.png", caption: "Map", align: "center", width: 80 }] };
+    const studio = { documents: [document], questions: [{ text: "One" }, { text: "Two" }],
+      translation: { documents: [{ type: "IMAGE", blocks: [{ id: "image", kind: "IMAGE",
+        caption: "Bản đồ" }] }] } };
+    assert.equal(savePartSevenDraft(token("admin"), "DE_THI", 4,
+      { documents: studio.documents, questions: studio.questions, studio }), true);
+    assert.deepEqual(loadPartSevenDraft(token("admin"), "DE_THI", 4).studio, studio);
+    assert.equal(loadPartSevenDraft(token("other"), "DE_THI", 4), null);
+  } finally { globalThis.localStorage = original; }
+});

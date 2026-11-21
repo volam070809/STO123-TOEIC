@@ -18,7 +18,8 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
     public sealed record GroupContentRequest(string? Text, string? Translation);
     public sealed record DocumentRequest(string Type, string? Content, string? ImagePath);
     public sealed record UnitResourceRequest(string? Text, string? Translation,
-        string? AudioPath, string? ImagePath, List<DocumentRequest> Documents);
+        string? AudioPath, string? ImagePath, List<DocumentRequest> Documents,
+        List<AdminQuestionAuthoringController.QuestionInput>? Questions = null);
 
     private async Task<int[]> LegacyDependencies(int[] memberIds, CancellationToken ct)
     {
@@ -31,12 +32,14 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
     }
 
     [HttpPut("{groupId:int}/unit")]
+    [HttpPut("{groupId:int}/studio")]
     public async Task<IActionResult> UpdateUnit(int groupId, [FromBody] UnitResourceRequest request,
         CancellationToken ct)
     {
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var editorId)) return Forbid();
         if (request.Documents is null) return BadRequest(new { code = "INVALID_DOCUMENT" });
         var members = await db.NhomCauHoi.AsNoTracking().Where(x => x.MaNguLieu == groupId)
+            .OrderBy(x => x.ThuTu)
             .Select(x => new { x.MaCauHoi, part = x.MaCauHoiNavigation.MaPartNavigation.SoPart,
                 bank = x.MaCauHoiNavigation.LoaiCauHoi }).ToArrayAsync(ct);
         if (members.Length == 0) return NotFound(new { code = "GROUP_NOT_FOUND" });
@@ -45,6 +48,37 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
             return Conflict(new { code = "INVALID_GROUP" });
         var part = members[0].part;
         var bank = members[0].bank;
+        if (request.Questions is not null)
+        {
+            if (part != 7 || request.Questions.Count is < 2 or > 5)
+                return BadRequest(new { code = "STUDIO_QUESTION_COUNT" });
+            var suppliedIds = request.Questions.Where(q => q is not null && q.Id.HasValue)
+                .Select(q => q.Id!.Value).ToArray();
+            if (suppliedIds.Length != suppliedIds.Distinct().Count() ||
+                suppliedIds.Any(id => !members.Any(member => member.MaCauHoi == id)) ||
+                request.Questions.Count != members.Length && suppliedIds.Length == 0)
+                return BadRequest(new { code = "STUDIO_QUESTION_IDS" });
+            var memberIdsForLinks = members.Select(member => member.MaCauHoi).ToArray();
+            var membershipChanged = suppliedIds.Length > 0 &&
+                (suppliedIds.Length != members.Length || !suppliedIds.SequenceEqual(memberIdsForLinks)) ||
+                request.Questions.Count != members.Length;
+            if (membershipChanged &&
+                await db.CauHoiDeThi.AsNoTracking().AnyAsync(link =>
+                    memberIdsForLinks.Contains(link.MaCauHoi), ct))
+                return Conflict(new { code = "GROUP_LINKED_TO_EXAM",
+                    message = "Nhóm đang thuộc đề thi; không thể thay đổi số câu." });
+            for (var index = 0; index < request.Questions.Count; index++)
+            {
+                var input = request.Questions[index];
+                if (input is null || QuestionContentRules.InvalidField(7, input.Text,
+                        input.Explanation, input.Translation) is not null ||
+                    input.Difficulty is < 1 or > 3 ||
+                    new[] { input.A, input.B, input.C, input.D }.Any(x =>
+                        string.IsNullOrWhiteSpace(x) || x.Length > 512) ||
+                    input.Correct?.Trim().ToUpperInvariant() is not ("A" or "B" or "C" or "D"))
+                    return BadRequest(new { code = "INVALID_QUESTION", question = index + 1 });
+            }
+        }
         var resource = new NguLieu {
             NoiDungNguLieu = request.Text?.Trim(), NoiDungDich = request.Translation?.Trim(),
             DuongDanAudio = request.AudioPath?.Trim(), DuongDanAnh = request.ImagePath?.Trim()
@@ -63,7 +97,7 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
             return BadRequest(new { code = "INVALID_PART7_TRANSLATION",
                 message = "Bản dịch Part 7 không khớp cấu trúc tài liệu gốc." });
         var paths = new[] { resource.DuongDanAudio, resource.DuongDanAnh }
-            .Concat(docs.Select(d => d.DuongDanAnh)).Where(x => !string.IsNullOrWhiteSpace(x))
+            .Concat(docs.SelectMany(ExamDocumentCodec.ImagePaths)).Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(x => x!).Distinct().ToArray();
         if (paths.Any(path => path.Length > 512 || path.StartsWith('/') ||
             path.Contains("..", StringComparison.Ordinal) || path.Contains('\\')))
@@ -75,7 +109,8 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
             db.Database.GetConnectionString()!, paths.Select(path => (containerName, path)), ct);
         var media = new[] { (Path: resource.DuongDanAudio, Kind: "AUDIO"),
             (Path: resource.DuongDanAnh, Kind: "IMAGE") }
-            .Concat(docs.Select(d => (Path: (string?)d.DuongDanAnh, Kind: "IMAGE")))
+            .Concat(docs.SelectMany(ExamDocumentCodec.ImagePaths)
+                .Select(path => (Path: (string?)path, Kind: "IMAGE")))
             .Where(x => !string.IsNullOrWhiteSpace(x.Path)).Distinct().ToArray();
         foreach (var item in media)
         {
@@ -110,8 +145,72 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
                     db.NguLieuTaiLieu.RemoveRange(old);
                     await db.SaveChangesAsync(token);
                     db.NguLieuTaiLieu.AddRange(docs);
+                    if (request.Questions is not null)
+                    {
+                        var oldIds = members.Select(member => member.MaCauHoi).ToArray();
+                        var requestedIds = request.Questions.Select((input, index) =>
+                            input.Id ?? (request.Questions.Count == oldIds.Length &&
+                                request.Questions.All(q => !q.Id.HasValue) ? oldIds[index] : 0)).ToArray();
+                        var changed = requestedIds.Length != oldIds.Length ||
+                            !requestedIds.SequenceEqual(oldIds);
+                        if (changed && await db.CauHoiDeThi.AsNoTracking()
+                            .AnyAsync(link => oldIds.Contains(link.MaCauHoi), token))
+                            throw new ExamProblem("GROUP_LINKED_TO_EXAM",
+                                "Nhóm đang thuộc đề thi; không thể thay đổi số hoặc thứ tự câu.", 409);
+                        var firstQuestion = await db.CauHoi.SingleAsync(q => q.MaCauHoi == oldIds[0], token);
+                        var ordered = new List<CauHoi>();
+                        for (var index = 0; index < request.Questions.Count; index++)
+                        {
+                            var id = requestedIds[index];
+                            var question = id == 0 ? new CauHoi {
+                                MaPart = firstQuestion.MaPart, LoaiCauHoi = bank,
+                                TrangThai = ExamCore.Published
+                            } : await db.CauHoi.FromSqlInterpolated(
+                                $"SELECT * FROM dbo.CauHoi WITH (UPDLOCK, HOLDLOCK) WHERE MaCauHoi = {id}")
+                                .SingleOrDefaultAsync(token) ?? throw new ExamProblem(
+                                    "QUESTION_NOT_FOUND", "Câu hỏi trong nhóm không còn tồn tại.", 409);
+                            var input = request.Questions[index];
+                            question.NoiDung = input.Text?.Trim();
+                            question.PhuongAnA = input.A?.Trim();
+                            question.PhuongAnB = input.B?.Trim();
+                            question.PhuongAnC = input.C?.Trim();
+                            question.PhuongAnD = input.D?.Trim();
+                            question.PhuongAnDung = input.Correct?.Trim().ToUpperInvariant();
+                            question.DoKho = input.Difficulty;
+                            question.GiaiThich = input.Explanation?.Trim();
+                            if (!ExamSourceValidator.ValidQuestion(question, 7))
+                                throw new ExamProblem("INVALID_QUESTION", $"Câu hỏi {index + 1} không hợp lệ.");
+                            if (id == 0) db.CauHoi.Add(question);
+                            ordered.Add(question);
+                        }
+                        if (changed)
+                        {
+                            var oldMemberships = await db.NhomCauHoi
+                                .Where(item => item.MaNguLieu == groupId).ToListAsync(token);
+                            db.NhomCauHoi.RemoveRange(oldMemberships);
+                            await db.SaveChangesAsync(token);
+                            var removed = oldIds.Except(requestedIds).ToArray();
+                            if (removed.Length > 0)
+                            {
+                                await db.CauHoiLuotLam.Where(q => q.MaCauHoiGoc != null &&
+                                    removed.Contains(q.MaCauHoiGoc.Value))
+                                    .ExecuteUpdateAsync(s => s.SetProperty(q => q.MaCauHoiGoc, (int?)null), token);
+                                foreach (var id in removed)
+                                    await db.Database.ExecuteSqlInterpolatedAsync(
+                                        $"DELETE FROM dbo.ChiTietPhanLoai WHERE MaCauHoi = {id}", token);
+                                db.CauHoi.RemoveRange(await db.CauHoi.Where(q =>
+                                    removed.Contains(q.MaCauHoi)).ToArrayAsync(token));
+                            }
+                            await db.SaveChangesAsync(token);
+                            db.NhomCauHoi.AddRange(ordered.Select((question, index) => new NhomCauHoi {
+                                MaCauHoi = question.MaCauHoi, MaNguLieu = groupId, ThuTu = index + 1
+                            }));
+                        }
+                    }
                 }, editorId, ct);
-            return Ok(new { groupId, affectedExamIds = affected });
+            var questionIds = await db.NhomCauHoi.AsNoTracking().Where(x => x.MaNguLieu == groupId)
+                .OrderBy(x => x.ThuTu).Select(x => x.MaCauHoi).ToArrayAsync(ct);
+            return Ok(new { groupId, questionIds, affectedExamIds = affected });
         }
         catch (ExamProblem e) { return StatusCode(e.Status, new { code = e.Code, message = e.Message }); }
     }
@@ -142,6 +241,26 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
         if (!Part7TranslationCodec.IsValid(currentTranslation, documents))
             return BadRequest(new { code = "TRANSLATION_SHAPE_MISMATCH",
                 message = "Cấu trúc tài liệu đã đổi. Hãy sửa bản dịch tương ứng trước khi lưu." });
+        var banks = await db.CauHoi.AsNoTracking().Where(x => memberIds.Contains(x.MaCauHoi))
+            .Select(x => x.LoaiCauHoi).Distinct().ToArrayAsync(ct);
+        if (banks.Length != 1 || banks[0] is not ("DE_THI" or "LUYEN_TAP"))
+            return Conflict(new { code = "GROUP_BANK_MISMATCH" });
+        var containerName = banks[0] == "DE_THI" ?
+            configuration["ExamMedia:ContainerName"] ?? "toeic-exam-media" : "practice-question";
+        var paths = documents.SelectMany(ExamDocumentCodec.ImagePaths).Distinct().ToArray();
+        await using var lease = await ExamMediaPathLease.AcquireManyAsync(
+            db.Database.GetConnectionString()!, paths.Select(path => (containerName, path)), ct);
+        var container = blobs.GetBlobContainerClient(containerName);
+        foreach (var path in paths)
+        {
+            if (path.Length > 512 || path.StartsWith('/') || path.Contains("..", StringComparison.Ordinal) ||
+                path.Contains('\\') || !(await container.GetBlobClient(path).ExistsAsync(ct)).Value)
+                return BadRequest(new { code = "MEDIA_NOT_FOUND" });
+            var contentType = (await container.GetBlobClient(path).GetPropertiesAsync(cancellationToken: ct)).Value.ContentType;
+            if (System.IO.Path.GetExtension(path).ToLowerInvariant() is not (".jpg" or ".jpeg" or ".png" or ".webp") ||
+                contentType is not ("image/jpeg" or "image/png" or "image/webp" or "application/octet-stream"))
+                return BadRequest(new { code = "MEDIA_TYPE_MISMATCH" });
+        }
         try
         {
             var affected = await versions.ApplySourceEditAsync(memberIds, async token => {

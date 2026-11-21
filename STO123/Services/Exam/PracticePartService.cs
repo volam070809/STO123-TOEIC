@@ -489,7 +489,7 @@ public sealed class PracticePartService(ToeicDbContext db)
             translation = (isReview || attempt.CauHoiLuotLam.Any(q => q.MaNhomLuotLam == g.MaNhomLuotLam) &&
                 !attempt.CauHoiLuotLam.Any(q => q.MaNhomLuotLam == g.MaNhomLuotLam &&
                     string.IsNullOrWhiteSpace(q.ChiTietKetQua?.DapAnChon))) ? g.NoiDungDich : null,
-            documents = (isReview || part >= 5 ? ExamDocumentCodec.Decode(g.TaiLieuJson) : []).Select(d => new { d.Order, d.Type, content = ExamDocumentCodec.ToContent(d),
+            documents = (isReview || part >= 5 ? ExamDocumentCodec.Decode(g.TaiLieuJson) : []).Select(d => new { d.Order, d.Type, content = ExamDocumentCodec.ToClientContent(d, attempt.MaKetQua, g.MaNhomLuotLam),
                 imageUrl = string.IsNullOrWhiteSpace(d.ImagePath) ? null : $"/api/attempts/{attempt.MaKetQua}/groups/{g.MaNhomLuotLam}/documents/{d.Order}/image" })
         }).ToArray();
         var questions = attempt.CauHoiLuotLam.OrderBy(q => q.ThuTu).Select(q => new {

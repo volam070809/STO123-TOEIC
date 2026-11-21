@@ -249,21 +249,26 @@ export default function AdminExamManagementPage() {
       </section>}
     </div>}
     {(editIndex !== null && units[editIndex] || addPart !== null) && <div className="exam-drawer-backdrop">
-      <aside className="exam-drawer exam-author-drawer" role="dialog" aria-modal="true" aria-label="Tạo câu hỏi trực tiếp">
+      <aside className={`exam-drawer exam-author-drawer${editPart === 7 ? " part7-studio-drawer" : ""}`}
+        role="dialog" aria-modal="true" aria-label="Tạo câu hỏi trực tiếp">
         {createdReplacementIds ? <div className="exam-recovery"><h2>Câu nguồn đã được lưu</h2><p>Mã câu: {createdReplacementIds.join(", ")}. Hãy gắn câu vừa tạo vào bản đang soạn.</p>
           <button type="button" className="admin-button" onClick={() => attachCreated(createdReplacementIds)}>Gắn câu vừa tạo</button>
           <button type="button" className="admin-button admin-button-secondary" onClick={() => { setEditIndex(null); setAddPart(null); }}>Quay lại đề</button></div> :
           <ExamQuestionForm key={`${editPart}-${editCount || "add"}`} inline fixedPart fixedBank="DE_THI"
             initialPart={editPart} initialCount={editCount} token={token}
+            draftScope={`replacement-${exam?.examId || "exam"}-${editIndex ?? `add-${editPart}`}`}
             onClose={() => { setEditIndex(null); setAddPart(null); }}
             onSaved={result => attachCreated(result.questionIds)} />}</aside></div>}
     {detail && <section className="admin-panel question-detail" aria-label="Chi tiết câu hỏi"><nav className="exam-breadcrumb" aria-label="Đường dẫn">Quản lý đề thi › {exam?.name} › Part {detail.part} › Chi tiết</nav><div className="exam-drawer-head"><div><h2>Chi tiết {detail.groupId ? `nhóm ${detail.groupId}` : `câu ${detail.questions[0]?.id}`}</h2><p>{detail.questions.length} câu · Part {detail.part}</p></div><button type="button" disabled={!!examEdit || groupEditing} onClick={() => { setDetail(null); setExamEdit(null); setGroupEditing(false); }}>← Quay lại Part</button></div>
       {!examEdit && !groupEditing && <QuestionContentPreview unit={detail} token={token}
-        onEditQuestion={detailIndex !== null && !examEdit && !groupEditing ? id => { setExamEdit({ id }); setGroupEditing(false); } : undefined} />
+        onEditQuestion={detailIndex !== null && !examEdit && !groupEditing ? id => {
+          if (detail.part === 7) setGroupEditing(true);
+          else setExamEdit({ id });
+        } : undefined} />
       }{!examEdit && !groupEditing && sourceDetail?.exams?.length > 0 && <div className="exam-usage-list"><h3>Đề đang sử dụng</h3>
         {sourceDetail.exams.map(item => <p key={item.examId}>{item.name} (#{item.examId}) · {item.status}</p>)}</div>}
       {detailIndex !== null && sourceDetail?.groupId && !groupEditing && !examEdit && <button type="button"
-        className="admin-button admin-button-secondary" onClick={() => { setGroupEditing(true); setExamEdit(null); }}>Sửa ngữ liệu và media chung</button>}
+        className="admin-button admin-button-secondary" onClick={() => { setGroupEditing(true); setExamEdit(null); }}>{detail.part === 7 ? "Mở Visual Document Studio" : "Sửa ngữ liệu và media chung"}</button>}
       {groupEditing && sourceDetail && <ExamGroupEdit unit={sourceDetail} token={token}
         onCancel={() => setGroupEditing(false)} onSaved={async () => {
           setGroupEditing(false); setDetail(null); setNotice("Đã cập nhật ngữ liệu nguồn và đề hiện hành liên quan. Lượt đang thi giữ nội dung cũ.");

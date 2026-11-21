@@ -112,6 +112,24 @@
 .exam-layout-notice, .exam-layout-policy { background: #fbfdff; }
 .exam-layout-invoice .exam-table-scroll, .exam-layout-schedule .exam-table-scroll { margin-top: 1rem; }
 .exam-layout-ad header h4 { color: #0f6597; font-size: 1.35rem; }
+.exam-block-document .exam-block-heading h4 { margin: .15rem 0 .9rem; font-size: 1.3rem; color: #163e66; }
+.exam-block-document .exam-block-paragraph { line-height: 1.65; }
+.exam-block-document .exam-block-bullet ul,.exam-block-document .exam-block-numbered ol { margin: .35rem 0; padding-left: 1.5rem; }
+.exam-block-document .exam-block-meta .exam-layout-meta { margin: .15rem 0; }
+.exam-block-document .exam-block-caption { margin: .3rem 0 .7rem; text-align: center; color: #536b83; font-size: .88rem; }
+.exam-block-document .exam-block-image { max-width: 100%; }
+.exam-layout-email.exam-block-document .exam-block-meta { border-bottom: 1px solid #edf1f5; }
+.exam-layout-email.exam-block-document .exam-block-paragraph { border-top: 1px solid #d8e4ef; margin-top: .8rem; padding-top: .8rem; }
+.exam-layout-letter.exam-block-document { max-width: 42rem; margin-inline: auto; }
+.exam-layout-letter.exam-block-document .exam-block-paragraph { margin: 1.25rem 0; }
+.exam-layout-article.exam-block-document .exam-block-heading h4,.exam-layout-report.exam-block-document .exam-block-heading h4 { font-size: 1.55rem; border-bottom: 2px solid #2c70a7; padding-bottom: .5rem; }
+.exam-layout-notice.exam-block-document,.exam-layout-policy.exam-block-document,.exam-layout-memo.exam-block-document { background: #fbfdff; }
+.exam-layout-chat.exam-block-document { background: #f6f9fc; }
+.exam-layout-chat.exam-block-document .exam-block-meta { max-width: 78%; font-size: .82rem; }
+.exam-layout-chat.exam-block-document .exam-block-meta + .exam-block-paragraph { background: #e6f1fc; border-radius: 12px 12px 12px 3px; padding: .55rem .8rem; max-width: 78%; }
+.exam-layout-invoice.exam-block-document .exam-block-heading h4,.exam-layout-receipt.exam-block-document .exam-block-heading h4,.exam-layout-order.exam-block-document .exam-block-heading h4 { text-align: center; text-transform: uppercase; letter-spacing: .07em; }
+.exam-layout-web.exam-block-document .exam-block-heading h4 { color: #0b64a0; border-bottom: 2px solid #b3d6ee; }
+.exam-layout-poster.exam-block-document .exam-block-heading h4,.exam-layout-ad.exam-block-document .exam-block-heading h4 { font-size: 1.65rem; text-align: center; }
 .exam-document-zoom { display: block; width: 100%; padding: .4rem; border: 1px solid #d9e3ea; border-radius: 9px; background: #f7fbff; color: #145876; }
 .exam-document-zoom .exam-image { max-height: min(65vh, 38rem); margin: .3rem auto; }
 .exam-document-zoom > button { display: block; margin: .3rem auto; border: 0; background: transparent; color: #145876; font: inherit; font-size: .85rem; font-weight: 700; cursor: zoom-in; }

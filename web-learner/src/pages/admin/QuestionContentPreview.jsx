@@ -3,9 +3,19 @@ import { API_BASE_URL } from "../../services/api";
 import DocumentPreview from "./ExamDocumentPreview";
 import { fromDocument } from "./partSevenDocumentData";
 import { hasTranslatedContent, parsePart7Translation } from "./partSevenTranslationData";
+import DocumentRenderer from "../exam/DocumentRenderer";
+import PartSevenTranslationView from "../exam/PartSevenTranslationView";
 
 const part6Translation = (value, order) => value?.replace(/\r/g, "").split("\n")
   .find(line => line.trim().startsWith(`[${order}]`))?.trim().slice(3).trim() || "";
+const isStudioDocument = value => {
+  try { return JSON.parse(value)?.version === 2; } catch { return false; }
+};
+const studioContent = value => {
+  const parsed = JSON.parse(value);
+  return { ...parsed, blocks: parsed.blocks.map(block => block.kind === "IMAGE" ?
+    { ...block, imageUrl: block.path } : block) };
+};
 
 function Media({ path, bank, token, audio }) {
   const [url, setUrl] = useState("");
@@ -29,7 +39,8 @@ function Media({ path, bank, token, audio }) {
 export default function QuestionContentPreview({ unit, token, onEditQuestion }) {
   if (!unit) return null;
   const questions = unit.questions || [];
-  const part7Translation = unit.part === 7 ? parsePart7Translation(unit.resource?.translation,
+  const isStudio = unit.part === 7 && unit.documents?.some(doc => isStudioDocument(doc.content));
+  const part7Translation = unit.part === 7 && !isStudio ? parsePart7Translation(unit.resource?.translation,
     (unit.documents || []).map(fromDocument)) : null;
   return <div className="exam-content-preview">
     <p><strong>{unit.groupId ? `Nhóm ${unit.groupId}` : `Câu ${questions[0]?.id}`} · Part {unit.part}</strong> · {questions.length} câu</p>
@@ -43,13 +54,21 @@ export default function QuestionContentPreview({ unit, token, onEditQuestion }) 
       <Media path={unit.resource.image} bank={unit.bank || "DE_THI"} token={token} />
     </section>}
     {unit.documents?.map((doc, index) => <div className="exam-document-pair" key={index}><div className="exam-document-original">
-      <DocumentPreview doc={doc} index={index} title={`Tài liệu ${index + 1} · Bản gốc`} />
+      {isStudio && isStudioDocument(doc.content) ? <DocumentRenderer document={{ type: doc.type,
+        order: index + 1, content: studioContent(doc.content) }} token={token}
+        ImageComponent={({ endpoint }) => <Media path={endpoint} bank={unit.bank || "DE_THI"} token={token} />}
+        heading={`Tài liệu ${index + 1} · Bản gốc`} /> :
+        <DocumentPreview doc={doc} index={index} title={`Tài liệu ${index + 1} · Bản gốc`} />}
       {doc.image && <Media path={doc.image} bank={unit.bank || "DE_THI"} token={token} />}</div>
-      {hasTranslatedContent(part7Translation?.documents[index], fromDocument(doc)) && <DocumentPreview index={index}
+      {!isStudio && hasTranslatedContent(part7Translation?.documents[index], fromDocument(doc)) && <DocumentPreview index={index}
         doc={{ type: doc.type, content: typeof part7Translation.documents[index].content === "string" ?
           part7Translation.documents[index].content : JSON.stringify(part7Translation.documents[index].content) }}
         title={`Tài liệu ${index + 1} · Bản dịch tiếng Việt`} translation />}
     </div>)}
+    {isStudio && <PartSevenTranslationView translation={unit.resource?.translation}
+      documents={unit.documents.map(doc => ({ type: doc.type,
+        content: isStudioDocument(doc.content) ? JSON.parse(doc.content) : doc.content }))}
+      token={token} />}
     {questions.map((question, index) => <section className="exam-author-question" key={question.id}>
       <h3>Câu {index + 1} · #{question.id}</h3>
       {question.text && <p style={{ whiteSpace: "pre-wrap" }}>{question.text}</p>}

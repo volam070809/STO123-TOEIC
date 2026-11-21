@@ -667,7 +667,7 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
 
     private static IReadOnlyList<ExamDocumentDto> MapDocuments(int attemptId, int groupId, string? json) =>
         ExamDocumentCodec.Decode(json).Select(d => new ExamDocumentDto(d.Order, d.Type,
-            ExamDocumentCodec.ToContent(d), !string.IsNullOrWhiteSpace(d.ImagePath),
+            ExamDocumentCodec.ToClientContent(d, attemptId, groupId), !string.IsNullOrWhiteSpace(d.ImagePath),
             string.IsNullOrWhiteSpace(d.ImagePath) ? null :
                 $"/api/attempts/{attemptId}/groups/{groupId}/documents/{d.Order}/image")).ToList();
 

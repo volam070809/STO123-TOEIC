@@ -266,6 +266,77 @@ public sealed class CurrentExamSourceEditLocalTests
             Assert.Equal(["FORM", "TEXT", "IMAGE"], secondSet.Select(d => d.Type));
             Assert.Equal("Plain text", secondSet[1].Content);
             Assert.NotNull(secondSet[2].ImagePath);
+            var studioSource = """{"version":2,"blocks":[{"id":"heading","kind":"HEADING","text":"Studio article"},{"id":"chart","kind":"IMAGE","path":"test/image.png","caption":"Chart","align":"center","width":75}]}""";
+            var studioTranslation = Part7TranslationCodec.PrefixV2 + """{"version":2,"kind":"PART7_TRANSLATIONS","documents":[{"type":"ARTICLE","blocks":[{"id":"heading","kind":"HEADING","text":"Bài báo"},{"id":"chart","kind":"IMAGE","caption":"Biểu đồ"}]}]}""";
+            var studioMembers = await db.NhomCauHoi.AsNoTracking().Where(m => m.MaNguLieu == part7Group)
+                .OrderBy(m => m.ThuTu).Select(m => m.MaCauHoiNavigation).ToArrayAsync();
+            var studioQuestions = studioMembers.Select((question, index) =>
+                new AdminQuestionAuthoringController.QuestionInput(
+                    index == 0 ? "Studio changed question" : question.NoiDung,
+                    question.PhuongAnA!, question.PhuongAnB!, question.PhuongAnC!, question.PhuongAnD,
+                    question.PhuongAnDung!, question.DoKho, question.GiaiThich, null, question.MaCauHoi)).ToList();
+            Assert.IsType<ConflictObjectResult>(await resourceController.UpdateUnit(part7Group,
+                new AdminExamSourceMediaController.UnitResourceRequest(null, studioTranslation,
+                    null, null, [new("ARTICLE", studioSource, null)], [
+                        .. studioQuestions,
+                        new("Additional question", "A", "B", "C", "D", "A", 2, "Reason")
+                    ]), CancellationToken.None));
+            Assert.IsType<OkObjectResult>(await resourceController.UpdateUnit(part7Group,
+                new AdminExamSourceMediaController.UnitResourceRequest(
+                    null, studioTranslation, null, null, [new("ARTICLE", studioSource, null)],
+                    studioQuestions), CancellationToken.None));
+            db.ChangeTracker.Clear();
+            var studioPointer = await db.DeThi.AsNoTracking().Where(e => e.MaDeThi == exams[0].MaDeThi)
+                .Select(e => e.MaPhienBanHienHanh).SingleAsync();
+            var studioRow = await db.PhienBanDeThi.AsNoTracking()
+                .SingleAsync(v => v.MaPhienBanDeThi == studioPointer);
+            var studioSnapshot = await store.ReadAsync(studioRow, CancellationToken.None);
+            var studioDocument = Assert.Single(studioSnapshot.Groups.Single(g => g.Id == part7Group).Documents);
+            Assert.True(PartSevenBlockCodec.IsValid("ARTICLE", studioDocument.Content));
+            Assert.StartsWith("exam-snapshots/", Assert.Single(PartSevenBlockCodec.ImagePaths(studioDocument.Content)));
+            Assert.Equal("Studio changed question", studioSnapshot.Questions.Single(q =>
+                q.Id == studioMembers[0].MaCauHoi).Text);
+            Assert.NotEqual("Studio changed question", secondSet[0].Content);
+            var authoring = new AdminQuestionAuthoringController(db, blobs, config, store) {
+                ControllerContext = Context(adminId)
+            };
+            AdminQuestionAuthoringController.QuestionInput StudioQuestion(string text, int? id = null) =>
+                new(text, "One", "Two", "Three", "Four", "A", 2, "The first option is correct.", null, id);
+            Assert.IsType<OkObjectResult>(await authoring.Create(
+                new AdminQuestionAuthoringController.UnitInput(7, "DE_THI", null,
+                    studioTranslation, null, null, [new("ARTICLE", studioSource, null)],
+                    [StudioQuestion("Standalone one"), StudioQuestion("Standalone two")]),
+                CancellationToken.None));
+            db.ChangeTracker.Clear();
+            var standaloneGroup = await db.NguLieu.AsNoTracking().OrderByDescending(x => x.MaNguLieu)
+                .Select(x => x.MaNguLieu).FirstAsync();
+            var standaloneIds = await db.NhomCauHoi.AsNoTracking()
+                .Where(x => x.MaNguLieu == standaloneGroup).OrderBy(x => x.ThuTu)
+                .Select(x => x.MaCauHoi).ToArrayAsync();
+            Assert.Equal(2, standaloneIds.Length);
+            Assert.IsType<OkObjectResult>(await resourceController.UpdateUnit(standaloneGroup,
+                new AdminExamSourceMediaController.UnitResourceRequest(null, studioTranslation,
+                    null, null, [new("ARTICLE", studioSource, null)], [
+                        StudioQuestion("Standalone one", standaloneIds[0]),
+                        StudioQuestion("Standalone two", standaloneIds[1]),
+                        StudioQuestion("Added third")
+                    ]), CancellationToken.None));
+            db.ChangeTracker.Clear();
+            var threeIds = await db.NhomCauHoi.AsNoTracking()
+                .Where(x => x.MaNguLieu == standaloneGroup).OrderBy(x => x.ThuTu)
+                .Select(x => x.MaCauHoi).ToArrayAsync();
+            Assert.Equal(3, threeIds.Length);
+            Assert.IsType<OkObjectResult>(await resourceController.UpdateUnit(standaloneGroup,
+                new AdminExamSourceMediaController.UnitResourceRequest(null, studioTranslation,
+                    null, null, [new("ARTICLE", studioSource, null)], [
+                        StudioQuestion("Standalone two", threeIds[1]),
+                        StudioQuestion("Added third", threeIds[2])
+                    ]), CancellationToken.None));
+            db.ChangeTracker.Clear();
+            Assert.Equal([threeIds[1], threeIds[2]], await db.NhomCauHoi.AsNoTracking()
+                .Where(x => x.MaNguLieu == standaloneGroup).OrderBy(x => x.ThuTu)
+                .Select(x => x.MaCauHoi).ToArrayAsync());
+            Assert.False(await db.CauHoi.AsNoTracking().AnyAsync(q => q.MaCauHoi == threeIds[0]));
             async Task EditConcurrently(string content)
             {
                 using var inner = provider.CreateScope();

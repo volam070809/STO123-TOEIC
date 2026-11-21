@@ -15,7 +15,8 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
     BlobServiceClient blobs, IConfiguration configuration, ExamVersionStore versions) : ControllerBase
 {
     public sealed record QuestionInput(string? Text, string A, string B, string C,
-        string? D, string Correct, byte Difficulty, string? Explanation, string? Translation = null);
+        string? D, string Correct, byte Difficulty, string? Explanation, string? Translation = null,
+        int? Id = null);
     public sealed record DocumentInput(string Type, string? Content, string? ImagePath);
     public sealed record UnitInput(int Part, string Bank, string? Text, string? Translation,
         string? AudioPath, string? ImagePath, List<DocumentInput> Documents,
@@ -186,7 +187,8 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
                 message = "Part 5 là câu độc lập, không có ngữ liệu chung." });
         var mediaPaths = new (string? Path, string Kind)[] { (resource?.DuongDanAudio, "AUDIO"),
             (Path: resource?.DuongDanAnh, Kind: "IMAGE") }
-            .Concat(docs.Select(d => (Path: (string?)d.DuongDanAnh, Kind: "IMAGE")))
+            .Concat(docs.SelectMany(ExamDocumentCodec.ImagePaths)
+                .Select(path => (Path: (string?)path, Kind: "IMAGE")))
             .Where(p => !string.IsNullOrWhiteSpace(p.Path)).Distinct().ToArray();
         var containerName = input.Bank == "DE_THI" ?
             configuration["ExamMedia:ContainerName"] ?? "toeic-exam-media" : "practice-question";

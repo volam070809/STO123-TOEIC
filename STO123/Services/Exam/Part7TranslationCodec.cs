@@ -7,10 +7,14 @@ namespace STO123.Services.Exam;
 public static class Part7TranslationCodec
 {
     public const string Prefix = "P7DOCV1:";
+    public const string PrefixV2 = "P7DOCV2:";
 
     public static bool IsValid(string? value, IReadOnlyList<NguLieuTaiLieu> originals)
     {
+        if (value?.StartsWith(PrefixV2, StringComparison.Ordinal) == true)
+            return IsValidV2(value, originals);
         if (string.IsNullOrEmpty(value) || !value.StartsWith(Prefix, StringComparison.Ordinal)) return true;
+        if (originals.Any(d => PartSevenBlockCodec.IsV2(d.NoiDung))) return false;
         if (value.Length > 100_000) return false;
         try
         {
@@ -52,6 +56,57 @@ public static class Part7TranslationCodec
                         !content.GetProperty("fields").EnumerateArray().All(field =>
                             field.ValueKind == JsonValueKind.Object && AllStrings(field, "label", "value"))) ||
                     ExamDocumentCodec.IsLayoutType(type) && !SameLayoutShape(originalBody, content, type)) return false;
+            }
+            return true;
+        }
+        catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException
+            or IndexOutOfRangeException or ArgumentOutOfRangeException)
+        { return false; }
+    }
+
+    private static bool IsValidV2(string value, IReadOnlyList<NguLieuTaiLieu> originals)
+    {
+        if (value.Length > 150_000) return false;
+        try
+        {
+            using var parsed = JsonDocument.Parse(value[PrefixV2.Length..]);
+            var root = parsed.RootElement;
+            if (root.GetProperty("version").GetInt32() != 2 ||
+                root.GetProperty("kind").GetString() != "PART7_TRANSLATIONS" ||
+                root.TryGetProperty("legacyText", out var legacyText) &&
+                legacyText.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)) return false;
+            var translated = root.GetProperty("documents");
+            if (translated.ValueKind != JsonValueKind.Array || translated.GetArrayLength() != originals.Count)
+                return false;
+            for (var index = 0; index < originals.Count; index++)
+            {
+                if (!PartSevenBlockCodec.IsV2(originals[index].NoiDung)) return false;
+                using var source = JsonDocument.Parse(originals[index].NoiDung!);
+                var sourceBlocks = source.RootElement.GetProperty("blocks");
+                var item = translated[index];
+                if (item.ValueKind != JsonValueKind.Object ||
+                    item.GetProperty("type").GetString() != originals[index].LoaiTaiLieu) return false;
+                var translatedBlocks = item.GetProperty("blocks");
+                if (translatedBlocks.ValueKind != JsonValueKind.Array ||
+                    translatedBlocks.GetArrayLength() != sourceBlocks.GetArrayLength()) return false;
+                for (var blockIndex = 0; blockIndex < sourceBlocks.GetArrayLength(); blockIndex++)
+                {
+                    var original = sourceBlocks[blockIndex];
+                    var translatedBlock = translatedBlocks[blockIndex];
+                    if (translatedBlock.ValueKind != JsonValueKind.Object ||
+                        translatedBlock.GetProperty("id").GetString() != original.GetProperty("id").GetString() ||
+                        translatedBlock.GetProperty("kind").GetString() != original.GetProperty("kind").GetString())
+                        return false;
+                    var kind = original.GetProperty("kind").GetString();
+                    if (kind is "HEADING" or "PARAGRAPH" or "BULLET" or "NUMBERED" &&
+                        !AllStrings(translatedBlock, "text") ||
+                        kind == "META" && !AllStrings(translatedBlock, "label", "value") ||
+                        kind == "IMAGE" && !AllStrings(translatedBlock, "caption") ||
+                        kind == "TABLE" && (!SameTableShape(original, translatedBlock) ||
+                            translatedBlock.GetProperty("headers").EnumerateArray().Any(x => x.ValueKind != JsonValueKind.String) ||
+                            translatedBlock.GetProperty("rows").EnumerateArray().Any(row =>
+                                row.EnumerateArray().Any(x => x.ValueKind != JsonValueKind.String)))) return false;
+                }
             }
             return true;
         }
