@@ -15,11 +15,13 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
     IConfiguration configuration, ExamVersionStore versions) : ControllerBase
 {
     public sealed record MediaLinkRequest(string? Path);
-    public sealed record GroupContentRequest(string? Text, string? Translation);
+    public sealed record GroupContentRequest(string? Text, string? Translation,
+        string? PassageTranslation = null);
     public sealed record DocumentRequest(string Type, string? Content, string? ImagePath);
     public sealed record UnitResourceRequest(string? Text, string? Translation,
         string? AudioPath, string? ImagePath, List<DocumentRequest> Documents,
-        List<AdminQuestionAuthoringController.QuestionInput>? Questions = null);
+        List<AdminQuestionAuthoringController.QuestionInput>? Questions = null,
+        string? PassageTranslation = null);
 
     private async Task<int[]> LegacyDependencies(int[] memberIds, CancellationToken ct)
     {
@@ -81,6 +83,7 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
         }
         var resource = new NguLieu {
             NoiDungNguLieu = request.Text?.Trim(), NoiDungDich = request.Translation?.Trim(),
+            NoiDungDichDoanVan = request.PassageTranslation?.Trim(),
             DuongDanAudio = request.AudioPath?.Trim(), DuongDanAnh = request.ImagePath?.Trim()
         };
         var docs = request.Documents.Select((d, index) => new NguLieuTaiLieu {
@@ -139,6 +142,8 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
                             "Lượt thi cũ còn đọc ngữ liệu nguồn; chưa thể sửa an toàn.", 409);
                     current.NoiDungNguLieu = resource.NoiDungNguLieu;
                     current.NoiDungDich = resource.NoiDungDich;
+                    if (part == 6 && request.PassageTranslation is not null)
+                        current.NoiDungDichDoanVan = resource.NoiDungDichDoanVan;
                     current.DuongDanAudio = resource.DuongDanAudio;
                     current.DuongDanAnh = resource.DuongDanAnh;
                     var old = await db.NguLieuTaiLieu.Where(x => x.MaNguLieu == groupId).ToListAsync(token);
@@ -300,6 +305,8 @@ public sealed class AdminExamSourceMediaController(ToeicDbContext db, BlobServic
                     .Select(q => q.MaPartNavigation.SoPart).FirstOrDefaultAsync(token);
                 group.NoiDungNguLieu = request.Text?.Trim();
                 group.NoiDungDich = request.Translation?.Trim();
+                if (part == 6 && request.PassageTranslation is not null)
+                    group.NoiDungDichDoanVan = request.PassageTranslation.Trim();
                 if (part == 6 && !QuestionContentRules.ValidPart6(group.NoiDungDich))
                     throw new ExamProblem("PART6_TRANSLATION_REQUIRED",
                         "Cần bản dịch cho đủ bốn câu Part 6 theo thứ tự [1]–[4].");

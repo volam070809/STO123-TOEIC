@@ -116,6 +116,7 @@ public sealed class PracticePartService(ToeicDbContext db)
                     group = new NhomLuotLam { MaNguLieuGoc = unit.Resource.MaNguLieu,
                         MaPart = unit.Questions[0].MaPart, ThuTu = groupsInOrder.Count + 1,
                         NoiDungNguLieu = unit.Resource.NoiDungNguLieu, NoiDungDich = unit.Resource.NoiDungDich,
+                        NoiDungDichDoanVan = unit.Resource.NoiDungDichDoanVan,
                         DuongDanAudio = unit.Resource.DuongDanAudio, DuongDanAnh = unit.Resource.DuongDanAnh,
                         TaiLieuJson = unit.Documents.Count == 0 ? null : ExamDocumentCodec.Encode(unit.Documents.Select(d =>
                             new ExamDocumentSnapshot(d.ThuTu, d.LoaiTaiLieu, d.NoiDung, d.DuongDanAnh))) };
@@ -409,6 +410,7 @@ public sealed class PracticePartService(ToeicDbContext db)
         var resources = await db.NguLieu.AsNoTracking().Where(r => resourceIds.Contains(r.MaNguLieu))
             .Select(r => new NguLieu { MaNguLieu = r.MaNguLieu, NoiDungNguLieu = r.NoiDungNguLieu,
                 NoiDungDich = includeSnapshotText ? r.NoiDungDich : null,
+                NoiDungDichDoanVan = includeSnapshotText ? r.NoiDungDichDoanVan : null,
                 DuongDanAudio = r.DuongDanAudio, DuongDanAnh = r.DuongDanAnh })
             .ToListAsync(ct);
         var documents = await db.NguLieuTaiLieu.AsNoTracking().Where(d => resourceIds.Contains(d.MaNguLieu))
@@ -489,6 +491,10 @@ public sealed class PracticePartService(ToeicDbContext db)
             translation = (isReview || attempt.CauHoiLuotLam.Any(q => q.MaNhomLuotLam == g.MaNhomLuotLam) &&
                 !attempt.CauHoiLuotLam.Any(q => q.MaNhomLuotLam == g.MaNhomLuotLam &&
                     string.IsNullOrWhiteSpace(q.ChiTietKetQua?.DapAnChon))) ? g.NoiDungDich : null,
+            passageTranslation = part == 6 && (isReview || attempt.CauHoiLuotLam.Any(q =>
+                q.MaNhomLuotLam == g.MaNhomLuotLam) && !attempt.CauHoiLuotLam.Any(q =>
+                q.MaNhomLuotLam == g.MaNhomLuotLam &&
+                string.IsNullOrWhiteSpace(q.ChiTietKetQua?.DapAnChon))) ? g.NoiDungDichDoanVan : null,
             documents = (isReview || part >= 5 ? ExamDocumentCodec.Decode(g.TaiLieuJson) : []).Select(d => new { d.Order, d.Type, content = ExamDocumentCodec.ToClientContent(d, attempt.MaKetQua, g.MaNhomLuotLam),
                 imageUrl = string.IsNullOrWhiteSpace(d.ImagePath) ? null : $"/api/attempts/{attempt.MaKetQua}/groups/{g.MaNhomLuotLam}/documents/{d.Order}/image" })
         }).ToArray();

@@ -202,6 +202,7 @@ CREATE TABLE dbo.NguLieu(
     MaNguLieu int primary key identity(1,1),
     NoiDungNguLieu nvarchar(max) null,
     NoiDungDich nvarchar(max) null,
+    NoiDungDichDoanVan nvarchar(max) null,
     DuongDanAudio varchar(512) null,
     DuongDanAnh varchar(512) null
 );
@@ -454,6 +455,7 @@ CREATE TABLE dbo.NhomLuotLam(
     ThuTu int not null check (ThuTu > 0),
     NoiDungNguLieu nvarchar(max) null,
     NoiDungDich nvarchar(max) null,
+    NoiDungDichDoanVan nvarchar(max) null,
     DuongDanAudio varchar(512) null,
     DuongDanAnh varchar(512) null,
     TaiLieuJson nvarchar(max) null,

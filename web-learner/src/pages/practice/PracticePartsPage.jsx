@@ -129,7 +129,7 @@ export default function PracticePartsPage() {
       const result = await apiRequest(`${api}/${attempt.attemptId}/questions/${id}/check`,
         { method: "POST", body: { selectedOption }, token });
       setFeedback(current => ({ ...current, [id]: { ...result, checked: true, result: true } }));
-      if (attempt.part === 7) {
+      if (attempt.part === 6 || attempt.part === 7) {
         try {
           const fresh = await practiceRead(`${api}/${attempt.attemptId}`, token);
           setAttempt(current => current?.attemptId === fresh.attemptId ? { ...current, groups: fresh.groups } : current);
@@ -156,9 +156,9 @@ export default function PracticePartsPage() {
       await apiRequest(`${api}/${attempt.attemptId}/questions/${questionId}/redo`, { method: "POST", token });
       setFeedback(current => ({ ...current, [questionId]: { checked: false, selectedOption: null } }));
       const groupId = attempt.questions.find(item => item.questionOccurrenceId === questionId)?.groupId;
-      if (attempt.part === 7 && groupId) setAttempt(current => current && { ...current,
+      if ((attempt.part === 6 || attempt.part === 7) && groupId) setAttempt(current => current && { ...current,
         groups: current.groups.map(group => group.groupId === groupId ?
-          { ...group, translation: null } : group) });
+          { ...group, translation: null, passageTranslation: null } : group) });
     } catch (e) { setError(e.data?.message || "Không thể làm lại câu này. Vui lòng thử lại."); }
     finally { unlockQuestion(questionId); }
   }
@@ -321,6 +321,10 @@ export function PracticeGroup({ group, part, token, revealedContext }) {
     {group.imageUrl && <div className={part === 1 ? "practice-part-one-image" : undefined}>
       <PracticeImage endpoint={group.imageUrl} token={token} alt="Hình minh họa" /></div>}
     {part > 2 && (group.context || revealedContext) && <p className="practice-part-context">{group.context || revealedContext}</p>}
+    {part === 6 && group.passageTranslation && <div className="practice-feedback">
+      <strong>Bản dịch toàn bộ đoạn văn</strong>
+      <p className="practice-part-context">{group.passageTranslation}</p>
+    </div>}
     {group.documents?.map(document => <DocumentRenderer key={document.order} document={document} token={token}
       ImageComponent={PracticeImage} />)}
     {part === 7 && <PartSevenTranslationView translation={group.translation} documents={group.documents}

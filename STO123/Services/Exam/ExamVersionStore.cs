@@ -14,7 +14,7 @@ public sealed record VersionQuestion(int Id, int Part, int Order, int PartOrder,
     string? Text, string A, string B, string C, string? D, string Correct, string? Explanation,
     byte Difficulty = 2);
 public sealed record VersionGroup(int Id, int Part, int Order, string? Text, string? Translation,
-    string? Audio, string? Image, List<ExamDocumentSnapshot> Documents);
+    string? Audio, string? Image, List<ExamDocumentSnapshot> Documents, string? PassageTranslation = null);
 public sealed record VersionedExam(int SchemaVersion, int ExamId, int Version, string Name,
     int Duration, List<VersionQuestion> Questions, List<VersionGroup> Groups);
 
@@ -36,7 +36,8 @@ public sealed class ExamVersionStore(ToeicDbContext db, BlobServiceClient blobs,
                 groups.Add(new VersionGroup(resource.MaNguLieu, unit.Part, groups.Count + 1,
                     resource.NoiDungNguLieu, resource.NoiDungDich, resource.DuongDanAudio,
                     resource.DuongDanAnh, unit.Documents.Select(d => new ExamDocumentSnapshot(
-                        d.ThuTu, d.LoaiTaiLieu, d.NoiDung, d.DuongDanAnh)).ToList()));
+                        d.ThuTu, d.LoaiTaiLieu, d.NoiDung, d.DuongDanAnh)).ToList(),
+                    resource.NoiDungDichDoanVan));
             foreach (var q in unit.Questions)
             {
                 partOrders[unit.Part] = partOrders.GetValueOrDefault(unit.Part) + 1;
@@ -318,7 +319,8 @@ public sealed class ExamVersionStore(ToeicDbContext db, BlobServiceClient blobs,
                     unit.Part, 0, resource.NoiDungNguLieu, resource.NoiDungDich,
                     resource.DuongDanAudio, resource.DuongDanAnh,
                     unit.Documents.Select(d => new ExamDocumentSnapshot(d.ThuTu,
-                        d.LoaiTaiLieu, d.NoiDung, d.DuongDanAnh)).ToList()) : null;
+                        d.LoaiTaiLieu, d.NoiDung, d.DuongDanAnh)).ToList(),
+                    resource.NoiDungDichDoanVan) : null;
                 members = unit.Questions.Select(q => new VersionQuestion(q.MaCauHoi, unit.Part,
                     0, 0, unit.Resource?.MaNguLieu, q.NoiDung, q.PhuongAnA,
                     q.PhuongAnB, q.PhuongAnC, q.PhuongAnD, q.PhuongAnDung, q.GiaiThich,
@@ -399,6 +401,7 @@ public sealed class ExamVersionStore(ToeicDbContext db, BlobServiceClient blobs,
             MaNhomLuotLam = g.Id, ThuTu = g.Order,
             MaPartNavigation = new PartTOEIC { SoPart = g.Part },
             NoiDungNguLieu = g.Text, NoiDungDich = view == SnapshotView.Review ? g.Translation : null,
+            NoiDungDichDoanVan = view == SnapshotView.Review ? g.PassageTranslation : null,
             DuongDanAudio = g.Audio, DuongDanAnh = g.Image,
             TaiLieuJson = g.Documents.Count == 0 ? null : ExamDocumentCodec.Encode(g.Documents)
         }).ToList();

@@ -64,6 +64,7 @@ public sealed record ReviewGroupDto(int GroupId, int Order, int Part, string? Co
     bool HasImage, IReadOnlyList<ExamDocumentDto> Documents, IReadOnlyList<ReviewQuestionDto> Questions)
 {
     public string? Translation { get; init; }
+    public string? PassageTranslation { get; init; }
 }
 public sealed record ExamReviewDto(int AttemptId, IReadOnlyList<ReviewGroupDto> Groups,
     IReadOnlyList<ReviewQuestionDto> IndependentQuestions)

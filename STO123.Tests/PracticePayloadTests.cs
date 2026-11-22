@@ -61,4 +61,31 @@ public sealed class PracticePayloadTests
         Assert.Contains("\"isChecked\":true", json);
         Assert.Contains("\"isChecked\":false", json);
     }
+
+    [Fact]
+    public void Part6PassageTranslationAppearsOnlyAfterGroupFeedbackOrCompletion()
+    {
+        var attempt = new KetQuaLamBai { MaKetQua = 42, TrangThai = ExamCore.Active };
+        attempt.NhomLuotLam.Add(new NhomLuotLam { MaNhomLuotLam = 7, ThuTu = 1,
+            NoiDungNguLieu = "Original [1]\n[2]", NoiDungDichDoanVan = "Dịch [1]\n[2]" });
+        for (var order = 1; order <= 4; order++)
+            attempt.CauHoiLuotLam.Add(new CauHoiLuotLam { MaCauHoiLuotLam = order,
+                MaNhomLuotLam = 7, ThuTu = order, PhuongAnDung = "A",
+                ChiTietKetQua = order < 4 ? new ChiTietKetQua { DapAnChon = "A" } : null });
+
+        string? PassageTranslation(bool review)
+        {
+            var payload = typeof(PracticePartService)
+                .GetMethod("Payload", BindingFlags.NonPublic | BindingFlags.Static)!
+                .Invoke(null, [attempt, 6, null, null, null, review]);
+            using var json = JsonDocument.Parse(JsonSerializer.Serialize(payload));
+            return json.RootElement.GetProperty("groups")[0]
+                .GetProperty("passageTranslation").GetString();
+        }
+
+        Assert.Null(PassageTranslation(false));
+        attempt.CauHoiLuotLam.Last().ChiTietKetQua = new ChiTietKetQua { DapAnChon = "B" };
+        Assert.Equal("Dịch [1]\n[2]", PassageTranslation(false));
+        Assert.Equal("Dịch [1]\n[2]", PassageTranslation(true));
+    }
 }

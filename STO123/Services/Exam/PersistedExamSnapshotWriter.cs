@@ -28,15 +28,17 @@ public sealed class PersistedExamSnapshotWriter(ToeicDbContext db, RandomStartPr
                                  GroupId int NOT NULL, PartId int NOT NULL);
         INSERT INTO dbo.NhomLuotLam
             (MaKetQua, MaNguLieuGoc, MaPart, ThuTu, NoiDungNguLieu, NoiDungDich,
+             NoiDungDichDoanVan,
              DuongDanAudio, DuongDanAnh, TaiLieuJson)
         OUTPUT inserted.ThuTu, inserted.MaNhomLuotLam, inserted.MaPart
             INTO @GroupMap (GroupOrder, GroupId, PartId)
         SELECT @attemptId, j.MaNguLieuGoc, j.MaPart, j.ThuTu, j.NoiDungNguLieu,
-               j.NoiDungDich, j.DuongDanAudio, j.DuongDanAnh, j.TaiLieuJson
+               j.NoiDungDich, j.NoiDungDichDoanVan, j.DuongDanAudio, j.DuongDanAnh, j.TaiLieuJson
         FROM OPENJSON(@groups) WITH (
             MaNguLieuGoc int '$.MaNguLieuGoc', MaPart int '$.MaPart', ThuTu int '$.ThuTu',
             NoiDungNguLieu nvarchar(max) '$.NoiDungNguLieu',
             NoiDungDich nvarchar(max) '$.NoiDungDich',
+            NoiDungDichDoanVan nvarchar(max) '$.NoiDungDichDoanVan',
             DuongDanAudio varchar(512) '$.DuongDanAudio',
             DuongDanAnh varchar(512) '$.DuongDanAnh',
             TaiLieuJson nvarchar(max) '$.TaiLieuJson') AS j;
@@ -95,6 +97,7 @@ public sealed class PersistedExamSnapshotWriter(ToeicDbContext db, RandomStartPr
             throw new ExamProblem("INVALID_EXAM_STRUCTURE", "Đề thi phải có đúng 200 câu và loại bài làm hợp lệ.", 409);
         var groupJson = JsonSerializer.Serialize(groups.Select(g => new {
             g.MaNguLieuGoc, g.MaPart, g.ThuTu, g.NoiDungNguLieu, g.NoiDungDich,
+            g.NoiDungDichDoanVan,
             g.DuongDanAudio, g.DuongDanAnh, g.TaiLieuJson
         }), Json);
         var questionJson = JsonSerializer.Serialize(questions.Select(item => new {

@@ -26,6 +26,8 @@ public partial class NhomLuotLam
 
     public string NoiDungDich { get; set; }
 
+    public string NoiDungDichDoanVan { get; set; }
+
     [StringLength(512)]
     [Unicode(false)]
     public string DuongDanAudio { get; set; }

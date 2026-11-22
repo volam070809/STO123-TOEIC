@@ -46,6 +46,9 @@ export default function QuestionContentPreview({ unit, token, onEditQuestion }) 
     <p><strong>{unit.groupId ? `Nhóm ${unit.groupId}` : `Câu ${questions[0]?.id}`} · Part {unit.part}</strong> · {questions.length} câu</p>
     {unit.resource && <section className="exam-author-question"><h3>Ngữ liệu chung</h3>
       {unit.resource.text && <p style={{ whiteSpace: "pre-wrap" }}>{unit.resource.text}</p>}
+      {unit.part === 6 && unit.resource.passageTranslation && <>
+        <strong>Bản dịch toàn bộ đoạn văn</strong>
+        <p className="exam-preserve-lines">{unit.resource.passageTranslation}</p></>}
       {unit.part === 7 && part7Translation?.legacyText && <p className="exam-preserve-lines"><em>{part7Translation.legacyText}</em></p>}
       {unit.resource.translation && unit.part !== 7 && unit.part !== 6 && unit.part !== 2 && <p><em>{unit.resource.translation}</em></p>}
       {unit.part === 6 && unit.resource.translation && !part6Translation(unit.resource.translation, 1) &&

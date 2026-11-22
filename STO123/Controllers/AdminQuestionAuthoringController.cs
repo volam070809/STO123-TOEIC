@@ -20,7 +20,7 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
     public sealed record DocumentInput(string Type, string? Content, string? ImagePath);
     public sealed record UnitInput(int Part, string Bank, string? Text, string? Translation,
         string? AudioPath, string? ImagePath, List<DocumentInput> Documents,
-        List<QuestionInput> Questions);
+        List<QuestionInput> Questions, string? PassageTranslation = null);
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Detail(int id, CancellationToken ct)
@@ -33,6 +33,8 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
                 difficulty = q.DoKho, explanation = q.GiaiThich,
                 translation = q.MaPartNavigation.SoPart == 2 ? q.NhomCauHoi!.MaNguLieuNavigation.NoiDungDich :
                     q.MaPartNavigation.SoPart == 6 ? q.NhomCauHoi!.MaNguLieuNavigation.NoiDungDich : null,
+                passageTranslation = q.MaPartNavigation.SoPart == 6 ?
+                    q.NhomCauHoi!.MaNguLieuNavigation.NoiDungDichDoanVan : null,
                 groupOrder = q.NhomCauHoi == null ? (int?)null : q.NhomCauHoi.ThuTu,
                 examCount = q.CauHoiDeThi.Count }).SingleOrDefaultAsync(ct);
         if (row is null) return NotFound(new { code = "QUESTION_NOT_FOUND",
@@ -40,6 +42,7 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
         return Ok(new { row.id, row.part, row.bank, row.groupId, row.text,
             row.a, row.b, row.c, row.d, row.correct, row.difficulty, row.explanation,
             translation = row.part == 6 ? QuestionContentRules.Part6Translation(row.translation, row.groupOrder ?? 0) : row.translation,
+            row.passageTranslation,
             row.examCount });
     }
 
@@ -168,6 +171,7 @@ public sealed class AdminQuestionAuthoringController(ToeicDbContext db,
             NoiDungDich = input.Part == 6 ? QuestionContentRules.FormatPart6(
                 input.Questions.Select(q => q.Translation).ToArray()) :
                 input.Part == 2 ? (input.Questions[0].Translation ?? input.Translation)?.Trim() : input.Translation?.Trim(),
+            NoiDungDichDoanVan = input.Part == 6 ? input.PassageTranslation?.Trim() : null,
             DuongDanAudio = input.AudioPath?.Trim(), DuongDanAnh = input.ImagePath?.Trim()
         };
         var docs = input.Documents.Select((d, index) => new NguLieuTaiLieu {

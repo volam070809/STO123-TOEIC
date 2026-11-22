@@ -18,6 +18,7 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
   const [bank, setBank] = useState(fixedBank || "DE_THI");
   const [text, setText] = useState(draft?.text || "");
   const [translation, setTranslation] = useState("");
+  const [passageTranslation, setPassageTranslation] = useState("");
   const [audioPath, setAudioPath] = useState("");
   const [imagePath, setImagePath] = useState("");
   const [documents, setDocuments] = useState(() => draft?.documents || (Number(initialPart) === 7 ? [newDocument()] : []));
@@ -67,7 +68,8 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
     setQuestions(saved?.questions || Array.from({ length: questionCount(next) }, emptyQuestion));
     setDocuments(saved?.documents || (next === 7 ? [newDocument()] : []));
     setPart7Translation(saved?.part7Translation || { legacyText: "", documents: [] });
-    setText(saved?.text || ""); setTranslation(""); setAudioPath(""); setImagePath("");
+    setText(saved?.text || ""); setTranslation(""); setPassageTranslation("");
+    setAudioPath(""); setImagePath("");
     setPreviews({});
   }
 
@@ -159,6 +161,7 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
       const payload = {
         part, bank, text: part === 5 ? null : text || null,
         translation: part === 7 ? structuredTranslation : part === 5 ? null : translation || null,
+        passageTranslation: part === 6 ? passageTranslation || null : null,
         audioPath: part === 5 ? null : audioPath || null,
         imagePath: part === 5 ? null : imagePath || null,
         documents: part === 7 ? documents.map(documentPayload) : [],
@@ -194,6 +197,14 @@ export default function ExamQuestionForm({ token, onClose, onSaved, fixedBank, i
         {part !== 5 && <section><h3>{Number(part) === 7 ? "Tài liệu đọc" : Number(part) === 6 ? "Đoạn văn chung" : Number(part) <= 2 ? "Âm thanh và hình ảnh" : "Ngữ liệu nghe chung"}</h3>
           {[3, 4, 6].includes(Number(part)) && <label>{Number(part) === 3 ? "Hội thoại chung" : Number(part) === 4 ? "Bài nói chung" : "Đoạn văn có chỗ trống [1]–[4]"}
             <textarea value={text} onChange={event => { setText(event.target.value); setDirty(true); }} rows={Number(part) === 6 ? 7 : 4}/></label>}
+          {Number(part) === 6 && <label>Bản dịch toàn bộ đoạn văn<textarea value={passageTranslation}
+            onChange={event => { setPassageTranslation(event.target.value); setDirty(true); }} rows={7} /></label>}
+          {Number(part) === 6 && (text || passageTranslation) && <div className="exam-author-question">
+            <h4>Xem trước ngữ liệu</h4>
+            {text && <p className="exam-preserve-lines">{text}</p>}
+            {passageTranslation && <><strong>Bản dịch toàn bộ đoạn văn</strong>
+              <p className="exam-preserve-lines">{passageTranslation}</p></>}
+          </div>}
           {[1, 2, 3, 4].includes(Number(part)) && <div className="exam-author-two">{fileField("Audio MP3", audioPath, setAudioPath, ".mp3,audio/mpeg")}
             {[1, 3, 4].includes(Number(part)) && fileField("Hình ảnh", imagePath, setImagePath, ".jpg,.jpeg,.png,.webp,image/*")}</div>}
           {part === 7 && <div className="exam-author-docs"><div className="exam-drawer-head"><h3>Tài liệu đọc</h3><button type="button" disabled={documents.length >= 3} onClick={() => { setDocuments(old => [...old, newDocument()]); setDirty(true); }}>Thêm tài liệu</button></div>

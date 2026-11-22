@@ -31,6 +31,16 @@ public sealed class CurrentExamSourceEditLocalTests
     }
 
     [Fact]
+    public void Legacy_version_group_without_passage_translation_remains_readable()
+    {
+        var group = System.Text.Json.JsonSerializer.Deserialize<VersionGroup>(
+            """{"id":1,"part":6,"order":1,"text":"[1] [2] [3] [4]","translation":"[1] question","audio":null,"image":null,"documents":[]}""",
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        Assert.Null(group?.PassageTranslation);
+        Assert.Equal("[1] question", group?.Translation);
+    }
+
+    [Fact]
     public async Task Published_shared_source_updates_both_current_exams_and_preserves_old_snapshots()
     {
         if (Environment.GetEnvironmentVariable("STO123_RUN_LOCAL_EXAM_EDIT_TEST") != "1") return;
@@ -227,8 +237,65 @@ public sealed class CurrentExamSourceEditLocalTests
             Assert.IsType<OkObjectResult>(await resourceController.UpdateUnit(part6Group,
                 new AdminExamSourceMediaController.UnitResourceRequest(
                     "Passage [1] then [2], [3], [4]", QuestionContentRules.FormatPart6(
-                        ["Dịch câu 1", "Dịch câu 2", "Dịch câu 3", "Dịch câu 4"]), null, null, []), CancellationToken.None));
+                        ["Dịch câu 1", "Dịch câu 2", "Dịch câu 3", "Dịch câu 4"]), null, null, [],
+                    PassageTranslation: "Bản dịch [1]\nDòng thứ hai [2] [3] [4]"), CancellationToken.None));
             db.ChangeTracker.Clear();
+            Assert.Equal("Bản dịch [1]\nDòng thứ hai [2] [3] [4]",
+                await db.NguLieu.AsNoTracking().Where(r => r.MaNguLieu == part6Group)
+                    .Select(r => r.NoiDungDichDoanVan).SingleAsync());
+            var part6VersionId = await db.DeThi.AsNoTracking().Where(e => e.MaDeThi == exams[0].MaDeThi)
+                .Select(e => e.MaPhienBanHienHanh).SingleAsync();
+            var part6Version = await db.PhienBanDeThi.AsNoTracking()
+                .SingleAsync(v => v.MaPhienBanDeThi == part6VersionId);
+            var part6Snapshot = await store.ReadAsync(part6Version, CancellationToken.None);
+            Assert.Equal("Bản dịch [1]\nDòng thứ hai [2] [3] [4]",
+                part6Snapshot.Groups.Single(g => g.Id == part6Group).PassageTranslation);
+            Assert.Null(oldSnapshots[0].Groups.Single(g => g.Id == part6Group).PassageTranslation);
+            var part6AttemptId = await compact.CreateVersionedAsync(learnerId, part6Version,
+                part6Snapshot, ExamCore.Mock, CancellationToken.None);
+            var part6Active = await compact.LoadAsync(part6AttemptId, learnerId,
+                SnapshotView.Active, true, CancellationToken.None);
+            Assert.Null(part6Active.Groups.Single(g => g.MaNhomLuotLam == part6Group).NoiDungDichDoanVan);
+            var part6Review = await compact.LoadAsync(part6AttemptId, learnerId,
+                SnapshotView.Review, true, CancellationToken.None);
+            Assert.Equal("Bản dịch [1]\nDòng thứ hai [2] [3] [4]",
+                part6Review.Groups.Single(g => g.MaNhomLuotLam == part6Group).NoiDungDichDoanVan);
+            var createdPart6 = new AdminQuestionAuthoringController.UnitInput(6, "LUYEN_TAP",
+                "New [1]\n[2] [3] [4]", null, null, null, [],
+                Enumerable.Range(1, 4).Select(index =>
+                    new AdminQuestionAuthoringController.QuestionInput($"Question {index}",
+                        "A", "B", "C", "D", "A", 2, "Explanation",
+                        $"Question translation {index}")).ToList(),
+                "Full translation [1]\n[2] [3] [4]");
+            Assert.IsType<OkObjectResult>(await questionController.Create(createdPart6, CancellationToken.None));
+            db.ChangeTracker.Clear();
+            var createdResource = await db.NguLieu.AsNoTracking()
+                .SingleAsync(r => r.NoiDungNguLieu == "New [1]\n[2] [3] [4]");
+            Assert.Equal("Full translation [1]\n[2] [3] [4]", createdResource.NoiDungDichDoanVan);
+            Assert.Equal("Question translation 1",
+                QuestionContentRules.Part6Translation(createdResource.NoiDungDich, 1));
+            var createdQuestionId = await db.NhomCauHoi.AsNoTracking()
+                .Where(m => m.MaNguLieu == createdResource.MaNguLieu).OrderBy(m => m.ThuTu)
+                .Select(m => m.MaCauHoi).FirstAsync();
+            var bankController = new AdminQuestionBankController(db,
+                scope.ServiceProvider.GetRequiredService<ExamGenerationService>());
+            var createdDetail = Assert.IsType<OkObjectResult>(
+                await bankController.UnitDetail(createdQuestionId, CancellationToken.None));
+            Assert.Contains("Full translation [1]",
+                System.Text.Json.JsonSerializer.Serialize(createdDetail.Value));
+            var practice = new PracticePartService(db);
+            await practice.StartAsync(learnerId, 6, 2, PracticeQuestionBank.Short, CancellationToken.None);
+            var practiceSnapshot = await db.NhomLuotLam.AsNoTracking()
+                .SingleAsync(g => g.MaNguLieuGoc == createdResource.MaNguLieu);
+            Assert.Equal("Full translation [1]\n[2] [3] [4]", practiceSnapshot.NoiDungDichDoanVan);
+            Assert.IsType<OkObjectResult>(await resourceController.UpdateUnit(createdResource.MaNguLieu,
+                new AdminExamSourceMediaController.UnitResourceRequest(
+                    "New [1]\n[2] [3] [4]", createdResource.NoiDungDich, null, null, [],
+                    PassageTranslation: "Updated translation [1]\n[2] [3] [4]"), CancellationToken.None));
+            db.ChangeTracker.Clear();
+            Assert.Equal("Full translation [1]\n[2] [3] [4]", await db.NhomLuotLam.AsNoTracking()
+                .Where(g => g.MaNhomLuotLam == practiceSnapshot.MaNhomLuotLam)
+                .Select(g => g.NoiDungDichDoanVan).SingleAsync());
             var part7Id = ordered.First(q => q.MaPart == partIds[7]).MaCauHoi;
             var part7Group = await db.NhomCauHoi.AsNoTracking().Where(x => x.MaCauHoi == part7Id)
                 .Select(x => x.MaNguLieu).SingleAsync();

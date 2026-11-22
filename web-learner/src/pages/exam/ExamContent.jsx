@@ -80,6 +80,10 @@ export default function ExamContent({ group, independentQuestion, attemptId, tok
         onClick={() => setSourceOpen(value => !value)}>{sourceOpen ? "Thu gọn đề" : "Xem đề"}</button>}
       <div className={`exam-context${sourceOpen || partOne ? " is-open" : ""}`}>
       {group.context && <p className="exam-preserve-lines">{group.context}</p>}
+      {review && group.part === 6 && group.passageTranslation && <div className="exam-review-status">
+        <strong>Bản dịch toàn bộ đoạn văn</strong>
+        <p className="exam-preserve-lines">{group.passageTranslation}</p>
+      </div>}
       {group.documents?.map(document =>
         <DocumentRenderer key={document.order} document={document} token={token} />)}
       {review && mode !== "PLACEMENT" && group.part === 7 &&

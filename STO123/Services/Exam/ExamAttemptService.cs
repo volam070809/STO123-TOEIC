@@ -622,7 +622,8 @@ public sealed class ExamAttemptService(ToeicDbContext db, PersistedExamTemplate 
             !string.IsNullOrWhiteSpace(g.DuongDanAudio), !string.IsNullOrWhiteSpace(g.DuongDanAnh),
             MapDocuments(id, g.MaNhomLuotLam, g.TaiLieuJson),
             questionsByGroup.GetValueOrDefault(g.MaNhomLuotLam, []).Select(Map).ToList())
-            { Translation = g.MaPartNavigation.SoPart == 7 ? g.NoiDungDich : null }).ToList(),
+            { Translation = g.MaPartNavigation.SoPart == 7 ? g.NoiDungDich : null,
+                PassageTranslation = g.MaPartNavigation.SoPart == 6 ? g.NoiDungDichDoanVan : null }).ToList(),
             questions.Where(q => q.MaNhomLuotLam == null).Select(Map).ToList())
             { Source = result.Source, Result = result };
     }

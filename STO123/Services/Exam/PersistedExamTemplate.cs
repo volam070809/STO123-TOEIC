@@ -27,7 +27,8 @@ public sealed class PersistedExamTemplate(ToeicDbContext db, RandomStartProfiler
             WHERE m.MaNguLieu IN (SELECT DISTINCT m2.MaNguLieu FROM dbo.NhomCauHoi m2
                                   JOIN dbo.CauHoiDeThi l ON l.MaCauHoi = m2.MaCauHoi
                                   WHERE l.MaDeThi = @exam);
-            SELECT r.MaNguLieu, r.NoiDungNguLieu, r.NoiDungDich, r.DuongDanAudio, r.DuongDanAnh
+            SELECT r.MaNguLieu, r.NoiDungNguLieu, r.NoiDungDich, r.DuongDanAudio, r.DuongDanAnh,
+                   r.NoiDungDichDoanVan
             FROM dbo.NguLieu r
             WHERE r.MaNguLieu IN (SELECT DISTINCT m.MaNguLieu FROM dbo.NhomCauHoi m
                                   JOIN dbo.CauHoiDeThi l ON l.MaCauHoi = m.MaCauHoi
@@ -86,7 +87,7 @@ public sealed class PersistedExamTemplate(ToeicDbContext db, RandomStartProfiler
                 var id = reader.GetInt32(0);
                 resources.Add(id, new NguLieu { MaNguLieu = id, NoiDungNguLieu = Optional(reader, 1),
                     NoiDungDich = Optional(reader, 2), DuongDanAudio = Optional(reader, 3),
-                    DuongDanAnh = Optional(reader, 4) });
+                    DuongDanAnh = Optional(reader, 4), NoiDungDichDoanVan = Optional(reader, 5) });
             }
             await reader.NextResultAsync(ct);
             var documents = new List<NguLieuTaiLieu>();

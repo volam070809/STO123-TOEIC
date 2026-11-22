@@ -194,6 +194,7 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
         var resource = anchor.groupId is null ? null : await db.NguLieu.AsNoTracking()
             .Where(r => r.MaNguLieu == anchor.groupId).Select(r => new {
                 text = r.NoiDungNguLieu, translation = r.NoiDungDich,
+                passageTranslation = r.NoiDungDichDoanVan,
                 audio = r.DuongDanAudio, image = r.DuongDanAnh }).SingleOrDefaultAsync(ct);
         var documents = anchor.groupId is null ? [] : await db.NguLieuTaiLieu.AsNoTracking()
             .Where(d => d.MaNguLieu == anchor.groupId).OrderBy(d => d.ThuTu)
@@ -259,6 +260,7 @@ public sealed class AdminQuestionBankController(ToeicDbContext db,
             difficulties = u.Questions.Select(q => q.DoKho).ToArray(),
             resource = u.Resource is null ? null : new {
                 text = u.Resource.NoiDungNguLieu, translation = u.Resource.NoiDungDich,
+                passageTranslation = u.Resource.NoiDungDichDoanVan,
                 audio = u.Resource.DuongDanAudio, image = u.Resource.DuongDanAnh
             },
             documents = u.Documents.Select(d => new { type = d.LoaiTaiLieu,

@@ -14,6 +14,7 @@ const withPart6Translation = (value, order, translation) =>
   Array.from({ length: 4 }, (_, index) => `[${index + 1}] ${index + 1 === order ? translation : part6Translation(value, index + 1)}`).join("\n");
 
 const sourceValue = unit => ({ text: unit.resource?.text || "", translation: unit.resource?.translation || "",
+  passageTranslation: unit.resource?.passageTranslation || "",
   audioPath: unit.resource?.audio || "", imagePath: unit.resource?.image || "",
   documents: (unit.documents || []).map(fromDocument) });
 const sourceTranslation = unit => parsePart7Translation(unit.resource?.translation,
@@ -145,6 +146,7 @@ function LegacyExamGroupEdit({ unit, token, onCancel, onSaved }) {
       const result = await apiRequest(`/api/admin/content/groups/${unit.groupId}/unit`, {
         method: "PUT", token, timeoutMs: 120000,
         body: { text: value.text || null, translation: translated,
+          passageTranslation: unit.part === 6 ? value.passageTranslation : null,
           audioPath: value.audioPath || null, imagePath: value.imagePath || null,
           documents: unit.part === 7 ? value.documents.map(documentPayload) : [] }
       });
@@ -168,6 +170,14 @@ function LegacyExamGroupEdit({ unit, token, onCancel, onSaved }) {
     <form className="exam-author-form" onSubmit={save} onInvalidCapture={event => { const section = event.target.closest("details"); if (section) section.open = true; }}>
       {unit.part >= 3 && unit.part <= 6 && <label>{label}<textarea rows={unit.part === 6 ? 7 : 4}
         value={value.text} onChange={event => change("text", event.target.value)} /></label>}
+      {unit.part === 6 && <label>Bản dịch toàn bộ đoạn văn<textarea rows={7}
+        value={value.passageTranslation} onChange={event => change("passageTranslation", event.target.value)} /></label>}
+      {unit.part === 6 && (value.text || value.passageTranslation) &&
+        <div className="exam-author-question"><h4>Xem trước ngữ liệu</h4>
+          {value.text && <p className="exam-preserve-lines">{value.text}</p>}
+          {value.passageTranslation && <><strong>Bản dịch toàn bộ đoạn văn</strong>
+            <p className="exam-preserve-lines">{value.passageTranslation}</p></>}
+        </div>}
       {[1, 2, 3, 4].includes(unit.part) && fileField("Audio MP3", value.audioPath,
         path => change("audioPath", path), ".mp3,audio/mpeg", "audio")}
       {[1, 3, 4].includes(unit.part) && fileField("Hình ảnh", value.imagePath,
